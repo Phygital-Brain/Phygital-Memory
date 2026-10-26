@@ -69,6 +69,10 @@ class Memory:
     def unlock(self, password: str) -> dict:
         with self._lock:
             if self._con is not None:
+                # Already open: the password must still be right. (Otherwise anyone could ask for a fresh app pass
+                # for an open folder and read every note directly, around Engram.)
+                keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password).wipe()
+                self._touch()
                 return self.status()
             key = keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password)
             try:
