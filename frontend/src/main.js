@@ -1600,8 +1600,8 @@ window.addEventListener("keydown", (e) => {
     if (e.target.closest && e.target.closest(".cm-editor")) return;   // the editor has its own find
     e.preventDefault(); openSearch();
   }
-  else if (k === "n") { e.preventDefault(); newNote(); }
-  else if (k === "w") { e.preventDefault(); if (state.active) closeTab(state.active); }
+  else if (k === "n") { e.preventDefault(); if (!e.repeat) newNote(); }   // holding ⌘N must not make a pile of notes
+  else if (k === "w") { e.preventDefault(); if (!e.repeat && state.active) closeTab(state.active); }
   else if (k === "s") { e.preventDefault(); if (state.active) saveNow(state.active); }
 }, true);
 window.addEventListener("beforeunload", (e) => { if (state.tabs.some((t) => t.dirty)) { e.preventDefault(); e.returnValue = ""; } });
