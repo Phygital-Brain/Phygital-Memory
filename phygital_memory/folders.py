@@ -38,7 +38,8 @@ class Folder:
                 "exists": is_vault(self.path), "finder": bool(self.finder.where())}
 
     def lock(self) -> None:
-        self.memory.lock()          # the Finder view closes itself on lock
+        self.finder.hide()          # close the Finder view first, and wait for it (locking would also close it, later)
+        self.memory.lock()
         self.passes.clear()
 
 

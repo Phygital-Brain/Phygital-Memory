@@ -6,3 +6,4 @@ packaging/build/
 packaging/dist/
 frontend/node_modules/
 phygital_memory/web/
+.state-dev/

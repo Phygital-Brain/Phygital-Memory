@@ -406,12 +406,43 @@ async def shell(request: Request) -> Response:
         return JSONResponse({"answer": closing["answer"]})
     if action == "should-exit":
         return JSONResponse({"exit": closing["exit"]})
+    if action == "lockall":   # the app is about to quit: lock everything now (Finder views close with it)
+        await asyncio.to_thread(_finish)
+        return JSONResponse({"ok": True})
     if action == "reopen":   # the person came back: cancel the pending quit
         if closing["timer"]:
             closing["timer"].cancel()
         closing.update(asked=False, answer=None, exit=False, timer=None)
         return JSONResponse({"ok": True})
     return JSONResponse({"error": "Unknown."}, status_code=404)
+
+
+def _watch_parent() -> None:
+    """When the Mac app that started us is gone (quit, crashed, force-quit), lock everything (Finder views close
+    with it) and stop. Without this, a leftover copy of this program could keep folders open in Finder."""
+    app_pid = int(os.environ.get("PHYGITAL_MEMORY_APP_PID") or 0)
+    if not app_pid:   # started by hand (tests, development): nobody to watch
+        return
+
+    def alive() -> bool:
+        try:
+            os.kill(app_pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    def watch():
+        while True:
+            time.sleep(1.5)
+            if not alive():
+                try:
+                    folders.lock_all()
+                finally:
+                    os._exit(0)
+
+    threading.Thread(target=watch, name="watch-parent", daemon=True).start()
 
 
 def main() -> None:
@@ -424,6 +455,7 @@ def main() -> None:
         print(f"Made a locked notes folder at {FOLDER}")
         return
     print(f"Phygital Memory: app {PAGE}  ·  AI apps connect to {PAGE}mcp", file=sys.stderr)
+    _watch_parent()
     try:
         mcp.run("streamable-http", host="127.0.0.1", port=PORT,
                 transport_security=TransportSecuritySettings(

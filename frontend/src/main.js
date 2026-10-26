@@ -1409,13 +1409,12 @@ window.addEventListener("beforeunload", (e) => { if (state.tabs.some((t) => t.di
 
 // ---------- closing the app ----------
 // When the window closes while a folder is open in Finder, the program asks (through closestate) whether to keep
-// the notes open for a while. We only watch for it while some folder is shown in Finder.
+// the notes open for a while. We always watch for it (a tiny local call each second): the page can't be sure it
+// knows about every Finder view, and a missed question would leave the folders open.
 let closeTimer = null, closeBusy = false, closeTick = 0;
 
 function syncClosePoll() {
-  const need = folderList.some((f) => f.finder);
-  if (need && !closeTimer) { closeTick = 0; closeTimer = setInterval(pollClose, 1000); }
-  else if (!need && closeTimer) { clearInterval(closeTimer); closeTimer = null; }
+  if (!closeTimer) { closeTick = 0; closeTimer = setInterval(pollClose, 1000); }
 }
 
 async function pollClose() {
