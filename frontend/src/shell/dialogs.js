@@ -42,11 +42,4 @@ export function confirmDialog(message, okLabel, danger) {
   }).then((v) => v === true);
 }
 
-let toastTimer = null;
-export function toast(text) {
-  document.querySelectorAll(".toast").forEach((t) => t.remove());
-  const t = el("div", { class: "toast", role: "status" }, text);
-  document.body.append(t);
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.remove(), 4000);
-}
+export { toast, toastOk, toastErr } from "./toast.js";

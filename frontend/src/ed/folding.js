@@ -95,6 +95,10 @@ export default function folding(opts) {
       }),
       foldService.of((state, from) => rangeFor(state, from)),
       foldGutter({ markerDOM: chevron }),
+      EditorView.theme({
+        ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--text-faint)" },
+        ".cm-activeLineGutter": { backgroundColor: "transparent" },
+      }),
       keymap.of(foldKeymap),
       restore,
       EditorView.updateListener.of((u) => {

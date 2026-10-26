@@ -1,15 +1,21 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all
 
+datas = [('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/app.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/web', 'phygital_memory/web'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/engram_config.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/vault/words_en.txt', 'phygital_memory/vault')]
+binaries = []
 hiddenimports = []
 hiddenimports += collect_submodules('phygital_memory')
+hiddenimports += collect_submodules('cheroot')
+tmp_ret = collect_all('wsgidav')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['entry.py'],
     pathex=['.'],
-    binaries=[],
-    datas=[('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/app.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/web', 'phygital_memory/web'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/engram_config.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/vault/words_en.txt', 'phygital_memory/vault')],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

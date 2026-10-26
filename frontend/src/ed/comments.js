@@ -54,7 +54,8 @@ function build(view) {
     } else items.push([c.from, c.to, faint, 0]);
     if (!active) for (const [a, b] of c.marks) items.push([a, b, hide, 1]);
   }
-  items.sort((x, y) => x[0] - y[0] || x[3] - y[3] || x[1] - y[1]);
+  // RangeSetBuilder needs ranges sorted by position, then by each decoration's own startSide
+  items.sort((x, y) => x[0] - y[0] || x[2].startSide - y[2].startSide || x[1] - y[1]);
   const b = new RangeSetBuilder();
   for (const [from, to, deco] of items) b.add(from, to, deco);
   return b.finish();

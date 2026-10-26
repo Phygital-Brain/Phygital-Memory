@@ -26,5 +26,15 @@ m = Memory(VAULT)
 m.unlock(password)
 for f in sorted(SAMPLES.rglob("*.md")):
     m.save(str(f.relative_to(SAMPLES)), f.read_text())
+# images and other files
+import zlib, struct
+w, h = 320, 180
+raw = b"".join(b"\x00" + bytes(v for x in range(w) for v in (int(127 + 128 * x / w) % 256, 80, int(255 * y / h))) for y in range(h))
+chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
+m.save_bytes("attachments/test-image.png", b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+             + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+for f in sorted((HERE.parent / "sample-files").rglob("*")):
+    if f.is_file():
+        m.save_bytes(str(f.relative_to(HERE.parent / "sample-files")), f.read_bytes())
 print(m.status())
 m.lock()
