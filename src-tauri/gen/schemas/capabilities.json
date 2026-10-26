@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"Only the first-run setup window may call the app (to create the locked folder).","local":true,"windows":["setup"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"No window may call the app: the main window is our local page, and there is no setup window any more.","local":true,"permissions":[]}}
