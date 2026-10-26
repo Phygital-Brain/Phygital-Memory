@@ -17,7 +17,7 @@ if VAULT.exists():
         sys.exit(f"{VAULT} exists. Run with --fresh to make it again.")
     shutil.rmtree(VAULT)
 
-password = secrets.token_urlsafe(18)
+password = "12345678"   # test only; the person asked for this simple one
 PASSWORD_FILE.write_text(password)
 os.chmod(PASSWORD_FILE, 0o600)
 

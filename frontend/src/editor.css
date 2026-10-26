@@ -1,0 +1,103 @@
+/* The note editor's look. Colours and fonts come from the app's variables (styles.css). */
+.cm-editor { background: transparent; color: var(--text); font-family: var(--font-body); font-size: 16px; }
+.cm-editor.cm-focused { outline: none; }
+.cm-scroller { font-family: inherit; line-height: 1.6; overflow: visible; }
+.cm-content { padding: 4px 0 40vh; caret-color: var(--accent); }
+.cm-line { padding: 0; }
+.cm-cursor { border-left: 2px solid var(--accent); }
+.cm-selectionBackground, .cm-focused .cm-selectionBackground, .cm-content ::selection { background: var(--selection) !important; }
+.cm-activeLine { background: transparent; }
+.cm-placeholder { color: var(--text-faint); }
+
+/* headings */
+.md-h { font-family: var(--font-display); font-weight: 650; color: var(--text); }
+.md-h1 { font-size: 1.75em; font-weight: 700; line-height: 1.25; padding-top: .6em !important; }
+.md-h2 { font-size: 1.35em; font-weight: 700; line-height: 1.25; padding-top: .5em !important; }
+.md-h3 { font-size: 1.12em; padding-top: .4em !important; }
+.md-h4, .md-h5, .md-h6 { font-size: 1em; }
+.md-h6 { color: var(--text-2); }
+.md-heading { font-weight: inherit; }
+
+/* inline */
+.md-strong { font-weight: 700; }
+.md-em { font-style: italic; }
+.md-strike { text-decoration: line-through; color: var(--text-3); }
+.md-highlight { background: rgba(255, 208, 0, .22); border-radius: 3px; padding: 0 1px; }
+.md-mark { color: var(--text-faint); }
+.md-code { font-family: var(--font-mono); font-size: .9em; background: var(--bg-subtle); border-radius: 4px; padding: .1em .3em; }
+.md-link { color: var(--link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
+.md-url { color: var(--text-3); }
+.md-wiki { color: var(--accent); cursor: pointer; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.md-wiki:hover { color: var(--accent-hover); border-bottom-color: var(--accent-hover); }
+a.md-wiki-missing { color: var(--text-3); border-bottom-style: dashed; border-bottom-color: var(--text-faint); }
+.md-tag { color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: .05em .45em; font-size: .9em; }
+.md-footnote { color: var(--accent); font-size: .78em; vertical-align: super; }
+.md-footnote-def { color: var(--text-3); font-size: .9em; }
+.md-quote { color: var(--text-2); }
+
+/* lists and tasks */
+.md-bullet { display: inline-block; width: 1em; text-align: center; color: var(--text-3); font-weight: 700; }
+.md-check { appearance: none; width: 15px; height: 15px; margin: 0 .45em 0 0; vertical-align: -2px; border: 1.5px solid var(--text-3);
+            border-radius: 4px; cursor: pointer; display: inline-grid; place-content: center; background: transparent; }
+.md-check:checked { background: var(--accent); border-color: var(--accent); }
+.md-check:checked::after { content: ""; width: 8px; height: 4px; border: 2px solid var(--bg-surface); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
+.md-done { color: var(--text-3); text-decoration: line-through; }
+
+/* blockquotes */
+.md-blockquote { border-left: 3px solid var(--border); padding-left: 14px !important; color: var(--text-2); font-style: italic; }
+
+/* callouts: five colour families like Obsidian */
+.md-callout { --c: var(--accent); background: color-mix(in srgb, var(--c) 8%, transparent); border-left: 3px solid var(--c); padding: 0 14px !important; }
+.md-callout-first { border-top-right-radius: 8px; padding-top: 8px !important; }
+.md-callout.md-block-last { border-bottom-right-radius: 8px; padding-bottom: 8px !important; }
+.md-callout-tip, .md-callout-success { --c: var(--success); }
+.md-callout-warning, .md-callout-question { --c: var(--warning); }
+.md-callout-danger, .md-callout-failure, .md-callout-bug { --c: var(--danger); }
+.md-callout-quote { --c: var(--text-3); }
+.md-callout-title { font-weight: 650; color: var(--c); display: inline-flex; gap: .45em; align-items: baseline; }
+.md-callout-icon { font-size: .95em; }
+
+/* code blocks */
+.md-codeblock { font-family: var(--font-mono); font-size: .88em; background: var(--bg-subtle); padding: 0 16px !important; line-height: 1.55; }
+.md-codeblock-first { border-radius: 10px 10px 0 0; padding-top: 6px !important; }
+.md-codeblock-last { border-radius: 0 0 10px 10px; padding-bottom: 6px !important; }
+.md-code-header { display: inline-flex; width: 100%; justify-content: space-between; align-items: center; color: var(--text-3);
+                  font-family: var(--font-body); font-size: 12px; }
+.md-copy { font: inherit; font-size: 11.5px; color: var(--text-2); background: transparent; border: 1px solid var(--border);
+           border-radius: 6px; padding: 1px 8px; cursor: pointer; }
+.md-copy:hover { color: var(--text); background: var(--bg-surface); }
+.tok-keyword { color: #c678dd; } .tok-string { color: #98c379; } .tok-comment { color: var(--text-3); font-style: italic; }
+.tok-number { color: #d19a66; } .tok-function { color: #61afef; } .tok-type { color: #e5c07b; } .tok-property { color: #56b6c2; }
+.tok-punct { color: var(--text-2); } .tok-tag { color: #e06c75; } .tok-attr { color: #d19a66; }
+@media (prefers-color-scheme: light) {
+  .tok-keyword { color: #8b3fbf; } .tok-string { color: #3d7a2a; } .tok-number { color: #b0611c; }
+  .tok-function { color: #2b6cb0; } .tok-type { color: #966b00; } .tok-property { color: #137a85; } .tok-tag { color: #b8333e; } .tok-attr { color: #b0611c; }
+}
+
+/* rules, tables, images, embeds */
+.md-hr { display: inline-block; width: 100%; height: 1px; background: var(--border); vertical-align: middle; }
+.md-table-wrap { overflow-x: auto; margin: 6px 0; cursor: text; }
+.md-table { border-collapse: collapse; font-size: .94em; min-width: 40%; }
+.md-table th, .md-table td { border: 1px solid var(--border); padding: 6px 12px; vertical-align: top; }
+.md-table th { background: var(--bg-subtle); font-weight: 650; }
+.md-table-source { font-family: var(--font-mono); font-size: .88em; color: var(--text-2); }
+.md-embed { display: inline-block; max-width: 100%; }
+.md-embed img { max-width: 100%; border-radius: 8px; display: block; margin: 4px 0; }
+.md-missing { color: var(--danger); font-size: .9em; background: color-mix(in srgb, var(--danger) 8%, transparent); border-radius: 6px; padding: 2px 8px; }
+.md-note-embed { display: inline-block; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px;
+                 padding: 4px 12px; color: var(--accent); cursor: pointer; background: var(--bg-subtle); }
+
+/* autocomplete */
+.cm-tooltip { background: var(--bg-surface); border: 1px solid var(--border) !important; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.25); overflow: hidden; }
+.cm-tooltip-autocomplete > ul { font-family: var(--font-body) !important; max-height: 260px !important; }
+.cm-tooltip-autocomplete > ul > li { padding: 5px 12px !important; color: var(--text); }
+.cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--accent-soft) !important; color: var(--text) !important; }
+.cm-completionDetail { color: var(--text-3); font-style: normal; margin-left: .8em; font-size: .85em; }
+.cm-completionMatchedText { text-decoration: none; color: var(--accent); font-weight: 650; }
+
+/* search panel inside a note (Cmd+F) */
+.cm-panels { background: var(--bg-subtle); color: var(--text); border-color: var(--border) !important; }
+.cm-panel.cm-search input, .cm-panel.cm-search button { font: inherit; font-size: 12.5px; color: var(--text); background: var(--bg-surface);
+  border: 1px solid var(--border); border-radius: 6px; }
+.cm-searchMatch { background: rgba(255, 208, 0, .25); }
+.cm-selectionMatch { background: var(--accent-soft); }

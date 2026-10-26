@@ -8,7 +8,7 @@ from pathlib import Path
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-BASE = "http://127.0.0.1:8790"
+BASE = "http://127.0.0.1:" + __import__("os").environ.get("PM_TEST_PORT", "8790")
 VAULT = Path(__file__).resolve().parent.parent / "locked-notes"
 
 
@@ -58,9 +58,9 @@ async def main():
     good &= check("wrong password refused", api("unlock", {"password": "nope"})[0] == 400)
     # 3. The person unlocks in the app
     code, s = api("unlock", {"password": (Path(__file__).parent / ".test-password").read_text()})
-    good &= check("unlock with password", code == 200 and s["open"] and s["notes"] == 9)
+    good &= check("unlock with password", code == 200 and s["open"] and s["notes"] == 10)
     app_pass = s["pass"]
-    good &= check("app lists notes", len(api("notes", app_pass=app_pass)[1]["notes"]) == 9)
+    good &= check("app lists notes", len(api("notes", app_pass=app_pass)[1]["notes"]) == 10)
     # 4. The AI searches, opens, edits through Engram ids
     r = await ai([("search_notes", {"question": "tide data supplier"})])
     found = r['search_notes{"question": "tide data supplier"}']

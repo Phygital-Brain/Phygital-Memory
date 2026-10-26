@@ -115,7 +115,7 @@ class Memory:
     def _index_all(self) -> None:
         redact = ingest.make_redactor(self.cfg)
         for path, entry in self._tree.walk():
-            if entry.kind == "file" and path.lower().endswith(".md"):
+            if entry.kind == "file" and path.lower().endswith(".md") and not path.startswith(f"/{TRASH}/"):
                 self._index_one(path.lstrip("/"), entry, redact)
         ingest.count_backlinks(self._con, self.cfg)
         self._con.commit()
@@ -217,12 +217,92 @@ class Memory:
             self._need_open()
             return self._tree.read_file(self._tree.resolve(_clean_path(rel))).decode("utf-8", "replace")
 
+    def list_files(self) -> list[dict]:
+        """Every folder and file (notes, images, other files), for the person's own sidebar."""
+        with self._lock:
+            self._need_open()
+            out = []
+            for path, entry in self._tree.walk():
+                rel = path.lstrip("/")
+                if rel.split("/")[0] == TRASH or entry.kind == "link":
+                    continue
+                out.append({"path": rel, "kind": "folder" if entry.kind == "dir" else "file"})
+            return out
 
-def _clean_path(rel: str) -> str:
+    def read_bytes(self, rel: str) -> bytes:
+        with self._lock:
+            self._need_open()
+            return self._tree.read_file(self._tree.resolve(_clean_path(rel, md=False)))
+
+    def save_bytes(self, rel: str, data: bytes) -> str:
+        """An image or other file, stored encrypted like the notes. Picks a free name if the path is taken."""
+        rel = _clean_path(rel, md=False)
+        if len(data) > MAX_FILE_BYTES:
+            raise ValueError("That file is too big (25 MB at most).")
+        with self._lock:
+            self._need_open()
+            parent, name = self._make_parents(rel)
+            taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
+            stem, dot, ext = name.rpartition(".") if "." in name else (name, "", "")
+            n = 1
+            while name in taken:
+                n += 1
+                name = f"{stem} {n}{dot}{ext}"
+            self._writer.write_file(parent, name, data)
+            return "/".join(rel.split("/")[:-1] + [name])
+
+    def make_folder(self, rel: str) -> str:
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            parent, name = self._make_parents(rel)
+            if not any(e.name == name for e in self._tree.list_dir(parent.dir_id)):
+                self._writer.make_dir(parent, name)
+            return rel
+
+    def move(self, old: str, new: str) -> str:
+        """Rename or move a note, file or folder. Notes keep their .md ending."""
+        old_entry_path = _clean_path(old, md=False)
+        with self._lock:
+            self._need_open()
+            entry = self._tree.resolve(old_entry_path)
+            new = _clean_path(new, md=entry.kind == "file" and old_entry_path.lower().endswith(".md"))
+            parent, name = self._make_parents(new)
+            if any(e.name == name for e in self._tree.list_dir(parent.dir_id)):
+                raise Exists(f"'{new}' already exists.")
+            self._writer.move(entry, parent, name)
+            self._reindex()
+            return new
+
+    def trash(self, rel: str) -> None:
+        """Move a note, file or folder to the hidden trash folder inside the lock (nothing is erased)."""
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            entry = self._tree.resolve(rel)
+            try:
+                bin_ = self._tree.resolve(TRASH)
+            except NotFound:
+                root = self._tree.resolve("")
+                bin_ = self._writer.make_dir(root, TRASH)
+            self._writer.move(entry, bin_, f"{time.strftime('%Y%m%d-%H%M%S')} {Path(rel).name}")
+            self._reindex()
+
+    def _reindex(self) -> None:
+        for (path,) in self._con.execute("SELECT path FROM files").fetchall():
+            remove_file(self._con, path)
+        self._index_all()
+
+
+TRASH = ".trash"
+MAX_FILE_BYTES = 25_000_000
+
+
+def _clean_path(rel: str, md: bool = True) -> str:
     parts = [p for p in rel.replace("\\", "/").strip("/").split("/") if p]
     if not parts or any(p in (".", "..") or p.startswith(".") for p in parts):
         raise ValueError("Give a path inside the notes, like 'Projects/idea.md'.")
-    if not parts[-1].lower().endswith(".md"):
+    if md and not parts[-1].lower().endswith(".md"):
         parts[-1] += ".md"
     if any(re.search(r'[<>:"|?*\x00-\x1f]', p) for p in parts):
         raise ValueError("That name has characters a note name can't use.")

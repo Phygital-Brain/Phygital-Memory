@@ -8,6 +8,7 @@ Passwords are typed on that page only, never in a chat.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import secrets
@@ -147,7 +148,9 @@ _passes: set[str] = set()
 _fails = {"n": 0, "until": 0.0}
 HEADERS = {"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
            "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; "
-                                      "style-src 'self' 'unsafe-inline'; img-src 'self' data:"}
+                                      "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+                                      "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; "
+                                      "frame-ancestors 'none'"}
 
 
 def _local(request: Request) -> bool:
@@ -163,7 +166,21 @@ def _has_pass(request: Request) -> bool:
 async def page(request: Request) -> Response:
     if not _local(request):
         return Response("Wrong address.", status_code=421)
-    return HTMLResponse((HERE / "app.html").read_text(), headers=HEADERS)
+    page_file = WEB / "index.html" if (WEB / "index.html").exists() else HERE / "app.html"
+    return HTMLResponse(page_file.read_text(), headers=HEADERS)
+
+
+WEB = HERE / "web"   # the built front end (frontend/ builds into it)
+ASSET_TYPES = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".svg": "image/svg+xml"}
+
+
+@mcp.custom_route("/assets/{name}", methods=["GET"])
+async def asset(request: Request) -> Response:
+    name = request.path_params["name"]
+    f = WEB / "assets" / name
+    if not _local(request) or "/" in name or name.startswith(".") or not f.is_file() or f.suffix not in ASSET_TYPES:
+        return Response("Not found.", status_code=404)
+    return Response(f.read_bytes(), media_type=ASSET_TYPES[f.suffix], headers=HEADERS)
 
 
 @mcp.custom_route("/api/{action}", methods=["POST"])
@@ -214,6 +231,20 @@ async def api(request: Request) -> Response:
                                 headers=HEADERS)
         if action == "search":
             return JSONResponse({"results": memory.search(body.get("q", ""), 12)}, headers=HEADERS)
+        if action == "files":
+            return JSONResponse({"files": memory.list_files()}, headers=HEADERS)
+        if action == "readfile":   # images and other files, as base64 (the page makes a blob URL from it)
+            return JSONResponse({"path": body["path"], "base64": base64.b64encode(memory.read_bytes(body["path"])).decode()},
+                                headers=HEADERS)
+        if action == "savefile":
+            return JSONResponse({"path": memory.save_bytes(body["path"], base64.b64decode(body["base64"]))}, headers=HEADERS)
+        if action == "mkdir":
+            return JSONResponse({"path": memory.make_folder(body["path"])}, headers=HEADERS)
+        if action == "move":
+            return JSONResponse({"path": memory.move(body["from"], body["to"])}, headers=HEADERS)
+        if action == "trash":
+            memory.trash(body["path"])
+            return JSONResponse({"ok": True}, headers=HEADERS)
     except WrongPassword:
         return JSONResponse({"error": "Wrong password."}, status_code=400)
     except Locked as e:
