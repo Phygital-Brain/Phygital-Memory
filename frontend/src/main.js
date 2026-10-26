@@ -9,6 +9,7 @@ import { loadPrefs, clearPrefs, flushPrefs, getPref, setPref, setMapPref, noteSt
 import { openSettings, closeSettings, onSettings } from "./shell/settings.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
+import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
 const PALETTE = ["#7c5cff", "#cf3f8e", "#d9773a", "#3f8850", "#23877e", "#2f86bf", "#5262d0", "#c98a12", "#d24d43", "#6f9a2c"];
@@ -634,7 +635,7 @@ async function openPath(path, opts = {}) {
     try {
       if (isMd(path)) tab = await withLoading(makeNoteTab(path));
       else if (isImg(path)) tab = makeImageTab(path);
-      else { toastErr("This file type can't be opened here."); return; }
+      else tab = makeFileTab(path);
     } catch (e) { toastErr(e.message); return; }
     if (state.tabs.some((t) => t.path === path)) { tab.pane.remove(); tab = state.tabs.find((t) => t.path === path); }
     else state.tabs.push(tab);
@@ -647,6 +648,35 @@ function makeImageTab(path) {
   fileURL(path).then((u) => { img.src = u; }).catch((e) => toastErr(e.message));
   const pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, el("h1", { class: "img-title" }, baseName(path)), img));
   paneHost.append(pane);
+  return { path, kind: "image", pane, dirty: false };
+}
+
+// Other files open as a preview tab: CSV/TSV as a table, PDF, video, audio, plain text and code as text,
+// anything else as a card. Decrypted into memory only.
+const TEXT_EXT = /\.(txt|json|js|mjs|ts|py|rb|go|rs|java|c|h|cpp|css|html|xml|yml|yaml|toml|ini|sh|log|sql)$/i;
+function makeFileTab(path) {
+  const body = el("div", { class: "file-view" });
+  const pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, el("h1", { class: "img-title" }, baseName(path)), body));
+  paneHost.append(pane);
+  const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, `Can't open this file: ${e.message}`)); };
+  if (CSV.test(path)) {
+    readFileText(path).then((text) => body.replaceChildren(csvTable(text, path))).catch(fail);
+  } else if (PDF.test(path)) {
+    const frame = el("iframe", { class: "file-pdf", title: baseName(path), sandbox: "" });
+    fileURL(path).then((u) => { frame.src = u; }).catch(fail);
+    body.replaceChildren(frame);
+  } else if (VIDEO.test(path) || AUDIO.test(path)) {
+    const media = el(VIDEO.test(path) ? "video" : "audio", { class: "file-media", controls: "" });
+    fileURL(path).then((u) => { media.src = u; }).catch(fail);
+    body.replaceChildren(media);
+  } else if (TEXT_EXT.test(path)) {
+    const pre = el("pre", { class: "file-text" });
+    readFileText(path).then((t) => { pre.textContent = t.length > 2_000_000 ? t.slice(0, 2_000_000) + "\n…" : t; }).catch(fail);
+    body.replaceChildren(pre);
+  } else {
+    body.replaceChildren(el("p", { class: "file-note" },
+      "This kind of file can't be previewed here. Use Show in Finder to open it with another app."));
+  }
   return { path, kind: "image", pane, dirty: false };
 }
 

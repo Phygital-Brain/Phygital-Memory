@@ -152,7 +152,7 @@ _fails = {"n": 0, "until": 0.0}
 HEADERS = {"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
            "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; "
                                       "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
-                                      "connect-src 'self'; media-src blob:; frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'; "
+                                      "connect-src 'self'; media-src blob:; frame-src blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; "
                                       "frame-ancestors 'none'"}
 
 

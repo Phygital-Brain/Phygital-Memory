@@ -1,271 +1,304 @@
-// Graph view: every note is a dot, every [[link]] a line. Own small force simulation on a canvas.
+// Graph view: every note is a glowing dot, every [[link]] a soft thread, on a deep gradient (the Obsidian / Baalda
+// look). sigma.js draws it on the GPU (WebGL) with our glow program; d3-force lays it out in a background thread.
+// Both libraries are free (MIT / ISC) and load only when the graph is first opened.
 import { el } from "./dom.js";
 
-const REST = 70, SPRING = 0.05, REPEL = 900, GRAVITY = 0.012, DAMP = 0.62;
+const SETTINGS_KEY = "pm.graph.settings.v1";
+const DEFAULTS = { repel: -220, linkDistance: 70, linkStrength: 0.35, gravity: 0.6, nodeSize: 1, lineWidth: 1,
+                   labels: 1, colorBy: "links", hideOrphans: false };
+const RANGES = {
+  repel: ["Repel force", -1200, -10, 10], linkDistance: ["Link distance", 10, 300, 5], linkStrength: ["Link force", 0, 1, 0.05],
+  gravity: ["Centre force", 0, 2, 0.05], nodeSize: ["Node size", 0.4, 3, 0.1], lineWidth: ["Line thickness", 0.3, 3, 0.1],
+  labels: ["Labels", 0, 3, 0.1],
+};
+
+let libs = null;
+function loadLibs() {
+  libs ??= Promise.all([import("sigma"), import("graphology"), import("./graph-glow.js")])
+    .then(([sigma, graphology, glow]) => ({ Sigma: sigma.default, Graph: graphology.default, Glow: glow.NodeGlowProgram }));
+  return libs;
+}
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function rgb(color) {
+  const c = document.createElement("canvas").getContext("2d");
+  c.fillStyle = color || "#888"; const s = c.fillStyle;
+  if (s.startsWith("#")) return [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16));
+  return (s.match(/[\d.]+/g) || [136, 136, 136]).slice(0, 3).map(Number);
+}
+const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const hex = (c) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+// sigma blends with premultiplied alpha: the colour must already be scaled by its transparency
+const rgba = (c, a) => `rgba(${Math.round(c[0] * a)},${Math.round(c[1] * a)},${Math.round(c[2] * a)},${a})`;
+
+function loadSettings() {
+  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; } catch { return { ...DEFAULTS }; }
+}
+function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {} }
 
 export function createGraph({ onOpen, colorFor, labelFor }) {
-  const canvas = el("canvas", { class: "graph-canvas", tabindex: "0", "aria-label": "Graph of linked notes" });
+  const host = el("div", { class: "graph-canvas", tabindex: "0", "aria-label": "Graph of linked notes" });
   const info = el("span", { class: "graph-info" });
   const localBox = el("input", { type: "checkbox", "aria-label": "Local graph" });
+  const find = el("input", { type: "search", class: "graph-find", placeholder: "Find a note…", "aria-label": "Find a note in the graph" });
+  const panelBtn = el("button", { class: "btn small", onclick: () => panel.classList.toggle("hidden") }, "Settings");
   const bar = el("div", { class: "graph-bar" },
-    el("label", { class: "set-check", title: "Only the open note and what it links to, two steps out" }, localBox, "Local graph"),
-    el("button", { class: "btn small", onclick: () => fit() }, "Reset view"), info);
+    find,
+    el("label", { class: "set-check", title: "Only the open note and what it links to, two steps out" }, localBox, "Local"),
+    el("button", { class: "btn small", onclick: () => worker?.postMessage({ type: "reheat" }) }, "Shake"),
+    el("button", { class: "btn small", onclick: () => fit() }, "Fit"),
+    panelBtn, info);
+  const panel = el("div", { class: "graph-panel hidden" });
   const empty = el("div", { class: "graph-empty hidden" }, "No notes to show yet.");
-  const root = el("div", { class: "graph" }, canvas, bar, empty);
-  const ctx = canvas.getContext("2d");
+  const root = el("div", { class: "graph" }, host, bar, panel, empty);
 
-  let data = { nodes: [], edges: [] };
-  let current = null;
-  let nodes = [], links = [], byPath = new Map();
-  const pos = new Map();                     // remembered positions, so toggling "local" doesn't scramble things
-  let view = { k: 1, x: 0, y: 0 };
-  let w = 0, h = 0, dpr = 1;
-  let alpha = 1, raf = 0, dirtyDraw = true;
-  let hover = null, dragging = null, panning = null;
-  const pointers = new Map();
-  let pinch = null;
-  let alive = true;
-  let colors = null;
+  let s = loadSettings();
+  let data = { nodes: [], edges: [] }, current = null, alive = true;
+  let L = null, graph = null, renderer = null, worker = null, ids = [], idx = new Map();
+  const pos = new Map();
+  let hovered = null, hood = null, query = "", dragged = null, dragMoved = false, settled = false;
+  let theme = {};
 
-  function readColors() {
-    const cs = getComputedStyle(document.documentElement);
-    const g = (n) => cs.getPropertyValue(n).trim();
-    colors = { text: g("--text"), dim: g("--text-2"), accent: g("--accent"), line: g("--text-faint") };
+  // ---------- settings panel ----------
+  function buildPanel() {
+    const rows = Object.entries(RANGES).map(([key, [label, min, max, step]]) => {
+      const out = el("span", { class: "graph-val" }, String(s[key]));
+      const input = el("input", { type: "range", min, max, step, value: s[key], "aria-label": label });
+      input.addEventListener("input", () => {
+        s[key] = Number(input.value); out.textContent = String(s[key]); saveSettings(s);
+        if (["repel", "linkDistance", "linkStrength", "gravity"].includes(key)) worker?.postMessage({ type: "settings", settings: s });
+        else restyle();
+      });
+      return el("label", { class: "graph-row" }, el("span", {}, label), input, out);
+    });
+    const colorSel = el("select", { "aria-label": "Colour by" },
+      el("option", { value: "links" }, "Colour by links"), el("option", { value: "folder" }, "Colour by folder"));
+    colorSel.value = s.colorBy;
+    colorSel.addEventListener("change", () => { s.colorBy = colorSel.value; saveSettings(s); restyle(); });
+    const orphans = el("input", { type: "checkbox" }); orphans.checked = s.hideOrphans;
+    orphans.addEventListener("change", () => { s.hideOrphans = orphans.checked; saveSettings(s); rebuild(); });
+    const reset = el("button", { class: "btn small", onclick: () => { s = { ...DEFAULTS }; saveSettings(s); buildPanel(); worker?.postMessage({ type: "settings", settings: s }); restyle(); } }, "Reset");
+    panel.replaceChildren(el("div", { class: "graph-panel-title" }, "Graph"), colorSel,
+      el("label", { class: "set-check" }, orphans, "Hide notes without links"), ...rows, reset);
   }
 
-  function rebuild() {
-    const all = new Map(data.nodes.map((p) => [p, { path: p, deg: 0, nb: new Set() }]));
-    const edges = data.edges.filter(([a, b]) => all.has(a) && all.has(b));
-    for (const [a, b] of edges) { all.get(a).nb.add(b); all.get(b).nb.add(a); }
-    for (const n of all.values()) n.deg = n.nb.size;
-    let keep = [...all.keys()];
+  function readTheme() {
+    const dark = (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")) === "dark";
+    theme = { dark, text: css("--text"), dim: css("--text-2"), faint: css("--text-faint"), accent: rgb(css("--accent")),
+              textRgb: rgb(css("--text")), low: rgb(dark ? "#5d5d72" : "#a9a6bd"), bg: css("--bg-surface"),
+              font: css("--font-body") || "system-ui" };
+  }
+
+  // ---------- data -> graph ----------
+  function nodeColor(p, deg, maxDeg) {
+    if (s.colorBy === "folder") return colorFor(p);
+    const t = maxDeg ? Math.pow(deg / maxDeg, 0.55) : 0;
+    return hex(mix(theme.low, theme.accent, t));
+  }
+
+  function build() {
+    const { Graph } = L;
+    const all = new Set(data.nodes);
+    const edges = data.edges.filter(([a, b]) => all.has(a) && all.has(b) && a !== b);
+    const nb = new Map(data.nodes.map((p) => [p, new Set()]));
+    for (const [a, b] of edges) { nb.get(a).add(b); nb.get(b).add(a); }
+    let keep = data.nodes;
     if (localBox.checked && current && all.has(current)) {
-      const seen = new Set([current]);
-      let frontier = [current];
-      for (let s = 0; s < 2; s++) {
+      const seen = new Set([current]); let frontier = [current];
+      for (let k = 0; k < 2; k++) {
         const next = [];
-        for (const p of frontier) for (const q of all.get(p).nb) if (!seen.has(q)) { seen.add(q); next.push(q); }
+        for (const p of frontier) for (const q of nb.get(p)) if (!seen.has(q)) { seen.add(q); next.push(q); }
         frontier = next;
       }
       keep = [...seen];
     }
+    if (s.hideOrphans) keep = keep.filter((p) => nb.get(p).size > 0 || p === current);
     const keepSet = new Set(keep);
-    nodes = keep.map((p, i) => {
-      const n = all.get(p);
-      let at = pos.get(p);
-      if (!at) {
-        const a = i * 2.399963, r = 18 * Math.sqrt(i + 1);
-        at = { x: Math.cos(a) * r, y: Math.sin(a) * r };
-      }
-      return { path: p, label: labelFor(p), color: colorFor(p), deg: n.deg, nb: n.nb, x: at.x, y: at.y, vx: 0, vy: 0, r: 4 + Math.sqrt(n.deg) * 2.2, fixed: false };
+    const maxDeg = Math.max(1, ...keep.map((p) => nb.get(p).size));
+    graph = new Graph({ type: "undirected", allowSelfLoops: false });
+    for (const p of keep) {
+      const deg = nb.get(p).size, at = pos.get(p);
+      graph.addNode(p, { x: at?.x ?? 0, y: at?.y ?? 0, label: labelFor(p), deg, size: 1, color: nodeColor(p, deg, maxDeg) });
+    }
+    for (const [a, b] of edges) if (keepSet.has(a) && keepSet.has(b) && !graph.hasEdge(a, b)) graph.addEdge(a, b, { size: 1 });
+    ids = graph.nodes(); idx = new Map(ids.map((n, i) => [n, i]));
+    applySizes();
+    info.textContent = `${graph.order} notes · ${graph.size} links`;
+    empty.classList.toggle("hidden", graph.order > 0);
+    return { fresh: ids.filter((n) => pos.has(n)).length < ids.length * 0.8 };
+  }
+
+  function applySizes() {
+    const maxDeg = Math.max(1, ...graph.mapNodes((n, a) => a.deg));
+    graph.updateEachNodeAttributes((n, a) => ({ ...a, size: (2.2 + Math.sqrt(a.deg) * 1.7) * s.nodeSize, color: nodeColor(n, a.deg, maxDeg) }),
+      { attributes: ["size", "color"] });
+    const edgeCol = rgba(theme.textRgb, theme.dark ? 0.16 : 0.22);
+    graph.updateEachEdgeAttributes((e, a) => ({ ...a, size: 0.7 * s.lineWidth, color: edgeCol }), { attributes: ["size", "color"] });
+  }
+
+  // ---------- drawing ----------
+  function mount() {
+    renderer?.kill();
+    const { Sigma, Glow } = L;
+    renderer = new Sigma(graph, host, {
+      allowInvalidContainer: true, zIndex: true, stagePadding: 60, minCameraRatio: 0.03, maxCameraRatio: 6,
+      defaultNodeType: "glow", nodeProgramClasses: { glow: Glow },
+      labelFont: theme.font, labelSize: 12, labelWeight: "500", labelColor: { color: theme.dim },
+      labelRenderedSizeThreshold: 9 - s.labels * 2.4, labelDensity: 0.35 + s.labels * 0.25, labelGridCellSize: 90,
+      defaultDrawNodeHover: drawHover, nodeReducer, edgeReducer,
     });
-    byPath = new Map(nodes.map((n) => [n.path, n]));
-    links = edges.filter(([a, b]) => keepSet.has(a) && keepSet.has(b)).map(([a, b]) => ({ a: byPath.get(a), b: byPath.get(b) }));
-    info.textContent = `${nodes.length} notes · ${links.length} links`;
-    empty.classList.toggle("hidden", nodes.length > 0);
-    hover = null;
-    alpha = 1;
-    const warm = nodes.length > 400 ? 60 : 150;
-    for (let i = 0; i < warm; i++) tick();
-    fit();
-    kick();
+    wireEvents();
   }
 
-  function tick() {
-    const n = nodes.length;
-    for (let i = 0; i < n; i++) {
-      const a = nodes[i];
-      for (let j = i + 1; j < n; j++) {
-        const b = nodes[j];
-        let dx = a.x - b.x, dy = a.y - b.y;
-        let d2 = dx * dx + dy * dy;
-        if (d2 > 160000) continue;
-        if (d2 < 25) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 25; }
-        const f = (REPEL * alpha) / d2, d = Math.sqrt(d2);
-        const fx = (dx / d) * f * 10, fy = (dy / d) * f * 10;
-        a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
-      }
+  function nodeReducer(node, a) {
+    const out = { ...a };
+    const dim = () => { out.color = rgba(theme.textRgb, theme.dark ? 0.12 : 0.15); out.label = ""; out.zIndex = 0; };
+    if (query) {
+      if (a.label.toLowerCase().includes(query)) { out.forceLabel = true; out.zIndex = 2; } else dim();
     }
-    for (const l of links) {
-      const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const f = (d - REST) * SPRING * alpha, fx = (dx / d) * f, fy = (dy / d) * f;
-      l.a.vx += fx; l.a.vy += fy; l.b.vx -= fx; l.b.vy -= fy;
+    if (hovered) {
+      if (node === hovered) { out.highlighted = true; out.zIndex = 3; out.forceLabel = true; out.size = a.size * 1.25; }
+      else if (hood.has(node)) { out.zIndex = 2; out.forceLabel = true; }
+      else dim();
     }
-    for (const a of nodes) {
-      a.vx -= a.x * GRAVITY * alpha; a.vy -= a.y * GRAVITY * alpha;
-      if (a.fixed) { a.vx = a.vy = 0; continue; }
-      a.vx *= DAMP; a.vy *= DAMP;
-      a.x += a.vx; a.y += a.vy;
-      pos.set(a.path, { x: a.x, y: a.y });
-    }
-    alpha *= 0.985;
+    if (node === current) { out.forceLabel = true; out.zIndex = Math.max(out.zIndex || 0, 2); }
+    return out;
+  }
+  function edgeReducer(edge, a) {
+    const out = { ...a };
+    if (hovered) {
+      const [x, y] = graph.extremities(edge);
+      if (x === hovered || y === hovered) { out.color = rgba(theme.accent, 0.8); out.size = a.size * 1.8; out.zIndex = 2; }
+      else out.color = rgba(theme.textRgb, 0.04);
+    } else if (query) out.color = rgba(theme.textRgb, 0.05);
+    return out;
   }
 
-  function frame() {
-    raf = 0;
-    if (!alive) return;
-    if (alpha > 0.02) { tick(); dirtyDraw = true; }
-    if (dirtyDraw) draw();
-    if (alpha > 0.02 || dirtyDraw) kick();
+  // the hover label: a soft pill in the app's colours
+  function drawHover(ctx, d, settings) {
+    const size = settings.labelSize + 1, label = d.label || "";
+    ctx.font = `600 ${size}px ${settings.labelFont}`;
+    const w = ctx.measureText(label).width + 16, h = size + 12, x = d.x + d.size + 8, y = d.y - h / 2;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 12;
+    ctx.fillStyle = theme.bg; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = rgba(theme.accent, 0.7); ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.stroke();
+    ctx.fillStyle = theme.text; ctx.textBaseline = "middle"; ctx.fillText(label, x + 8, d.y + 0.5);
   }
-  function kick() { if (!raf && alive) raf = requestAnimationFrame(frame); }
-  function redraw() { dirtyDraw = true; kick(); }
 
-  const toScreen = (x, y) => [x * view.k + view.x, y * view.k + view.y];
-  const toWorld = (sx, sy) => [(sx - view.x) / view.k, (sy - view.y) / view.k];
+  function wireEvents() {
+    renderer.on("enterNode", ({ node }) => {
+      hovered = node; hood = new Set(graph.neighbors(node)); host.style.cursor = "pointer"; renderer.refresh({ skipIndexation: true });
+    });
+    renderer.on("leaveNode", () => {
+      if (dragged) return;
+      hovered = null; hood = null; host.style.cursor = "grab"; renderer.refresh({ skipIndexation: true });
+    });
+    renderer.on("downNode", ({ node }) => {
+      dragged = node; dragMoved = false;
+      if (!renderer.getCustomBBox()) renderer.setCustomBBox(renderer.getBBox());
+    });
+    renderer.getMouseCaptor().on("mousemovebody", (e) => {
+      if (!dragged) return;
+      dragMoved = true;
+      const p = renderer.viewportToGraph(e);
+      graph.mergeNodeAttributes(dragged, { x: p.x, y: p.y });
+      worker?.postMessage({ type: "drag", i: idx.get(dragged), x: p.x, y: p.y });
+      e.preventSigmaDefault(); e.original.preventDefault(); e.original.stopPropagation();
+    });
+    const release = () => {
+      if (!dragged) return;
+      const node = dragged; dragged = null;
+      worker?.postMessage({ type: "release", i: idx.get(node) });
+      if (!dragMoved) onOpen(node);
+    };
+    renderer.getMouseCaptor().on("mouseup", release);
+    renderer.on("upNode", release);
+    host.style.cursor = "grab";
+  }
+
+  // ---------- physics in the worker ----------
+  function startWorker(fresh) {
+    worker?.terminate();
+    worker = new Worker("/assets/graph-worker.js", { type: "module" });
+    settled = false;
+    let first = true;
+    worker.onmessage = ({ data: m }) => {
+      if (m.type !== "tick" || !graph || !alive) return;
+      const xy = m.xy;
+      graph.updateEachNodeAttributes((n, a) => {
+        const i = idx.get(n);
+        if (n !== dragged) { a.x = xy[2 * i]; a.y = xy[2 * i + 1]; }
+        pos.set(n, { x: a.x, y: a.y });
+        return a;
+      }, { attributes: ["x", "y"] });
+      // let the camera follow while the layout grows, then hold still so the view doesn't drift
+      if (first) { first = false; renderer?.setCustomBBox(null); renderer?.refresh(); renderer?.getCamera().setState({ x: 0.5, y: 0.5, ratio: 1 }); }
+      if (!settled && m.alpha < 0.08) { settled = true; if (!dragged) fit(); }
+    };
+    worker.postMessage({
+      type: "init", fresh, settings: s,
+      nodes: ids.map((n) => ({ deg: graph.getNodeAttribute(n, "deg"), x: pos.get(n)?.x, y: pos.get(n)?.y })),
+      links: graph.mapEdges((e, a, x, y) => [idx.get(x), idx.get(y)]),
+    });
+  }
 
   function fit() {
-    if (!nodes.length || !w) { redraw(); return; }
-    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-    for (const n of nodes) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
-    const pad = 60, bw = Math.max(x1 - x0, 60), bh = Math.max(y1 - y0, 60);
-    const k = Math.min(1.6, Math.max(0.1, Math.min((w - pad * 2) / bw, (h - pad * 2) / bh)));
-    view = { k, x: w / 2 - ((x0 + x1) / 2) * k, y: h / 2 - ((y0 + y1) / 2) * k };
-    redraw();
+    if (!renderer) return;
+    renderer.setCustomBBox(null);
+    renderer.refresh();
+    renderer.getCamera().animatedReset({ duration: 300 });
+    requestAnimationFrame(() => renderer?.setCustomBBox(renderer.getBBox()));
   }
 
-  function draw() {
-    dirtyDraw = false;
-    if (!colors) readColors();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    const hl = hover ? new Set([hover.path, ...hover.nb]) : null;
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = colors.line;
-    ctx.globalAlpha = hl ? 0.12 : 0.4;
-    ctx.beginPath();
-    for (const l of links) {
-      const [ax, ay] = toScreen(l.a.x, l.a.y), [bx, by] = toScreen(l.b.x, l.b.y);
-      ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
-    }
-    ctx.stroke();
-    if (hover) {
-      ctx.globalAlpha = 0.95; ctx.strokeStyle = colors.accent; ctx.lineWidth = 1.5; ctx.beginPath();
-      for (const l of links) if (l.a === hover || l.b === hover) {
-        const [ax, ay] = toScreen(l.a.x, l.a.y), [bx, by] = toScreen(l.b.x, l.b.y);
-        ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
-      }
-      ctx.stroke();
-    }
-    const showAll = view.k >= 1.25;
-    ctx.font = "12px -apple-system, system-ui, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "top";
-    const labels = [];
-    for (const n of nodes) {
-      const [sx, sy] = toScreen(n.x, n.y);
-      if (sx < -30 || sy < -30 || sx > w + 30 || sy > h + 30) continue;
-      const r = n.r * Math.min(1.8, Math.max(0.6, view.k));
-      const lit = !hl || hl.has(n.path);
-      ctx.globalAlpha = lit ? 1 : 0.18;
-      ctx.fillStyle = n.color;
-      ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill();
-      if (n.path === current) { ctx.strokeStyle = colors.text; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, sy, r + 3, 0, 6.2832); ctx.stroke(); }
-      if (lit && (showAll || (hl && hl.has(n.path)) || n.path === current)) labels.push([n.label, sx, sy + r + 3, n === hover]);
-    }
-    ctx.globalAlpha = 1;
-    for (const [t, x, y, bold] of labels) {
-      ctx.fillStyle = bold ? colors.text : colors.dim;
-      ctx.fillText(t.length > 28 ? t.slice(0, 27) + "…" : t, x, y);
+  async function rebuild() {
+    try {
+      L ??= await loadLibs();
+      if (!alive) return;
+      readTheme();
+      const { fresh } = build();
+      mount();
+      startWorker(fresh);
+    } catch (e) {
+      console.error(e);
+      empty.textContent = `The graph couldn't be drawn: ${e.message}`;
+      empty.classList.remove("hidden");
     }
   }
 
-  function hit(sx, sy) {
-    const [x, y] = toWorld(sx, sy);
-    let best = null, bd = 1e9;
-    for (const n of nodes) {
-      const dx = n.x - x, dy = n.y - y, d = Math.sqrt(dx * dx + dy * dy), r = n.r + 5 / view.k;
-      if (d < r && d < bd) { best = n; bd = d; }
-    }
-    return best;
+  function restyle() {
+    if (!graph || !renderer) return;
+    readTheme(); applySizes();
+    renderer.setSetting("labelColor", { color: theme.dim });
+    renderer.setSetting("labelRenderedSizeThreshold", 9 - s.labels * 2.4);
+    renderer.setSetting("labelDensity", 0.35 + s.labels * 0.25);
+    renderer.refresh();
   }
 
-  const local = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-  canvas.addEventListener("pointerdown", (e) => {
-    canvas.setPointerCapture(e.pointerId);
-    const [sx, sy] = local(e);
-    pointers.set(e.pointerId, [sx, sy]);
-    if (pointers.size === 2) {
-      const [p, q] = [...pointers.values()];
-      pinch = { d: Math.hypot(p[0] - q[0], p[1] - q[1]) };
-      dragging = null; panning = null;
-      return;
-    }
-    const n = hit(sx, sy);
-    if (n) { dragging = { n, sx, sy, moved: false }; n.fixed = true; }
-    else panning = { sx, sy, vx: view.x, vy: view.y };
+  find.addEventListener("input", () => { query = find.value.trim().toLowerCase(); renderer?.refresh({ skipIndexation: true }); });
+  find.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !graph || !query) return;
+    const hit = graph.findNode((n, a) => a.label.toLowerCase().includes(query));
+    if (!hit) return;
+    const d = renderer.getNodeDisplayData(hit);
+    renderer.getCamera().animate({ x: d.x, y: d.y, ratio: 0.3 }, { duration: 450 });
   });
-  canvas.addEventListener("pointermove", (e) => {
-    const [sx, sy] = local(e);
-    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, [sx, sy]);
-    if (pinch && pointers.size === 2) {
-      const [p, q] = [...pointers.values()];
-      const d = Math.hypot(p[0] - q[0], p[1] - q[1]);
-      zoomAt((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, d / pinch.d);
-      pinch.d = d;
-      return;
-    }
-    if (dragging) {
-      if (Math.hypot(sx - dragging.sx, sy - dragging.sy) > 4) dragging.moved = true;
-      if (dragging.moved) {
-        const [x, y] = toWorld(sx, sy);
-        dragging.n.x = x; dragging.n.y = y;
-        pos.set(dragging.n.path, { x, y });
-        alpha = Math.max(alpha, 0.25);
-        redraw();
-      }
-    } else if (panning) {
-      view.x = panning.vx + (sx - panning.sx); view.y = panning.vy + (sy - panning.sy);
-      redraw();
-    } else {
-      const n = hit(sx, sy);
-      if (n !== hover) { hover = n; canvas.style.cursor = n ? "pointer" : "grab"; redraw(); }
-    }
-  });
-  const up = (e) => {
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) pinch = null;
-    if (dragging) {
-      const d = dragging; dragging = null;
-      d.n.fixed = false;
-      if (!d.moved) onOpen(d.n.path);
-    }
-    panning = null;
-  };
-  canvas.addEventListener("pointerup", up);
-  canvas.addEventListener("pointercancel", up);
-  canvas.addEventListener("pointerleave", () => { if (hover && !dragging) { hover = null; redraw(); } });
-  canvas.style.cursor = "grab";
-
-  function zoomAt(sx, sy, f) {
-    const k = Math.min(6, Math.max(0.08, view.k * f)), real = k / view.k;
-    view.x = sx - (sx - view.x) * real; view.y = sy - (sy - view.y) * real; view.k = k;
-    redraw();
-  }
-  canvas.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const [sx, sy] = local(e);
-    zoomAt(sx, sy, Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0018)));
-  }, { passive: false });
-
-  localBox.addEventListener("change", rebuild);
-
-  const ro = new ResizeObserver(() => {
-    const r = root.getBoundingClientRect();
-    if (!r.width) return;
-    const first = !w;
-    dpr = window.devicePixelRatio || 1;
-    w = r.width; h = r.height;
-    canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
-    canvas.style.width = w + "px"; canvas.style.height = h + "px";
-    if (first && nodes.length) fit(); else redraw();
-  });
-  ro.observe(root);
+  localBox.addEventListener("change", () => rebuild());
+  buildPanel();
+  // the tab may be hidden (zero size) when the graph is first built: redraw as soon as it has a size
+  const ro = new ResizeObserver(() => { if (renderer && host.clientWidth) { renderer.resize(); renderer.refresh(); } });
+  ro.observe(host);
 
   return {
     root,
-    load(d, cur) { data = d; current = cur; colors = null; rebuild(); },
-    setCurrent(p) { current = p; if (localBox.checked) rebuild(); else redraw(); },
-    restyle() { colors = null; redraw(); },
-    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); },
+    load(d, cur) { data = d; current = cur; rebuild(); },
+    setCurrent(p) {
+      if (p === current) return;
+      current = p;
+      if (localBox.checked) rebuild(); else renderer?.refresh({ skipIndexation: true });
+    },
+    restyle,
+    destroy() { alive = false; ro.disconnect(); worker?.terminate(); renderer?.kill(); },
   };
 }

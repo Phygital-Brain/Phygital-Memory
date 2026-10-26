@@ -50,7 +50,9 @@ class Memory:
         self._key = self._tree = self._writer = self._con = None
         self._last_use = 0.0
         self._last_version: dict[str, float] = {}
-        self.on_lock: list = []   # called after every lock (the Finder view closes itself here)
+        self.on_lock: list = []
+        self._gen = 0              # goes up whenever a note changes; the links cache is only good for one value
+        self._links_cache = None   # called after every lock (the Finder view closes itself here)
 
     # ---------- open and close ----------
 
@@ -90,6 +92,7 @@ class Memory:
             if self._key is not None:
                 self._key.wipe()
             self._key = self._tree = self._writer = self._con = None
+            self._links_cache = None
         if was_open:   # on its own thread: unmounting Finder talks to us, and we may still hold the lock here
             def run():
                 for fn in list(self.on_lock):
@@ -132,6 +135,7 @@ class Memory:
         self._con.commit()
 
     def _index_one(self, rel: str, entry, redact=None) -> None:
+        self._gen += 1
         cfg = self.cfg
         redact = redact or ingest.make_redactor(cfg)
         if ingest.is_conflict(Path(rel).name) or self._tree.file_size(entry) > MAX_NOTE_BYTES:
@@ -367,14 +371,22 @@ class Memory:
         """Every [[link]] between notes: {"nodes": [paths], "edges": [[from, to], ...], "missing": {from: [names]}}."""
         with self._lock:
             self._need_open()
+            if self._links_cache and self._links_cache[0] == self._gen:
+                return self._links_cache[1]
             notes = [r[0] for r in self._con.execute("SELECT path FROM files ORDER BY path")]
+            wanted = set(notes)
+            texts = {}   # one walk over the folder: each folder's names are decrypted once, not once per note
+            for path, entry in self._tree.walk():
+                rel = path.lstrip("/")
+                if entry.kind == "file" and rel in wanted:
+                    texts[rel] = self._tree.read_file(entry).decode("utf-8", "replace")
             by_path = {p[:-3].lower(): p for p in notes}
             by_name: dict[str, str] = {}
             for p in notes:
                 by_name.setdefault(Path(p).stem.lower(), p)
             edges, missing, tags = set(), {}, {}
             for p in notes:
-                text = self.read(p)
+                text = texts.get(p, "")
                 for t in re.findall(r"(?:^|\s)#([\w][\w/-]*)", re.sub(r"```.*?```", "", text, flags=re.S)):
                     if not t.isdigit():
                         tags[t] = tags.get(t, 0) + 1
@@ -393,8 +405,10 @@ class Memory:
                         edges.add((p, target))
                     elif not target and not re.search(r"\.\w{2,5}$", name):
                         missing.setdefault(p, []).append(m.group(1).strip())
-            return {"nodes": notes, "edges": sorted(edges), "missing": missing,
-                    "tags": sorted(tags.items(), key=lambda kv: (-kv[1], kv[0]))}
+            out = {"nodes": notes, "edges": sorted(edges), "missing": missing,
+                   "tags": sorted(tags.items(), key=lambda kv: (-kv[1], kv[0]))}
+            self._links_cache = (self._gen, out)
+            return out
 
     def backlinks(self, rel: str) -> list[dict]:
         rel = _clean_path(rel)

@@ -1,14 +1,15 @@
 // Builds the app page into ../phygital_memory/web: index.html, assets/app.js, assets/app.css,
 // and THIRD-PARTY-LICENSES.txt for the free libraries inside the bundle.
 import * as esbuild from "esbuild";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 const OUT = new URL("../phygital_memory/web/", import.meta.url).pathname;
+rmSync(join(OUT, "assets"), { recursive: true, force: true });   // no old chunks left behind
 mkdirSync(join(OUT, "assets"), { recursive: true });
 
 const options = {
-  entryPoints: { app: "src/main.js" },
+  entryPoints: { app: "src/main.js", "graph-worker": "src/shell/graph-worker.js" },
   splitting: true,
   chunkNames: "chunk-[hash]",
   bundle: true,

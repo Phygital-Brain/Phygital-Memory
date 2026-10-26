@@ -84,6 +84,23 @@ class CsvWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
+// A whole CSV/TSV file as a table (the file preview tab). Built with textContent only.
+export function csvTable(text, path) {
+  const rows = parseCsv(text, /\.tsv$/i.test(path) ? "\t" : ",");
+  const shown = rows.slice(0, 5000);
+  const table = document.createElement("table"); table.className = "md-table";
+  shown.forEach((cells, i) => {
+    const tr = document.createElement("tr");
+    cells.forEach((c) => { const td = document.createElement(i === 0 ? "th" : "td"); td.textContent = c; tr.append(td); });
+    (i === 0 ? table.createTHead() : (table.tBodies[0] || table.createTBody())).append(tr);
+  });
+  const wrap = document.createElement("div"); wrap.className = "md-table-wrap"; wrap.append(table);
+  const cap = document.createElement("div"); cap.className = "md-media-caption";
+  cap.textContent = `${rows.length} rows${rows.length > 5000 ? " (first 5,000 shown)" : ""}`;
+  const out = document.createElement("div"); out.append(wrap, cap);
+  return out;
+}
+
 function parseCsv(text, sep) {
   const rows = []; let row = [], cur = "", quoted = false;
   for (let i = 0; i < text.length; i++) {
