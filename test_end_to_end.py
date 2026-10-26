@@ -49,7 +49,7 @@ async def main():
     # 1. Locked: the AI gets nothing and is told to ask the person to unlock in the app
     r = await ai([("search_notes", {"question": "storm"})])
     good &= check("AI tools are only search/open/write, no folder listing or path reading",
-                  r["tools"] == ["append_to_note", "around_result", "create_note", "open_result", "read_note",
+                  r["tools"] == ["append_to_note", "around_result", "create_note", "handed_notes", "open_result", "read_note",
                                  "replace_in_note", "search_notes", "status"])
     good &= check("locked: search refused", "locked" in r['search_notes{"question": "storm"}'].lower())
     # 2. The app without the password gets nothing

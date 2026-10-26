@@ -9,7 +9,9 @@ import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPr
 import { openSettings, closeSettings, onSettings } from "./shell/settings.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
+import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
+import { openStorage, openActivity } from "./shell/panels.js";
 import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
@@ -28,7 +30,7 @@ const state = {
   tags: [],             // [[tag, count]] for the editor's # suggestions
   lastNote: null,       // last note tab the person looked at (the graph's "current" note)
 };
-const HOME_ID = "::home", GRAPH_ID = "::graph";   // names can't hold ":", so these never clash with a real path
+const HOME_ID = "::home", GRAPH_ID = "::graph", SEARCH_ID = "::search";   // names can't hold ":", so these never clash with a real path
 
 const isMd = (p) => /\.md$/i.test(p);
 const isImg = (p) => /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(p);
@@ -36,7 +38,7 @@ const baseName = (p) => p.split("/").pop();
 const dirOf = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
 const label = (p) => baseName(p).replace(/\.md$/i, "");
 const tabLabel = (t) => t.title || label(t.path);
-const isSpecial = (t) => t.kind === "graph" || t.kind === "home";
+const isSpecial = (t) => t.kind === "graph" || t.kind === "home" || t.kind === "search";
 const colorsPref = () => getPref("colors", {});
 function folderColor(path) { return colorsPref()[path] || hashColor(baseName(path)); }
 function nodeColor(path) { const d = dirOf(path); return d ? folderColor(d) : PALETTE[0]; }
@@ -110,6 +112,7 @@ async function stashLoaded() {
 
 function rebuildPane(t) {
   if (t.kind === "graph") makeGraphPane(t);
+  else if (t.kind === "search") makeSearchPane(t);
   else t.pane = (t.make === "file" ? makeFileTab(t.path) : makeImageTab(t.path)).pane;
   t.stale = false;
 }
@@ -378,7 +381,9 @@ function buildApp() {
 
   sidebarEl.append(
     sbHead,
-    el("div", { class: "sb-home" }, homeRowEl),
+    el("div", { class: "sb-home" }, homeRowEl,
+      el("button", { class: "sb-search", type: "button", title: "Search every note (⇧⌘F)", onclick: () => openSearchView() },
+        icon("search", 15), el("span", {}, "Search"), el("kbd", {}, "⇧⌘F"))),
     el("div", { class: "sb-section" },
       el("span", {}, "NOTES"),
       el("span", { class: "sb-actions" },
@@ -408,6 +413,7 @@ function buildApp() {
   paneHost._empty = empty;
 
   noteTools = el("div", { class: "note-tools hidden" },
+    el("button", { class: "icon-btn", title: "Give this note to your AI apps", "aria-label": "Give to AI", onclick: giveToAI }, icon("sparkle", 16)),
     el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 16)));
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
   paneHost.append(noteTools, blPill);
@@ -498,6 +504,9 @@ function statusBar() {
     ai: pill("st-ai", ""),
   };
   barEls.lock.addEventListener("click", () => lockFolder());
+  barEls.cloud.style.cursor = barEls.ai.style.cursor = "pointer";
+  barEls.cloud.addEventListener("click", openStoragePanel);
+  barEls.ai.addEventListener("click", openActivityPanel);
   barEls.lock.setAttribute("aria-label", "Lock this folder");
   clearInterval(barTimer);
   barTimer = setInterval(refreshBar, 15000);
@@ -522,6 +531,30 @@ async function refreshBar() {
   barEls.ai.title = (b.ai || []).length
     ? "AI apps using your notes:\n" + b.ai.map((a) => `${a.name}, ${ago(a.ago)}`).join("\n")
     : "No AI app is using your notes right now.";
+}
+
+async function openStoragePanel() {
+  const info = curInfo();
+  if (!info || !unlocked(info.id)) return;
+  let storage;
+  try { storage = await api("storage"); } catch (e) { toastErr(e.message); return; }
+  const moved = await openStorage({
+    name: info.name, storage,
+    pick: (prompt) => pickFolder(prompt),
+    reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
+    move: async (parent, label) => {
+      if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+      await api("movefolder", { parent });
+      toastOk(`Moved to ${label}. Unlock it again to keep working.`);
+    },
+  });
+  if (moved) { lockedLocally(info.id); await refreshFolders(); showUnlock(); }
+}
+
+async function openActivityPanel() {
+  let rows = [];
+  try { rows = (await api("aiactivity")).activity || []; } catch (e) { toastErr(e.message); return; }
+  openActivity({ rows, open: (p) => openPath(p) });
 }
 
 // Click a note's path: copy it in the form you need.
@@ -1166,6 +1199,7 @@ function activate(tab, opts = {}) {
   refreshBacklinks();
   if (tab.kind === "home") renderHome(tab);
   if (tab.kind === "graph") loadGraph(tab);
+  if (tab.kind === "search") requestAnimationFrame(() => tab.sv.focus());
   if (tab.kind === "note") {
     requestAnimationFrame(() => {
       tab.editor.refresh();
@@ -1227,7 +1261,7 @@ function renderTabs() {
       oncontextmenu: (e) => { e.preventDefault(); tabMenu(t, e.clientX, e.clientY); },
       onauxclick: (e) => { if (e.button === 1) { e.preventDefault(); closeTab(t); } },
       onmousedown: (e) => { if (e.button === 1) e.preventDefault(); },
-    }, isSpecial(t) ? icon(t.kind === "graph" ? "graph" : "home", 13) : null,
+    }, isSpecial(t) ? icon(t.kind === "graph" ? "graph" : t.kind === "search" ? "search" : "home", 13) : null,
     el("span", { class: "tab-label" }, tabLabel(t)),
     t.dirty ? el("span", { class: "dot", title: "Unsaved" }) : null,
     el("button", { class: "tab-x", title: "Close", "aria-label": "Close tab", onclick: (e) => { e.stopPropagation(); closeTab(t); } }, icon("x", 12, 2)));
@@ -1277,6 +1311,65 @@ function renderHome(tab) {
 }
 
 // ---------- Graph ----------
+// ---------- search (Engram) ----------
+function openSearchView(q) {
+  let tab = state.tabs.find((t) => t.kind === "search");
+  if (!tab) {
+    tab = { path: SEARCH_ID, title: "Search", kind: "search", dirty: false };
+    makeSearchPane(tab);
+    state.tabs.push(tab);
+  }
+  activate(tab);
+  if (q) tab.sv.setQuery(q);
+}
+
+function makeSearchPane(tab) {
+  tab.sv = createSearchView({
+    api,
+    openAt: (path, heading) => openAt(path, heading),
+    folders: () => state.files.filter((f) => f.kind === "folder" && !f.path.includes("/")).map((f) => f.path).sort(),
+    recent: (n) => state.files.filter((f) => f.kind === "file" && isMd(f.path)).sort((a, b) => (b.mtime || 0) - (a.mtime || 0))
+      .slice(0, n).map((f) => f.path),
+  });
+  tab.pane = el("div", { class: "pane search-pane hidden" }, tab.sv.root);
+  paneHost.append(tab.pane);
+}
+
+// Open a note and bring one of its sections (by heading text) to the top of the view.
+async function openAt(path, heading) {
+  await openPath(path);
+  const tab = state.tabs.find((t) => t.path === path);
+  if (!heading || !tab || !tab.editor) return;
+  const view = tab.editor.view, doc = view.state.doc, want = heading.trim().toLowerCase();
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i);
+    const h = /^#{1,6}\s+(.*)$/.exec(line.text);
+    if (h && h[1].trim().toLowerCase() === want) {
+      requestAnimationFrame(() => {
+        view.dispatch({ effects: view.constructor.scrollIntoView(line.from, { y: "start", yMargin: 90 }) });
+        const dom = view.domAtPos(line.from).node;
+        const elx = dom.nodeType === 1 ? dom : dom.parentElement;
+        const row = elx && elx.closest(".cm-line");
+        if (row) { row.classList.add("flash-line"); setTimeout(() => row.classList.remove("flash-line"), 1400); }
+      });
+      return;
+    }
+  }
+}
+
+// ---------- give a note to AI ----------
+async function giveToAI() {
+  const tab = state.active;
+  if (!tab || tab.kind !== "note") return;
+  await saveNow(tab);
+  try {
+    await api("handtoai", { path: tab.path });
+    const say = `Read the note I handed you in Phygital Memory ("${label(tab.path)}").`;
+    navigator.clipboard.writeText(say).catch(() => {});
+    toastOk("Handed to your AI apps. A sentence to paste in your AI chat is copied.");
+  } catch (e) { toastErr(e.message); }
+}
+
 function openGraph() {
   let tab = state.tabs.find((t) => t.kind === "graph");
   if (!tab) {
@@ -1490,6 +1583,7 @@ window.addEventListener("keydown", (e) => {
   else if (/^[1-9]$/.test(k) && !e.shiftKey && !e.altKey && folderList[Number(k) - 1]) { e.preventDefault(); switchTo(folderList[Number(k) - 1].id); }
   else if (k === "g" && !e.shiftKey) { e.preventDefault(); openGraph(); }
   else if (k === "k" || k === "p") { e.preventDefault(); openSearch(); }
+  else if (k === "f" && e.shiftKey) { e.preventDefault(); openSearchView(); }
   else if (k === "f" && !e.shiftKey) {
     if (e.target.closest && e.target.closest(".cm-editor")) return;   // the editor has its own find
     e.preventDefault(); openSearch();

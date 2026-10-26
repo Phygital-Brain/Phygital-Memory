@@ -14,6 +14,7 @@ import subprocess
 import threading
 from pathlib import Path
 
+from . import activity
 from .finder import Finder
 from .memory import Memory
 
@@ -38,6 +39,8 @@ class Folder:
                 "exists": is_vault(self.path), "finder": bool(self.finder.where())}
 
     def lock(self) -> None:
+        activity.forget(self.id)   # the AI's activity lines and handed notes for this folder go with the lock
+        activity.handed[:] = [h for h in activity.handed if h["folder"] != self.id]
         self.finder.hide()          # close the Finder view first, and wait for it (locking would also close it, later)
         self.memory.lock()
         self.passes.clear()
@@ -121,6 +124,18 @@ class Folders:
             self._save()
             return f.info()
 
+    def relocate(self, fid: str, parent: str) -> dict:
+        """Move a folder to another place on disk (a cloud folder, or back to the Mac). It is locked first: only
+        scrambled files move, and the person unlocks it again afterwards."""
+        with self._lock:
+            f = self.get(fid)
+            f.lock()
+            new_path = move_folder_on_disk(f.path, Path(parent))
+            moved = Folder(f.id, f.name, new_path)
+            self.items[fid] = moved
+            self._save()
+            return moved.info()
+
     def forget(self, fid: str) -> None:
         """Take a folder off the list (it is locked first; nothing on disk is touched)."""
         with self._lock:
@@ -132,6 +147,57 @@ class Folders:
     def lock_all(self) -> None:
         for f in list(self.items.values()):
             f.lock()
+
+
+CLOUD_HOME_FOLDERS = (("Nextcloud", "Nextcloud"), ("Dropbox", "Dropbox"), ("ownCloud", "ownCloud"),
+                      ("Filen", "Filen"), ("pCloud Drive", "pCloud"), ("Sync", "Sync.com"), ("MEGA", "MEGA"))
+
+
+def cloud_places() -> list[dict]:
+    """The synced cloud folders on this Mac that a locked folder can live in (their own apps do the syncing)."""
+    home = Path.home()
+    out = []
+    icloud = home / "Library/Mobile Documents/com~apple~CloudDocs"
+    if icloud.is_dir():
+        out.append({"name": "iCloud Drive", "path": str(icloud)})
+    storage = home / "Library/CloudStorage"
+    if storage.is_dir():
+        for d in sorted(storage.iterdir()):
+            if d.is_dir() and not d.name.startswith("."):
+                base = d.name.split("-")[0]
+                label = {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "Dropbox": "Dropbox", "Box": "Box"}.get(base, base)
+                out.append({"name": label + (f" ({d.name.split('-', 1)[1]})" if "-" in d.name else ""), "path": str(d)})
+    for folder, label in CLOUD_HOME_FOLDERS:
+        d = home / folder
+        if d.is_dir() and not any(p["path"] == str(d) for p in out):
+            out.append({"name": label, "path": str(d)})
+    return out
+
+
+def move_folder_on_disk(src: Path, parent: Path) -> Path:
+    """Move a locked folder (only scrambled files) into another place. Same disk: one atomic rename. Another disk:
+    copy, check every file arrived with the same size, then put the original in the Trash (so it can come back)."""
+    import shutil
+    import time
+    src, parent = Path(src).resolve(), Path(parent).expanduser().resolve()
+    if not parent.is_dir():
+        raise ValueError("That place doesn't exist.")
+    dest = parent / src.name
+    if dest.exists():
+        raise ValueError(f"There is already something called '{src.name}' there.")
+    if dest.is_relative_to(src):
+        raise ValueError("A folder can't go inside itself.")
+    if os.stat(src).st_dev == os.stat(parent).st_dev:
+        os.rename(src, dest)
+        return dest
+    shutil.copytree(src, dest)
+    want = {p.relative_to(src): p.stat().st_size for p in src.rglob("*") if p.is_file()}
+    got = {p.relative_to(dest): p.stat().st_size for p in dest.rglob("*") if p.is_file()}
+    if want != got:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise ValueError("The copy didn't arrive complete. Nothing was moved.")
+    os.rename(src, Path.home() / ".Trash" / f"{src.name} (moved {time.strftime('%Y-%m-%d %H.%M')})")
+    return dest
 
 
 def pick_folder(prompt: str) -> str | None:
