@@ -135,7 +135,7 @@ export function createSearchView(opts) {
 
   return {
     root,
-    focus() { fillWithin(); input.focus(); input.select(); if (!input.value) draw(); },
+    focus() { fillWithin(); input.focus(); const n = input.value.length; input.setSelectionRange(n, n); if (!input.value) draw(); },   // caret at the end: typing carries on
     setQuery(q) { input.value = q; run(); },
     refresh() { fillWithin(); if (input.value.trim()) run(); else draw(); },
   };

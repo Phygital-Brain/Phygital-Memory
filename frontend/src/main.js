@@ -381,9 +381,7 @@ function buildApp() {
 
   sidebarEl.append(
     sbHead,
-    el("div", { class: "sb-home" }, homeRowEl,
-      el("button", { class: "sb-search", type: "button", title: "Search every note (⇧⌘F)", onclick: () => openSearchView() },
-        icon("search", 15), el("span", {}, "Search"), el("kbd", {}, "⇧⌘F"))),
+    el("div", { class: "sb-home" }, homeRowEl),
     el("div", { class: "sb-section" },
       el("span", {}, "NOTES"),
       el("span", { class: "sb-actions" },
@@ -420,7 +418,18 @@ function buildApp() {
 
   bannerHost = el("div", { class: "banner-host" });
   const graphBtn = el("button", { class: "icon-btn tab-graph", title: "Graph view (⌘G)", "aria-label": "Graph view", onclick: openGraph }, icon("graph", 16));
-  const searchBtn = el("button", { class: "icon-btn tab-graph", title: "Search every note (⇧⌘F)", "aria-label": "Search", onclick: () => openSearchView() }, icon("search", 16));
+  // A small search bar beside the graph button: typing here opens the search page with what you typed.
+  const topSearchInput = el("input", { class: "top-search-input", type: "search", placeholder: "Search", spellcheck: "false", "aria-label": "Search notes" });
+  topSearchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); const q = topSearchInput.value.trim(); topSearchInput.value = ""; topSearchInput.blur(); openSearchView(q); }
+    else if (e.key === "Escape") { topSearchInput.value = ""; topSearchInput.blur(); }
+  });
+  topSearchInput.addEventListener("input", () => {
+    const q = topSearchInput.value;
+    if (q.trim().length >= 2) { topSearchInput.value = ""; openSearchView(q); }
+  });
+  const searchBtn = el("label", { class: "top-search", title: "Search every note (⇧⌘F)" },
+    icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
   appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl, searchBtn, graphBtn, statusEl), paneHost));
 }
 

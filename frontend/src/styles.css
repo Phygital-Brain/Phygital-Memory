@@ -526,3 +526,9 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .sv-loading { color: var(--text-3); }
 .flash-line { animation: flash-line 1.4s ease-out; }
 @keyframes flash-line { 0%, 30% { background: var(--accent-soft); } 100% { background: transparent; } }
+.top-search { display: flex; align-items: center; gap: 6px; height: 26px; width: 200px; margin-right: 6px; padding: 0 8px; flex: none;
+              border: 1px solid var(--border); border-radius: 7px; background: var(--bg-subtle); color: var(--text-3); cursor: text; }
+.top-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); color: var(--text-2); }
+.top-search-input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; background: none; border: 0; outline: none; color: var(--text); }
+.top-search kbd { font: inherit; font-size: 10.5px; color: var(--text-faint); }
+.top-search:focus-within kbd { display: none; }
