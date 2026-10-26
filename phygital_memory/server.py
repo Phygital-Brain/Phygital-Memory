@@ -150,7 +150,8 @@ def search_notes(ctx: Context, question: Annotated[str, Field(description="What 
     if not rows:
         return "No matching notes."
     many = len(folders.open()) > 1
-    out = [f"[{f.id}:{r['id']}] {(f.name + ' / ') if many else ''}{r['path']}  >  {r['heading']}\n    {r['snippet']}"
+    out = [f"[{f.id}:{r['id']}] {(f.name + ' / ') if many else ''}{r['path']}  >  {r['heading']}\n    "
+           f"{r['snippet'].replace(chr(2), '[').replace(chr(3), ']')}"
            for _, f, r in rows[:limit]]
     return LABEL + "\n".join(out) + "\n\nOpen one with open_result(id)."
 

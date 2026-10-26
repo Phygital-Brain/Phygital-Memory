@@ -18,7 +18,13 @@ function marked(parent, text, words) {
   if (last < text.length) parent.append(text.slice(last));
 }
 
-// Engram wraps the matched words of a snippet in [brackets]; we mark them instead, so drop those brackets.
+// Engram marks the matched words of a snippet with \x02 … \x03; those become <mark>s.
+function engramMarks(parent, text) {
+  const parts = text.split(/\x02|\x03/);
+  parts.forEach((part, i) => { if (part) parent.append(i % 2 ? el("mark", {}, part) : part); });
+}
+
+// (older Engram snippets used [brackets] around matches)
 function unbracket(text, words) {
   const low = words.map((w) => w.toLowerCase());
   return text.replace(/\[([^\[\]\n]{1,60})\]/g, (m, inner) => (low.some((w) => inner.toLowerCase().includes(w)) ? inner : m));
@@ -92,7 +98,7 @@ export function createSearchView(opts) {
       const meta = el("div", { class: "sv-meta" }, el("span", { class: "sv-path" }, r.path.replace(/\.md$/i, "")),
         r.date ? el("span", {}, when(r.date)) : null, r.exact ? el("span", { class: "sv-exact" }, "exact") : null);
       const snip = el("div", { class: "sv-snippet" });
-      marked(snip, unbracket(r.snippet || "", words), words);
+      engramMarks(snip, r.snippet || "");
       item.append(head, section ? el("div", { class: "sv-section" }, "› " + section) : null, snip, meta,
         r.why ? el("div", { class: "sv-why", title: "Why this result" }, r.why) : null);
       return item;

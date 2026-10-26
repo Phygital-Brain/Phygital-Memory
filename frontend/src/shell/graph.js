@@ -248,7 +248,9 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
     if (!renderer) return;
     renderer.setCustomBBox(null);
     renderer.refresh();
-    renderer.getCamera().animatedReset({ duration: 300 });
+    // a small graph would stretch to the edges: zoom out a little so it sits in the middle
+    const n = graph ? graph.order : 0;
+    renderer.getCamera().animate({ x: 0.5, y: 0.5, angle: 0, ratio: n < 8 ? 1.9 : n < 40 ? 1.35 : 1.08 }, { duration: 300 });
     requestAnimationFrame(() => renderer?.setCustomBBox(renderer.getBBox()));
   }
 

@@ -532,3 +532,12 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .top-search-input { flex: 1; min-width: 0; font: inherit; font-size: 12.5px; background: none; border: 0; outline: none; color: var(--text); }
 .top-search kbd { font: inherit; font-size: 10.5px; color: var(--text-faint); }
 .top-search:focus-within kbd { display: none; }
+
+/* many tabs: they shrink first (names get "…"), then the strip scrolls; + / search / graph keep their place */
+.tabs { flex: 0 1 auto; }
+.tab { flex: 0 1 180px; min-width: 76px; max-width: 200px; }
+.tab .tab-label { flex: 1; min-width: 0; }
+.tab.active { flex-shrink: 0; min-width: 110px; }
+.tabbar-gap { flex: 1 1 8px; min-width: 8px; }
+.top-search { width: clamp(120px, 18vw, 220px); margin-left: 4px; }
+.tabbar > .tab-plus { flex: none; }

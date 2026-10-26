@@ -725,12 +725,21 @@ export function createEditor(parent, opts) {
       ".cm-content": { fontFamily: "var(--font-body)" },
       ".cm-activeLine": { backgroundColor: "transparent" },
       "&.cm-focused": { outline: "none" },
+      // menus that pop up while typing ([[, #, /): the app's colours, not CodeMirror's light default
+      ".cm-tooltip": { backgroundColor: "var(--bg-surface)", color: "var(--text)", border: "1px solid var(--border)",
+                       borderRadius: "10px", boxShadow: "0 10px 30px rgba(0,0,0,.3)" },
+      ".cm-tooltip.cm-tooltip-autocomplete > ul": { fontFamily: "var(--font-body)", maxHeight: "280px", padding: "4px" },
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li": { padding: "5px 10px", borderRadius: "6px", color: "var(--text)" },
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": { backgroundColor: "var(--accent-soft)", color: "var(--text)" },
+      ".cm-completionLabel": { color: "var(--text)" },
+      ".cm-completionDetail": { color: "var(--text-3)", fontStyle: "normal" },
+      ".cm-completionMatchedText": { color: "var(--accent)", textDecoration: "none", fontWeight: "650" },
     }),
     autocompletion({ override: [wikiCompletion(opts), ...features.flatMap((f) => f.completions || [])], icons: false }),
     fileDrops(opts),
     Prec.high(keymap.of([
       { key: "Mod-s", run: () => { opts.onSave?.(); return true; }, preventDefault: true },
-      { key: "Escape", run: (view) => { view.contentDOM.blur(); return true; } },   // back to view mode
+      { key: "Escape", run: (view) => { view.contentDOM.blur(); view.dispatch({ effects: setFocused.of(false) }); return true; } },   // back to view mode
       { key: "Mod-b", run: wrapWith("**") },
       { key: "Mod-i", run: wrapWith("*") },
       { key: "Mod-Shift-x", run: wrapWith("~~") },

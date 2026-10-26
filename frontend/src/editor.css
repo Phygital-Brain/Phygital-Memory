@@ -162,3 +162,5 @@ a.md-wiki-missing { color: var(--text-3); border-bottom-style: dashed; border-bo
 .md-fold-closed { transform: rotate(0deg); opacity: .9; color: var(--accent); }
 .md-fold-placeholder { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 6px; background: var(--bg-subtle);
                        color: var(--text-3); cursor: pointer; font-size: .85em; line-height: 1.4; }
+
+.md-table-live td, .md-table-live th { height: 34px; }

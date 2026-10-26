@@ -17,7 +17,7 @@ export function openStorage(ctx) {
     const moveTo = async (parent, label) => {
       err.textContent = "";
       busy(true);
-      try { await ctx.move(parent, label); done(true); }
+      try { if (await ctx.move(parent, label)) done(true); else busy(false); }
       catch (e) { err.textContent = e.message; busy(false); }
     };
     const option = (key, title, text, on, body) => el("div", { class: "st-opt" + (on ? " on" : "") },

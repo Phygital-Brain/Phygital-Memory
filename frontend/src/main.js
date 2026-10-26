@@ -430,7 +430,9 @@ function buildApp() {
   });
   const searchBtn = el("label", { class: "top-search", title: "Search every note (⇧⌘F)" },
     icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
-  appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl, searchBtn, graphBtn, statusEl), paneHost));
+  appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl,
+    el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 15)),
+    el("span", { class: "tabbar-gap" }), searchBtn, graphBtn, statusEl), paneHost));
 }
 
 async function enterApp() {
@@ -569,11 +571,12 @@ async function openStoragePanel() {
     pick: (prompt) => pickFolder(prompt),
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     move: async (parent, label) => {
-      const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then the scrambled files move to ${shortPath(parent)}. You unlock it again after.`, `Move to ${label}`, false);
-      if (!sure) throw new Error("Not moved.");
+      const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then only the scrambled files move. You unlock it again after.`, `Move to ${label}`, false);
+      if (!sure) return false;
       if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
       await api("movefolder", { parent });
       toastOk(`Moved to ${label}. Unlock it again to keep working.`);
+      return true;
     },
   });
   if (moved) { lockedLocally(info.id); await refreshFolders(); showUnlock(); }
@@ -1091,6 +1094,20 @@ async function makeNoteTab(path) {
   tab.propsEl = el("div", { class: "props" });
   tab.host = el("div", { class: "editor-host" });
   tab.pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, tab.crumbEl, tab.titleEl, tab.titleErr, tab.propsEl, tab.host));
+  // Clicking the empty space under a note puts the cursor at the end, like Obsidian. If the note ends with a
+  // table or a code block, a new line is added first so there is somewhere to type.
+  tab.pane.addEventListener("mousedown", (e) => {
+    const v = tab.editor && tab.editor.view;
+    if (!v || e.button !== 0 || e.target.closest("input, textarea, button, select, a, .props, .crumb, .md-table-wrap, .cm-line, .cm-widgetBuffer")) return;
+    const doc = v.state.doc;
+    const bottom = v.documentTop + v.lineBlockAt(doc.length).bottom;
+    if (e.clientY <= bottom) return;
+    e.preventDefault();
+    const last = doc.line(doc.lines).text;
+    const changes = /^\s*\|/.test(last) || /^\s*(```|~~~)/.test(last) ? { from: doc.length, insert: "\n\n" } : undefined;
+    v.focus();
+    v.dispatch({ changes, selection: { anchor: doc.length + (changes ? 2 : 0) }, scrollIntoView: true });
+  });
   paneHost.append(tab.pane);
   wireTitle(tab);
   renderProps(tab);
@@ -1295,8 +1312,7 @@ function renderTabs() {
     el("button", { class: "tab-x", title: "Close", "aria-label": "Close tab", onclick: (e) => { e.stopPropagation(); closeTab(t); } }, icon("x", 12, 2)));
     return el1;
   });
-  nodes.push(el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 15)));
-  tabsEl.replaceChildren(...nodes);
+  tabsEl.replaceChildren(...nodes);   // the + button sits outside the strip, so it never scrolls away
   const a = tabsEl.querySelector(".tab.active");
   if (a) a.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
