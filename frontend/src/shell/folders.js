@@ -49,15 +49,15 @@ export function switcherItems(ctx) {
   const cur = ctx.list.find((f) => f.id === ctx.currentId);
   const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id));
   const items = [...rows, { sep: true },
-    actionRow("plus", "New locked folder", ctx.createNew),
-    actionRow("folder", "Open a locked folder", ctx.openOther),
+    actionRow("plus", "New folder", ctx.createNew),
+    actionRow("folder", "Open folder", ctx.openOther),
     actionRow("grid", "Manage folders", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
-      actionRow("gear", "Rename this folder", ctx.rename),
+      actionRow("gear", "Rename folder", ctx.rename),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
       actionRow("home", "Home", ctx.home, { label: "⇧⌘H" }),
-      actionRow("lock", "Lock this folder", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
+      actionRow("lock", "Lock folder", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
   }
   return items;
 }
@@ -84,14 +84,14 @@ export function manageFolders(list, actions) {
           open ? btn("Lock", actions.lock) : null,
           btn("Remove", actions.forget, "danger"))));
     }
-    if (!list.length) body.append(el("div", { class: "mf-empty" }, "No locked folders yet."));
+    if (!list.length) body.append(el("div", { class: "mf-empty" }, "No folders yet."));
     const card = el("div", { class: "dlg mf", role: "dialog" },
-      el("div", { class: "dlg-title" }, "Locked folders"),
-      el("div", { class: "mf-hint" }, "Each folder has its own password. Removing one only takes it off this list."),
+      el("div", { class: "dlg-title" }, "Folders"),
+      el("div", { class: "mf-hint" }, "Every folder is encrypted and has its own password. Remove only takes it off this list; nothing is deleted."),
       body,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, "Open a locked folder…"),
-        el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, "New locked folder…")));
+        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, "Open folder…"),
+        el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, "New folder…")));
     return { card };
   });
 }
@@ -123,7 +123,7 @@ export function createFolderForm(pick) {
       done(out);
     };
     const card = el("div", { class: "dlg", role: "dialog" },
-      el("div", { class: "dlg-title" }, "Create a new locked folder"),
+      el("div", { class: "dlg-title" }, "New folder"),
       name, pw, pw2,
       el("div", { class: "dlg-where-row" }, where, choose),
       err,

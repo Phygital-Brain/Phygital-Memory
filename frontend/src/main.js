@@ -198,10 +198,10 @@ async function openOtherFolder() {
 }
 
 async function createNewFolder() {
-  const v = await createFolderForm(() => pickFolder("Choose where to make the new locked folder"));
+  const v = await createFolderForm(() => pickFolder("Choose where to put the new folder"));
   if (!v) return;
   try {
-    toast("Making the locked folder…");
+    toast("Making the folder…");
     const j = await api("createfolder", v);
     await refreshFolders();
     await switchTo(j.folder.id);
@@ -290,8 +290,8 @@ function drawUnlock() {
     const b = folderList.find((f) => f.id === backId);
     if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, `Back to ${b.name}`));
   }
-  links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open another locked folder…"),
-    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "Create a new locked folder…"));
+  links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open folder…"),
+    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New folder…"));
   kids.push(el("div", { class: "unlock-links" }, ...links));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(form);
@@ -382,7 +382,7 @@ function buildApp() {
       el("span", {}, "NOTES"),
       el("span", { class: "sb-actions" },
         ib("plus", "New note", () => newNote()),
-        ib("folderplus", "New folder", () => newFolder()),
+        ib("folderplus", "New subfolder", () => newFolder()),
         ib("collapse", "Collapse all", () => { state.open.clear(); renderTree(); }),
         sortBtn)),
     selBarEl,
@@ -485,6 +485,23 @@ function openSettingsHere() {
     name: info.name, finderShown: finder.shown, finderAvailable: finder.available,
     toggleFinder: async () => { await toggleFinder(); return finder.shown; },
   } : null);
+}
+
+// Click a note's path: copy it in the form you need.
+function copyPathMenu(path, anchor) {
+  const r = anchor.getBoundingClientRect();
+  const copy = (text, what) => navigator.clipboard.writeText(text)
+    .then(() => toastOk(`${what} copied`)).catch(() => toastErr("Couldn't copy."));
+  const name = path.split("/").pop().replace(/\.md$/i, "");
+  const items = [
+    { label: "Copy path", hint: path, fn: () => copy(path, "Path") },
+    { label: "Copy link", hint: `[[${name}]]`, fn: () => copy(`[[${name}]]`, "Link") },
+  ];
+  if (finder.shown && finder.where) {
+    const full = `${finder.where}/${path}`;
+    items.push({ label: "Copy Finder path", hint: shortPath(full), fn: () => copy(full, "Finder path") });
+  }
+  showMenu(items, r.left, r.bottom + 4);
 }
 
 // Show one note (or file) selected in Finder. Opens the folder in Finder first if needed (with the usual warning).
@@ -846,7 +863,7 @@ async function newNote(dir = "", opts = {}) {
 }
 
 async function newFolder(dir = "") {
-  const v = await askText("New folder", "", "Create", (val) => validName(val));
+  const v = await askText("New subfolder", "", "Create", (val) => validName(val));
   if (v == null) return;
   const path = join(dir, v.trim());
   if (exists(path)) { toastErr(`"${path}" already exists.`); return; }
@@ -968,7 +985,8 @@ async function makeNoteTab(path) {
   const tab = { path, kind: "note", folder: currentFolder(), fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
   tab.titleEl = el("input", { class: "title", spellcheck: "false", "aria-label": "Note title", value: label(path) });
   tab.titleErr = el("div", { class: "title-err" });
-  tab.crumbText = el("span", { class: "crumb-path" });
+  tab.crumbText = el("button", { class: "crumb-path", type: "button", title: "Copy path",
+                                 onclick: (e) => copyPathMenu(tab.path, e.currentTarget) });
   tab.crumbEl = el("div", { class: "crumb" }, tab.crumbText,
     el("button", { class: "crumb-btn", type: "button", title: "Show this note in Finder",
                    onclick: () => revealInFinder(tab.path) }, icon("folder", 13), "Show in Finder"));
