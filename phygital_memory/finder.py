@@ -22,13 +22,14 @@ NAME = "Phygital Memory"
 
 
 class _Vault:
-    name = NAME
+    def __init__(self, name):
+        self.name = name
 
 
 class _Session:
     """What finder_mount expects of an open vault."""
-    def __init__(self, memory: Memory):
-        self.memory, self.vault, self.read_only = memory, _Vault(), False
+    def __init__(self, memory: Memory, name: str = NAME):
+        self.memory, self.vault, self.read_only = memory, _Vault(name), False
         self.status_code = secrets.token_hex(8)
 
     @property
@@ -95,8 +96,8 @@ class _Journal:
 
 
 class Finder:
-    def __init__(self, memory: Memory):
-        self.memory = memory
+    def __init__(self, memory: Memory, volume: str = NAME):
+        self.memory, self.volume = memory, volume
         self.session = None
         self.mounts = None
         memory.on_lock.append(self.hide)
@@ -105,13 +106,13 @@ class Finder:
         return finder_mount.Mounts.available(self)   # macOS with mount_webdav
 
     def where(self) -> str:
-        return self.mounts.where(NAME) if self.mounts else ""
+        return self.mounts.where(self.volume) if self.mounts else ""
 
     def show(self) -> str:
         if not self.memory.is_open:
             raise ValueError("Unlock first.")
         if self.mounts is None:
-            self.session = _Session(self.memory)
+            self.session = _Session(self.memory, self.volume)
             manager = _Manager(self.memory, self.session)
             journal = _Journal(self.memory)
             BASE.mkdir(parents=True, exist_ok=True)

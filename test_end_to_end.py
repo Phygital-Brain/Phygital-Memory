@@ -65,13 +65,13 @@ async def main():
     r = await ai([("search_notes", {"question": "tide data supplier"})])
     found = r['search_notes{"question": "tide data supplier"}']
     good &= check("AI search finds Lighthouse", "Projects/Lighthouse-App.md" in found)
-    rid = int(found.split("[", 1)[1].split("]", 1)[0])
+    rid = found.split("[", 1)[1].split("]", 1)[0]
     r = await ai([("read_note", {"id": rid}),
                   ("replace_in_note", {"id": rid, "old_text": "still owe us an API key",
                                        "new_text": "sent the API key on 26 October"}),
                   ("create_note", {"path": "Ideas/From-AI.md", "text": "## Note\nWritten by the AI test."})])
-    good &= check("AI reads exact note with info block", "status: active" in r['read_note{"id": %d}' % rid])
-    good &= check("AI edit saved", "Saved" in r['replace_in_note{"id": %d, "old_text": "still owe us an API key", '
+    good &= check("AI reads exact note with info block", "status: active" in r['read_note{"id": "%s"}' % rid])
+    good &= check("AI edit saved", "Saved" in r['replace_in_note{"id": "%s", "old_text": "still owe us an API key", '
                                                '"new_text": "sent the API key on 26 October"}' % rid])
     code, note = api("read", {"path": "Projects/Lighthouse-App.md"}, app_pass=app_pass)
     good &= check("edit kept the info block and changed the text",
