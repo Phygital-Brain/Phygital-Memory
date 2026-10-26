@@ -16,6 +16,7 @@ import base64
 import json
 import os
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -347,6 +348,16 @@ async def api(request: Request) -> Response:
             do = body.get("do", "status")
             if do == "show":
                 where = await asyncio.to_thread(f.finder.show)
+                return _ok({"shown": True, "where": where})
+            if do == "reveal":   # select one note or file in the open Finder view
+                where = f.finder.where()
+                if not where:
+                    return _ok({"error": "Show the folder in Finder first."}, 400)
+                root = Path(where).resolve()
+                target = (root / str(body.get("path", "")).lstrip("/")).resolve()
+                if not target.is_relative_to(root) or not target.exists():
+                    return _ok({"error": "That note isn't in the Finder view."}, 400)
+                await asyncio.to_thread(subprocess.run, ["open", "-R", str(target)], timeout=30)
                 return _ok({"shown": True, "where": where})
             if do == "hide":
                 await asyncio.to_thread(f.finder.hide)

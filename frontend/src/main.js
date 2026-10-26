@@ -324,7 +324,8 @@ async function openSwitcher() {
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder,
     createNew: createNewFolder, manage: openManage, rename: () => renameFolder(), lockThis: () => lockFolder(), lockAll,
-    home: () => goHome() }), r.left + 6, r.bottom + 2);
+    home: () => goHome(),
+    finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 
 async function openManage() {
@@ -388,7 +389,7 @@ function buildApp() {
     treeEl,
     el("div", { class: "sb-foot" },
       el("span", { class: "sb-note" }, "🔒 Encrypted · AI reads through Engram"),
-      el("span", { class: "sb-foot-btns" }, finderBtn, ib("gear", "Settings (⌘,)", openSettings),
+      el("span", { class: "sb-foot-btns" }, finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere),
         el("button", { class: "btn small", onclick: lockFolder, title: "Lock this folder" }, icon("lock", 13), "Lock"))),
     resize);
 
@@ -477,6 +478,24 @@ function drawFinder() {
   clearInterval(finderTimer); finderTimer = null;
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
 }
+// Settings with this folder's options (Show in Finder). Resolves the switch's new state.
+function openSettingsHere() {
+  const info = curInfo();
+  openSettings(info && unlocked(info.id) ? {
+    name: info.name, finderShown: finder.shown, finderAvailable: finder.available,
+    toggleFinder: async () => { await toggleFinder(); return finder.shown; },
+  } : null);
+}
+
+// Show one note (or file) selected in Finder. Opens the folder in Finder first if needed (with the usual warning).
+async function revealInFinder(path) {
+  if (!finder.shown) {
+    await toggleFinder();
+    if (!finder.shown) return;
+  }
+  try { await api("finder", { do: "reveal", path }); } catch (e) { toastErr(e.message); }
+}
+
 async function toggleFinder() {
   if (finder.shown) { hideFinder(); return; }
   if (!finder.confirmed) {
@@ -949,9 +968,13 @@ async function makeNoteTab(path) {
   const tab = { path, kind: "note", folder: currentFolder(), fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
   tab.titleEl = el("input", { class: "title", spellcheck: "false", "aria-label": "Note title", value: label(path) });
   tab.titleErr = el("div", { class: "title-err" });
+  tab.crumbText = el("span", { class: "crumb-path" });
+  tab.crumbEl = el("div", { class: "crumb" }, tab.crumbText,
+    el("button", { class: "crumb-btn", type: "button", title: "Show this note in Finder",
+                   onclick: () => revealInFinder(tab.path) }, icon("folder", 13), "Show in Finder"));
   tab.propsEl = el("div", { class: "props" });
   tab.host = el("div", { class: "editor-host" });
-  tab.pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, tab.titleEl, tab.titleErr, tab.propsEl, tab.host));
+  tab.pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, tab.crumbEl, tab.titleEl, tab.titleErr, tab.propsEl, tab.host));
   paneHost.append(tab.pane);
   wireTitle(tab);
   renderProps(tab);
@@ -1139,6 +1162,8 @@ function cycleTab(dir) {
 
 function renderTabs() {
   if (!tabsEl) return;
+  const fname = (curInfo() || {}).name || "";
+  for (const t of state.tabs) if (t.crumbText) t.crumbText.textContent = [fname, ...t.path.split("/")].filter(Boolean).join("  /  ");
   const nodes = state.tabs.map((t) => {
     const on = t === state.active;
     const el1 = el("div", {
@@ -1404,7 +1429,7 @@ window.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.key === "Tab") { e.preventDefault(); cycleTab(e.shiftKey ? -1 : 1); return; }
   if (e.key === "Escape" && state.sel.size && !document.querySelector(".overlay,.menu")) { state.sel.clear(); renderTree(); return; }
   if (!mod || e.altKey) return;
-  if (e.key === ",") { e.preventDefault(); openSettings(); }
+  if (e.key === ",") { e.preventDefault(); openSettingsHere(); }
   else if (k === "h" && e.shiftKey) { e.preventDefault(); goHome(); }
   else if (k === "o" && e.shiftKey) { e.preventDefault(); openSwitcher(); }
   else if (/^[1-9]$/.test(k) && !e.shiftKey && !e.altKey && folderList[Number(k) - 1]) { e.preventDefault(); switchTo(folderList[Number(k) - 1].id); }

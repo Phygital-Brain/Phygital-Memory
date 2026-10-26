@@ -29,7 +29,7 @@ function actionRow(iconName, label, onClick, right) {
 }
 
 // ctx: {list, currentId, unlocked(id), switchTo(id), openOther(), createNew(), manage(), rename(), lockThis(),
-//       lockAll(), home()}
+//       lockAll(), home(), finder?: {shown, toggle()}}
 export function switcherItems(ctx) {
   const rows = ctx.list.map((f, i) => {
     const on = f.id === ctx.currentId, open = ctx.unlocked(f.id);
@@ -55,6 +55,7 @@ export function switcherItems(ctx) {
   if (cur) {
     items.push({ sep: true },
       actionRow("gear", "Rename this folder", ctx.rename),
+      ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
       actionRow("home", "Home", ctx.home, { label: "⇧⌘H" }),
       actionRow("lock", "Lock this folder", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
   }

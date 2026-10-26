@@ -33,7 +33,8 @@ applySettings();
 let open = null;
 export function closeSettings() { if (open) { open.close(); } }
 
-export function openSettings() {
+// folderOpts (optional): {name, finderShown, finderAvailable, toggleFinder()} for the "This folder" section.
+export function openSettings(folderOpts) {
   if (open) return;
   const prev = document.activeElement;
   const seg = (options, get, set) => {
@@ -70,7 +71,19 @@ export function openSettings() {
     row("Theme", "System follows your Mac.", seg([["system", "System"], ["light", "Light"], ["dark", "Dark"]], () => cur.theme, (v) => update({ theme: v }))),
     row("Editor width", null, el("div", { class: "set-range" }, width, widthVal, el("label", { class: "set-check" }, full, "Full"))),
     row("Font size", null, el("div", { class: "set-range" }, size, sizeVal)),
-    row("Show properties", "The fields under a note's title.", el("label", { class: "switch" }, props, el("span", { class: "switch-t" }))));
+    row("Show properties", "The fields under a note's title.", el("label", { class: "switch" }, props, el("span", { class: "switch-t" }))),
+    ...folderSection());
+  function folderSection() {
+    if (!folderOpts || !folderOpts.finderAvailable) return [];
+    const fin = el("input", { type: "checkbox", checked: !!folderOpts.finderShown, "aria-label": "Show in Finder" });
+    fin.addEventListener("change", async () => {
+      const ok = await folderOpts.toggleFinder();
+      fin.checked = !!(ok ?? fin.checked);
+    });
+    return [el("div", { class: "set-section" }, `This folder: ${folderOpts.name}`),
+      row("Show in Finder", "Opens the unlocked notes as a normal folder. While it's open, any app on this Mac can read them. It closes when you lock.",
+          el("label", { class: "switch" }, fin, el("span", { class: "switch-t" })))];
+  }
   const back = el("div", { class: "overlay modal", onmousedown: (e) => { if (e.target === back) close(); } }, card);
   document.addEventListener("keydown", onKey, true);
   document.body.append(back);
