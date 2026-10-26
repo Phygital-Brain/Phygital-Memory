@@ -447,6 +447,22 @@ async function enterApp() {
   checkFinder(true);
   goHome();
   refreshFolders();
+  preloadGraph();
+}
+
+// Build the graph quietly in the background after unlocking (libraries, links and the layout), so opening it
+// later is instant. It sits outside the tab bar until it's opened.
+let pregraph = null;
+function preloadGraph() {
+  const fid = loadedFolder;
+  pregraph = null;
+  setTimeout(() => {
+    if (loadedFolder !== fid || state.tabs.some((t) => t.kind === "graph")) return;
+    const tab = { path: GRAPH_ID, title: "Graph", kind: "graph", dirty: false, sig: "", folder: fid };
+    makeGraphPane(tab);
+    pregraph = tab;
+    loadGraph(tab);
+  }, 1200);
 }
 
 async function loadFiles() {
@@ -1384,6 +1400,11 @@ async function giveToAI() {
 
 function openGraph() {
   let tab = state.tabs.find((t) => t.kind === "graph");
+  if (!tab && pregraph && pregraph.folder === loadedFolder && pregraph.pane && pregraph.pane.isConnected) {
+    tab = pregraph;   // already built in the background
+    pregraph = null;
+    state.tabs.push(tab);
+  }
   if (!tab) {
     tab = { path: GRAPH_ID, title: "Graph", kind: "graph", dirty: false, sig: "" };
     makeGraphPane(tab);

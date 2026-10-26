@@ -287,7 +287,11 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
   localBox.addEventListener("change", () => rebuild());
   buildPanel();
   // the tab may be hidden (zero size) when the graph is first built: redraw as soon as it has a size
-  const ro = new ResizeObserver(() => { if (renderer && host.clientWidth) { renderer.resize(); renderer.refresh(); } });
+  let hiddenBefore = true;   // built in the background (no size yet): fit the whole picture the first time it shows
+  const ro = new ResizeObserver(() => {
+    if (!host.clientWidth) { hiddenBefore = true; return; }
+    if (renderer) { renderer.resize(); renderer.refresh(); if (hiddenBefore) { hiddenBefore = false; fit(); } }
+  });
   ro.observe(host);
 
   return {
