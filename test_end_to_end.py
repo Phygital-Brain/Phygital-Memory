@@ -49,7 +49,8 @@ async def main():
     # 1. Locked: the AI gets nothing and is told to ask the person to unlock in the app
     r = await ai([("search_notes", {"question": "storm"})])
     good &= check("AI tools are only search/open/write, no folder listing or path reading",
-                  r["tools"] == ["append_to_note", "around_result", "create_note", "handed_notes", "open_result", "read_note",
+                  r["tools"] == ["append_to_note", "around_result", "create_note", "finish_handed_note", "handed_notes",
+                                 "open_result", "read_note",
                                  "replace_in_note", "search_notes", "status"])
     good &= check("locked: search refused", "locked" in r['search_notes{"question": "storm"}'].lower())
     # 2. The app without the password gets nothing
@@ -78,9 +79,24 @@ async def main():
                   note["text"].startswith("---\ntype: project") and "sent the API key on 26 October" in note["text"])
     r = await ai([("search_notes", {"question": "written by the AI test"})])
     good &= check("new note is searchable", "Ideas/From-AI.md" in r['search_notes{"question": "written by the AI test"}'])
+    # 4b. The AI to-do list: the person gives a short note (no search id) with a request; the AI does it, ticks it off
+    api("save", {"path": "Ideas/Tiny.md", "text": "hi"}, app_pass=app_pass)
+    code, j = api("handtoai", {"path": "Ideas/Tiny.md", "ask": "Add the word kumquat at the end."}, app_pass=app_pass)
+    hid = j["item"]["id"]
+    r = await ai([("handed_notes", {})])
+    listed = r["handed_notes{}"]
+    good &= check("AI sees the handed note with the request", hid in listed and "kumquat" in listed and "Ideas/Tiny.md" in listed)
+    r = await ai([("append_to_note", {"id": hid, "text": "kumquat"}),
+                  ("finish_handed_note", {"id": hid, "what_you_did": "Added kumquat at the end."})])
+    code, note = api("read", {"path": "Ideas/Tiny.md"}, app_pass=app_pass)
+    good &= check("AI edited the handed note by its handed id", note["text"].rstrip().endswith("kumquat"))
+    todo = api("aitodo", app_pass=app_pass)[1]["todo"]
+    good &= check("ticked off, with what it did", todo[-1]["done"] and todo[-1]["result"] == "Added kumquat at the end.")
+    good &= check("finished notes leave the AI's list", "No AI tasks waiting" in (await ai([("handed_notes", {})]))["handed_notes{}"])
+    api("trash", {"path": "Ideas/Tiny.md"}, app_pass=app_pass)
     # 5. Nothing readable on disk
     blob = b"".join(p.read_bytes() for p in VAULT.rglob("*") if p.is_file())
-    good &= check("no plain text on disk", not any(w in blob for w in (b"paprika", b"Mira", b"Lighthouse", b"26 October")))
+    good &= check("no plain text on disk", not any(w in blob for w in (b"paprika", b"Mira", b"Lighthouse", b"26 October", b"kumquat")))
     # 6. Lock
     api("lock", app_pass=app_pass)
     r = await ai([("search_notes", {"question": "storm"})])

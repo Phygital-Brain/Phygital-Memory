@@ -39,8 +39,7 @@ class Folder:
                 "exists": is_vault(self.path), "finder": bool(self.finder.where())}
 
     def lock(self) -> None:
-        activity.forget(self.id)   # the AI's activity lines and handed notes for this folder go with the lock
-        activity.handed[:] = [h for h in activity.handed if h["folder"] != self.id]
+        activity.forget(self.id)   # the AI's activity lines for this folder go with the lock
         self.finder.hide()          # close the Finder view first, and wait for it (locking would also close it, later)
         self.memory.lock()
         self.passes.clear()

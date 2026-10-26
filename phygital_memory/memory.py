@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import sqlite3
 import threading
 import time
@@ -419,6 +420,7 @@ class Memory:
                 raise Exists(f"'{new}' already exists.")
             self._writer.move(entry, parent, name)
             self._reindex()
+            self.todo_moved(old_entry_path, new)
             return new
 
     def trash(self, rel: str) -> None:
@@ -552,6 +554,65 @@ class Memory:
             self._writer.write_file(parent, name, data, replace=existing)
             return prefs
 
+    # ---------- AI tasks: notes the person gave to their AI, each with what to do ----------
+    # Kept inside the lock like the settings, so it survives locking and waits for the AI.
+
+    def todo(self) -> list[dict]:
+        with self._lock:
+            self._need_open()
+            try:
+                items = json.loads(self._tree.read_file(self._tree.resolve(TODO)))
+                return items if isinstance(items, list) else []
+            except (NotFound, ValueError):
+                return []
+
+    def _save_todo(self, items: list[dict]) -> list[dict]:
+        items = items[-TODO_KEEP:]
+        parent, name = self._make_parents(TODO)
+        existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+        self._writer.write_file(parent, name, json.dumps(items, ensure_ascii=False).encode(), replace=existing)
+        return items
+
+    def todo_add(self, rel: str, ask: str) -> dict:
+        """Give a note to the AI, with what to do (may be empty). Giving the same note again replaces its open item."""
+        rel = _clean_path(rel)
+        ask = str(ask or "").strip()[:TODO_ASK_MAX]
+        with self._lock:
+            self._need_open()
+            self._tree.resolve(rel)   # must exist
+            items = [i for i in self.todo() if not (i["path"] == rel and not i.get("done"))]
+            item = {"id": "h-" + secrets.token_hex(4), "path": rel, "ask": ask, "t": time.time(), "done": False}
+            self._save_todo(items + [item])
+            return item
+
+    def todo_set(self, tid: str, done: bool, by: str = "", result: str = "") -> dict:
+        with self._lock:
+            self._need_open()
+            items = self.todo()
+            item = next((i for i in items if i["id"] == tid), None)
+            if not item:
+                raise LookupError("That task isn't on the AI tasks list any more.")
+            item.update(done=bool(done), done_t=time.time() if done else None,
+                        by=str(by)[:60] if done else "", result=str(result).strip()[:TODO_ASK_MAX] if done else "")
+            self._save_todo(items)
+            return item
+
+    def todo_remove(self, tid: str) -> None:
+        with self._lock:
+            self._need_open()
+            self._save_todo([i for i in self.todo() if i["id"] != tid])
+
+    def todo_moved(self, old: str, new: str) -> None:
+        """A note or folder was renamed or moved: its to-do items follow it."""
+        items = self.todo()
+        changed = False
+        for i in items:
+            if i["path"] == old or i["path"].startswith(old + "/"):
+                i["path"] = new + i["path"][len(old):]
+                changed = True
+        if changed:
+            self._save_todo(items)
+
     def _reindex(self) -> None:
         for (path,) in self._con.execute("SELECT path FROM files").fetchall():
             remove_file(self._con, path)
@@ -561,6 +622,9 @@ class Memory:
 TRASH = ".trash"
 VERSIONS = ".versions"
 PREFS = ".phygital/prefs.json"
+TODO = ".phygital/ai-todo.json"
+TODO_KEEP = 100
+TODO_ASK_MAX = 2000
 HIDDEN = (TRASH, VERSIONS, ".phygital")
 VERSION_EVERY = 5 * 60
 VERSION_KEEP = 50

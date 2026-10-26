@@ -11,7 +11,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openActivity } from "./shell/panels.js";
+import { openStorage, openActivity, openAITodo } from "./shell/panels.js";
 import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
@@ -411,7 +411,7 @@ function buildApp() {
   paneHost._empty = empty;
 
   noteTools = el("div", { class: "note-tools hidden" },
-    el("button", { class: "icon-btn", title: "Give this note to your AI apps", "aria-label": "Give to AI", onclick: giveToAI }, icon("sparkle", 16)),
+    el("button", { class: "icon-btn", title: "Give AI a task with this note", "aria-label": "Give AI a task", onclick: giveToAI }, icon("sparkle", 16)),
     el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 16)));
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
   paneHost.append(noteTools, blPill);
@@ -552,6 +552,7 @@ function statusBar() {
 }
 
 async function refreshBar() {
+  watchTodo();
   if (!barEls || !barEls.lock.isConnected) return;
   let b = null;
   try { b = await api("bar"); } catch { return; }
@@ -594,7 +595,7 @@ async function openStoragePanel() {
 async function openActivityPanel() {
   let rows = [];
   try { rows = (await api("aiactivity")).activity || []; } catch (e) { toastErr(e.message); return; }
-  openActivity({ rows, open: (p) => openPath(p) });
+  openActivity({ rows, open: (p) => openPath(p), todo: () => openTodoList() });
 }
 
 // Click a note's path: copy it in the form you need.
@@ -1316,6 +1317,12 @@ function cycleTab(dir) {
 
 function renderTabs() {
   if (!tabsEl) return;
+  const gb = document.querySelector(".tab-graph");
+  if (gb) {
+    const on = !!(state.active && state.active.kind === "graph" && state.tabs.includes(state.active));
+    gb.classList.toggle("graph-on", on);
+    gb.title = on ? "Close the graph (⌘G)" : "Graph view (⌘G)";
+  }
   const fname = (curInfo() || {}).name || "";
   for (const t of state.tabs) if (t.crumbText) t.crumbText.textContent = [fname, ...t.path.split("/")].filter(Boolean).join("  /  ");
   const nodes = state.tabs.map((t) => {
@@ -1421,20 +1428,48 @@ async function openAt(path, heading) {
   }
 }
 
-// ---------- give a note to AI ----------
+// ---------- give AI a task with a note (the AI tasks list) ----------
 async function giveToAI() {
   const tab = state.active;
   if (!tab || tab.kind !== "note") return;
   await saveNow(tab);
-  try {
-    await api("handtoai", { path: tab.path });
-    const say = `Read the note I handed you in Phygital Memory ("${label(tab.path)}").`;
-    navigator.clipboard.writeText(say).catch(() => {});
-    toastOk("Handed to your AI apps. A sentence to paste in your AI chat is copied.");
-  } catch (e) { toastErr(e.message); }
+  openTodoList(tab.path);
+}
+
+async function openTodoList(path) {
+  let todo;
+  try { todo = (await api("aitodo")).todo || []; } catch (e) { toastErr(e.message); return; }
+  await openAITodo({
+    path, todo, label,
+    give: async (ask) => {
+      const j = await api("handtoai", { path, ask });
+      navigator.clipboard.writeText("Do my Phygital Memory tasks.").catch(() => {});
+      toastOk("Added to AI tasks. “Do my Phygital Memory tasks.” is copied, to paste in your AI chat.");
+      return j.todo || [];
+    },
+    set: async (id, done) => (await api("aitodoset", { id, done })).todo || [],
+    remove: async (id) => (await api("aitodoremove", { id })).todo || [],
+    load: async () => (await api("aitodo")).todo || [],
+    open: (p) => openPath(p),
+  });
+  watchTodo();
+}
+
+// Tell the person when their AI ticks a note off (checked with the status icons).
+let todoDone = null;
+async function watchTodo() {
+  let todo;
+  try { todo = (await api("aitodo")).todo || []; } catch { return; }
+  const now = new Set(todo.filter((i) => i.done).map((i) => i.id));
+  now.folder = currentFolder();
+  if (todoDone && todoDone.folder === now.folder) {
+    for (const i of todo) if (i.done && !todoDone.has(i.id) && i.by !== "you") toastOk(`${i.by || "Your AI"} finished “${label(i.path)}”.`);
+  }
+  todoDone = now;
 }
 
 function openGraph() {
+  if (state.active && state.active.kind === "graph") { closeTab(state.active); return; }   // pressed again: close it
   let tab = state.tabs.find((t) => t.kind === "graph");
   if (!tab && pregraph && pregraph.folder === loadedFolder && pregraph.pane && pregraph.pane.isConnected) {
     tab = pregraph;   // already built in the background

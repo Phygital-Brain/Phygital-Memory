@@ -541,3 +541,15 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .tabbar-gap { flex: 1 1 8px; min-width: 8px; }
 .top-search { width: clamp(120px, 18vw, 220px); margin-left: 4px; }
 .tabbar > .tab-plus { flex: none; }
+
+/* AI tasks */
+.todo-give { display: flex; flex-direction: column; gap: 8px; }
+.todo-ask { font: inherit; font-size: 13px; resize: vertical; min-height: 64px; color: var(--text); }
+.todo-row { display: grid; grid-template-columns: 20px 1fr 24px; gap: 10px; align-items: start; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.todo-row.done .act-path, .todo-row.done .act-detail { opacity: .55; }
+.todo-check { margin-top: 3px; accent-color: var(--accent); }
+.todo-result { font-size: 12px; color: var(--success, var(--accent)); margin-top: 3px; word-break: break-word; }
+.todo-x { opacity: .5; }
+.todo-x:hover { opacity: 1; }
+.act-tools { display: flex; align-items: center; gap: 8px; }
+.tab-graph.graph-on { color: var(--accent); background: var(--accent-soft); }

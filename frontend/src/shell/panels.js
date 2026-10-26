@@ -56,7 +56,7 @@ export function openStorage(ctx) {
   });
 }
 
-// ctx: {rows:[{t, ago, app, folderName, what, detail, path}], open(path)}
+// ctx: {rows:[{t, ago, app, folderName, what, detail, path}], open(path), todo()}
 export function openActivity(ctx) {
   return modal((done) => {
     const apps = [...new Set(ctx.rows.map((r) => r.app))];
@@ -79,10 +79,71 @@ export function openActivity(ctx) {
     filter.addEventListener("change", draw);
     draw();
     const card = el("div", { class: "dlg activity", role: "dialog" },
-      el("div", { class: "act-head" }, el("div", { class: "dlg-title" }, "AI activity"), filter),
+      el("div", { class: "act-head" }, el("div", { class: "dlg-title" }, "AI activity"),
+        el("div", { class: "act-tools" }, el("button", { class: "btn small", type: "button", onclick: () => { done(null); ctx.todo(); } }, "AI tasks"), filter)),
       el("div", { class: "mf-hint" }, "What AI apps did with your unlocked notes. Kept only until you lock."),
       list,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };
+  });
+}
+
+// AI tasks: notes given to the AI, each with what to do. With ctx.path, a box on top gives that note.
+// ctx: {path?, label(path), todo:[{id, path, ask, t, done, by, result}], give(ask) -> todo, set(id, done) -> todo,
+//       remove(id) -> todo, load() -> todo, open(path)}
+export function openAITodo(ctx) {
+  return modal((done) => {
+    let todo = ctx.todo;
+    const err = el("div", { class: "dlg-err" });
+    const list = el("div", { class: "act-list todo-list" });
+    const act = async (fn) => {
+      err.textContent = "";
+      try { todo = await fn(); draw(); } catch (e) { err.textContent = e.message; }
+    };
+    const draw = () => {
+      const items = [...todo].sort((a, b) => (a.done - b.done) || (b.t - a.t));
+      list.replaceChildren(...(items.length ? items.map((i) => {
+        const box = el("input", { type: "checkbox", class: "todo-check", "aria-label": "Done" });
+        box.checked = !!i.done;
+        box.addEventListener("change", () => act(() => ctx.set(i.id, box.checked)));
+        return el("div", { class: "todo-row" + (i.done ? " done" : "") }, box,
+          el("div", { class: "act-main" },
+            el("button", { class: "act-path", type: "button", title: i.path, onclick: () => { done(null); ctx.open(i.path); } }, ctx.label(i.path)),
+            el("div", { class: "act-detail" }, i.ask || "No request: just read it."),
+            i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : "Ticked off by you"}${i.result ? ": " + i.result : ""}`)
+                   : el("div", { class: "act-folder" }, `Given ${ago(Math.max(0, Date.now() / 1000 - i.t))}`)),
+          el("button", { class: "icon-btn todo-x", type: "button", title: "Remove from the list", "aria-label": "Remove",
+                         onclick: () => act(() => ctx.remove(i.id)) }, icon("x", 14)));
+      }) : [el("div", { class: "act-empty" }, "Nothing here yet. Open a note and press the sparkle button to give your AI a task.")]));
+    };
+    draw();
+    // Stay current while open: the AI may tick things off meanwhile.
+    const tick = setInterval(async () => {
+      if (!list.isConnected) { clearInterval(tick); return; }
+      try { const t = await ctx.load(); if (JSON.stringify(t) !== JSON.stringify(todo)) { todo = t; draw(); } } catch {}
+    }, 4000);
+
+    let give = null, ask = null;
+    if (ctx.path) {
+      ask = el("textarea", { class: "dlg-input todo-ask", rows: "3", spellcheck: "true",
+                             placeholder: "What should the AI do with this note? (optional)\nFor example: fix typos and make it shorter." });
+      const add = () => act(async () => {
+        const t = await ctx.give(ask.value);
+        ask.value = "";
+        return t;
+      });
+      ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } });
+      give = el("div", { class: "todo-give" },
+        el("div", { class: "dlg-sub" }, el("b", {}, ctx.label(ctx.path))),
+        ask,
+        el("div", { class: "dlg-actions" }, el("button", { class: "btn primary", type: "button", onclick: add }, "Add task")));
+    }
+    const card = el("div", { class: "dlg activity", role: "dialog" },
+      el("div", { class: "dlg-title" }, ctx.path ? "Give AI a task" : "AI tasks"),
+      give,
+      el("div", { class: "mf-hint" }, "Your AI works through these tasks when you ask it to, for example: “Do my Phygital Memory tasks.” Its changes can be undone in each note’s version history."),
+      list, err,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
+    return { card, focus: ask };
   });
 }

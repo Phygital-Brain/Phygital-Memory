@@ -15,5 +15,3 @@ def add(app: str, folder_id: str, what: str, detail: str = "", path: str = "") -
 def forget(folder_id: str) -> None:
     log[:] = [a for a in log if a["folder"] != folder_id]
 
-
-handed: list[dict] = []   # notes the person handed to their AI from the app: {folder, path, t}
