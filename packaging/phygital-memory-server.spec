@@ -9,7 +9,7 @@ a = Analysis(
     ['entry.py'],
     pathex=['.'],
     binaries=[],
-    datas=[('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/app.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/engram_config.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/vault/words_en.txt', 'phygital_memory/vault')],
+    datas=[('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/app.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/web', 'phygital_memory/web'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/engram_config.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/vault/words_en.txt', 'phygital_memory/vault')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

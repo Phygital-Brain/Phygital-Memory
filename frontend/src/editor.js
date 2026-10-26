@@ -9,7 +9,7 @@
 //     loadImage(path),                // -> Promise of a blob: URL
 //     uploadFile(file),               // pasted or dropped file -> Promise of its saved path
 //   }) -> { view, getText(), setText(text), focus(), destroy() }
-import { EditorState, StateField, RangeSetBuilder, Prec } from "@codemirror/state";
+import { EditorState, StateField, StateEffect, RangeSetBuilder, Prec } from "@codemirror/state";
 import { EditorView, Decoration, WidgetType, keymap, drawSelection, highlightActiveLine, dropCursor,
          rectangularSelection, placeholder } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
@@ -284,9 +284,18 @@ function calloutGroup(kind) { kind = kind.toLowerCase(); return CALLOUT_ALIASES[
 const hidden = Decoration.replace({});
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i;
 
+// Markup shows again only where the cursor is, and only while the editor has focus (like Baalda).
+const setFocused = StateEffect.define();
+const focusedField = StateField.define({
+  create: () => false,
+  update: (v, tr) => tr.effects.reduce((acc, e) => (e.is(setFocused) ? e.value : acc), v),
+});
+
 function buildDecorations(state, opts) {
   const tree = ensureSyntaxTree(state, state.doc.length, 200) || syntaxTree(state);
-  const doc = state.doc, sel = state.selection.ranges;
+  // Only a plain cursor reveals markup. A drag-selection reveals nothing, or the text would reflow under the
+  // mouse and the selection would jump.
+  const doc = state.doc, sel = state.field(focusedField, false) ? state.selection.ranges.filter((r) => r.empty) : [];
   const touches = (from, to) => sel.some((r) => r.from <= to && r.to >= from);
   const lineActive = (pos) => { const l = doc.lineAt(pos); return touches(l.from, l.to); };
   const blockActive = (from, to) => touches(doc.lineAt(from).from, doc.lineAt(to).to);
@@ -320,7 +329,8 @@ function buildDecorations(state, opts) {
         return false;
       }
       if (name === "Link") {
-        if (touches(from, to)) return false;
+        // "[!note]" opens a callout and "[^1]" is a footnote: neither is a link
+        if (/^\[[!^]/.test(doc.sliceString(from, from + 2)) || touches(from, to)) return false;
         const marks = node.node.getChildren("LinkMark"), url = node.node.getChild("URL");
         if (marks.length >= 2) { add(marks[0].from, marks[0].to, hidden); add(marks[1].from, to, hidden); }
         if (url) add(marks[0].to, marks[1].from, Decoration.mark({ class: "md-link", attributes: { title: doc.sliceString(url.from, url.to) } }));
@@ -538,7 +548,15 @@ export function createEditor(parent, opts) {
     placeholder("Start writing…"),
     markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [ObsidianSyntax], addKeymap: true }),
     syntaxHighlighting(syntaxColours),
+    focusedField,
+    EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing)),
     livePreview(opts),
+    EditorView.theme({
+      ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.6" },
+      ".cm-content": { fontFamily: "var(--font-body)" },
+      ".cm-activeLine": { backgroundColor: "transparent" },
+      "&.cm-focused": { outline: "none" },
+    }),
     autocompletion({ override: [wikiCompletion(opts)], icons: false }),
     fileDrops(opts),
     Prec.high(keymap.of([
@@ -568,4 +586,3 @@ export function createEditor(parent, opts) {
     destroy: () => view.destroy(),
   };
 }
-export const _test = { ObsidianSyntax, buildDecorations };
