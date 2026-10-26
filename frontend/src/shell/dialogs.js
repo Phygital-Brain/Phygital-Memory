@@ -1,7 +1,7 @@
 // In-page dialogs (prompt() and confirm() don't work in the Mac app window).
 import { el } from "./dom.js";
 
-function modal(build) {
+export function modal(build) {
   return new Promise((resolve) => {
     const prev = document.activeElement;
     const done = (v) => { back.remove(); document.removeEventListener("keydown", onKey, true); prev && prev.focus && prev.focus(); resolve(v); };

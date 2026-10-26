@@ -11,6 +11,9 @@ export async function loadPrefs() {
   catch (e) { data = {}; loaded = false; if (e.message === "locked") throw e; }
 }
 export function clearPrefs() { clearTimeout(timer); timer = null; data = {}; loaded = false; }
+// Switching folders: keep this folder's settings in memory and bring them back later.
+export function takePrefs() { clearTimeout(timer); timer = null; const kept = { data, loaded }; data = {}; loaded = false; return kept; }
+export function givePrefs(kept) { clearTimeout(timer); timer = null; data = kept.data; loaded = kept.loaded; }
 export const getPref = (k, d) => (data[k] === undefined ? d : data[k]);
 
 export function setPref(k, v) {

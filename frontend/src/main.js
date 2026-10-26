@@ -1,14 +1,16 @@
-import { api, setPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText } from "./api.js";
+import { api, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText } from "./api.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
 import { askText, confirmDialog } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
-import { loadPrefs, clearPrefs, flushPrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
+import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
 import { openSettings, closeSettings, onSettings } from "./shell/settings.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
+import { switcherItems, createFolderForm } from "./shell/folders.js";
+import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
@@ -57,58 +59,269 @@ const unlockEl = el("div", { class: "unlock hidden" });
 const appEl = el("div", { class: "app hidden" });
 root.append(unlockEl, appEl);
 
+// ---------- folders ----------
+// Every locked folder keeps its own screen in memory while you look at another one: tabs, open tree folders,
+// settings, Finder state. Switching back is instant and nothing unsaved is lost.
+let folderList = [];          // [{id, name, path, open, exists, finder}] from the server
+let loadedFolder = null;      // the folder whose screen is in `state` right now (null on an unlock screen)
+const views = new Map();      // folder id -> its screen, while another folder is in front
+let backId = null;            // the folder the unlock screen offers to go back to
+let sbWidth = "";
+
+const curInfo = () => folderList.find((f) => f.id === currentFolder()) || null;
+const unlocked = (id) => hasPass(id) && !!(folderList.find((f) => f.id === id) || {}).open;
+
+async function refreshFolders() {
+  try { folderList = (await api("folders")).folders || []; } catch { return folderList; }
+  drawSwitcher();
+  syncClosePoll();
+  return folderList;
+}
+
+function resetState() {
+  Object.assign(state, { files: [], tabs: [], active: null, open: new Set(), sel: new Set(), anchor: null, visible: [], tags: [], lastNote: null });
+  blToken++; blData = [];
+}
+
+// Take a folder's screen out of the window and keep it in memory.
+function detachTab(t) {
+  clearTimeout(t.timer);
+  if (t.kind === "note") { t.editor && t.editor.destroy(); t.editor = null; t.host && t.host.replaceChildren(); }
+  else if (t.kind === "graph") { t.onClose && t.onClose(); t.onClose = null; t.graph = null; t.sig = ""; t.stale = true; }
+  else if (t.kind === "image") t.stale = true;   // decrypted images are dropped on a switch; they load again on return
+  t.pane && t.pane.remove();
+}
+
+async function stashLoaded() {
+  const fid = loadedFolder;
+  await Promise.all(state.tabs.map((t) => saveNow(t)));
+  await flushPrefs();
+  clearTimeout(linksTimer); clearInterval(finderTimer); finderTimer = null;
+  closeSearch(); closeMenu(); closeVersions(); closeSettings(); closeBacklinks();
+  sbWidth = sidebarEl ? sidebarEl.style.width : sbWidth;
+  const view = { files: state.files, tabs: state.tabs, active: state.active, open: state.open, tags: state.tags, lastNote: state.lastNote, finder, prefs: takePrefs() };
+  state.tabs.forEach(detachTab);
+  views.delete(fid); views.set(fid, view);
+  backId = fid;
+  resetState();
+  finder = { shown: false, available: false, where: "", confirmed: false };
+  loadedFolder = null;
+}
+
+function rebuildPane(t) {
+  if (t.kind === "graph") makeGraphPane(t);
+  else t.pane = (t.make === "file" ? makeFileTab(t.path) : makeImageTab(t.path)).pane;
+  t.stale = false;
+}
+
+function restoreView(fid) {
+  const v = views.get(fid);
+  views.delete(fid);
+  unlockEl.classList.add("hidden");
+  appEl.classList.remove("hidden");
+  Object.assign(state, { files: v.files, tabs: v.tabs, open: v.open, tags: v.tags, lastNote: v.lastNote, sel: new Set(), anchor: null, active: null });
+  givePrefs(v.prefs);
+  finder = v.finder;
+  loadedFolder = fid;
+  for (const t of state.tabs) { if (t.stale) rebuildPane(t); t.pane.classList.add("hidden"); paneHost.append(t.pane); }
+  drawSwitcher(); drawFinder(); renderTree();
+  const first = state.tabs.includes(v.active) ? v.active : state.tabs[0];
+  if (first) activate(first);
+  else { paneHost._empty.classList.remove("hidden"); noteTools.classList.add("hidden"); renderTabs(); renderStatus(); refreshBacklinks(); }
+  for (const t of state.tabs) if (t.dirty) saveNow(t);
+  loadFiles().catch(() => {});
+  checkFinder(true);
+}
+
+// The folder's screen is gone (locked, or taken off the list).
+function clearLoaded() {
+  for (const t of state.tabs) { clearTimeout(t.timer); t.editor && t.editor.destroy(); t.onClose && t.onClose(); t.pane && t.pane.remove(); }
+  resetState();
+  clearInterval(finderTimer); finderTimer = null; clearTimeout(linksTimer);
+  finder = { shown: false, available: false, where: "", confirmed: false };
+  clearPrefs();
+  closeSearch(); closeMenu(); closeVersions(); closeSettings(); closeBacklinks();
+  loadedFolder = null;
+}
+function dropView(fid) {
+  const v = views.get(fid);
+  if (!v) return;
+  views.delete(fid);
+  for (const t of v.tabs) { clearTimeout(t.timer); t.editor && t.editor.destroy(); t.onClose && t.onClose(); }
+}
+
+function lockedLocally(fid) {
+  forgetPass(fid);
+  forgetFiles();
+  if (fid === loadedFolder) clearLoaded(); else dropView(fid);
+  if (backId === fid) backId = null;
+  if (fid === currentFolder()) {
+    backId = [...views.keys()].filter((k) => hasPass(k)).pop() || null;
+    document.querySelectorAll(".toasts").forEach((t) => t.remove());
+    showUnlock();
+  }
+  refreshFolders();
+}
+onLocked(lockedLocally);
+
+let switching = false;
+async function switchTo(id) {
+  if (switching || !id) return;
+  if (id === currentFolder() && (loadedFolder === id || !hasPass(id))) { if (loadedFolder !== id) showUnlock(); return; }
+  switching = true;
+  try {
+    if (loadedFolder) await stashLoaded();
+    setFolder(id);
+    forgetFiles();
+    if (views.has(id) && hasPass(id)) restoreView(id);
+    else if (hasPass(id)) await enterApp();
+    else showUnlock();
+  } catch (e) { toastErr(e.message); }
+  switching = false;
+  refreshFolders();
+}
+
+async function pickFolder(prompt) {
+  toast("Choose a folder in the window that opens…");
+  return (await api("pickfolder", { prompt })).path || null;
+}
+
+async function openOtherFolder() {
+  try {
+    const p = await pickFolder("Choose a locked notes folder");
+    if (!p) return;
+    const j = await api("addfolder", { path: p });
+    await refreshFolders();
+    toastOk(`Added "${j.folder.name}".`);
+    await switchTo(j.folder.id);
+  } catch (e) { toastErr(e.message); }
+}
+
+async function createNewFolder() {
+  const v = await createFolderForm(() => pickFolder("Choose where to make the new locked folder"));
+  if (!v) return;
+  try {
+    toast("Making the locked folder…");
+    const j = await api("createfolder", v);
+    await refreshFolders();
+    await switchTo(j.folder.id);
+    if (currentFolder() === j.folder.id) await unlockCurrent(v.password);
+    toastOk(`Created "${j.folder.name}".`);
+  } catch (e) { toastErr(e.message); }
+}
+
+async function renameFolder() {
+  const info = curInfo();
+  if (!info) return;
+  const v = await askText("Rename folder", info.name, "Rename", (x) => (x.trim() ? "" : "Name can't be empty."));
+  if (v == null) return;
+  try { await api("renamefolder", { folder: info.id, name: v.trim() }); await refreshFolders(); } catch (e) { toastErr(e.message); }
+}
+
+async function forgetFolder() {
+  const info = curInfo();
+  if (!info) return;
+  const ok = await confirmDialog(`Remove "${info.name}" from the list? Nothing is deleted: the folder and its notes stay where they are. It locks, and you can add it again later.`, "Remove from list", true);
+  if (!ok) return;
+  const fid = info.id;
+  try {
+    if (loadedFolder === fid) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+    await api("forgetfolder", { folder: fid });
+  } catch (e) { toastErr(e.message); return; }
+  lockedLocally(fid);
+  await refreshFolders();
+  const next = folderList.find((f) => views.has(f.id) && hasPass(f.id)) || folderList[0];
+  if (next) await switchTo(next.id); else { setFolder(null); showUnlock(); }
+  toast(`Removed "${info.name}" from the list.`);
+}
+
+async function lockFolder() {
+  const fid = currentFolder();
+  if (loadedFolder === fid) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+  try { await api("lock", { folder: fid }); } catch {}
+  lockedLocally(fid);
+}
+
+async function lockAll() {
+  if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+  for (const f of folderList) if (hasPass(f.id)) { try { await api("lock", { folder: f.id }); } catch {} lockedLocally(f.id); }
+  showUnlock();
+}
+
 // ---------- unlock ----------
-function buildUnlock() {
-  const pw = el("input", { type: "password", placeholder: "Password", autocomplete: "off", "aria-label": "Password" });
-  const err = el("div", { class: "unlock-err" });
-  const btn = el("button", { class: "btn primary", type: "submit" }, "Unlock");
-  const form = el("form", { class: "unlock-card", onsubmit: async (e) => {
-    e.preventDefault();
-    err.textContent = "";
-    btn.disabled = true;
-    try {
-      const j = await api("unlock", { password: pw.value });
-      setPass(j.pass);
-      pw.value = "";
-      await enterApp();
-    } catch (x) { err.textContent = x.message; pw.select(); }
-    btn.disabled = false;
-  } },
-  el("div", { class: "wordmark" }, "Phygital ", el("span", {}, "Memory")),
-  el("div", { class: "unlock-sub" }, "Your notes are locked."),
-  pw, btn, err);
+async function unlockCurrent(password) {
+  const fid = currentFolder();
+  const j = await api("unlock", { password, folder: fid });
+  setPass(j.pass, fid);
+  await enterApp();
+}
+
+function drawUnlock() {
+  const info = curInfo();
+  const kids = [el("div", { class: "wordmark" }, "Phygital ", el("span", {}, "Memory"))];
+  const links = [];
+  if (info) {
+    const pw = el("input", { type: "password", placeholder: "Password", autocomplete: "off", "aria-label": "Password" });
+    const err = el("div", { class: "unlock-err" }, info.exists ? "" : "This folder can't be found. It may have moved, or its drive isn't connected.");
+    const btn = el("button", { class: "btn primary", type: "submit" }, "Unlock");
+    if (folderList.length > 1) {
+      const sel = el("select", { class: "unlock-pick", "aria-label": "Folder" },
+        ...folderList.map((f) => el("option", { value: f.id }, f.name + (unlocked(f.id) ? " (unlocked)" : ""))));
+      sel.value = info.id;
+      sel.addEventListener("change", () => switchTo(sel.value));
+      kids.push(sel);
+    } else kids.push(el("div", { class: "unlock-folder" }, info.name));
+    kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This folder is locked." : "Your notes are locked."), pw, btn, err);
+    unlockEl._submit = async (e) => {
+      e.preventDefault();
+      if (!pw.value) return;
+      err.textContent = ""; btn.disabled = true;
+      try { await unlockCurrent(pw.value); pw.value = ""; }
+      catch (x) { err.textContent = x.message; pw.select(); }
+      btn.disabled = false;
+    };
+    unlockEl._focus = () => pw.focus();
+  } else {
+    kids.push(el("div", { class: "unlock-sub" }, "No locked notes folder yet. Open one you already have, or make a new one."));
+    unlockEl._submit = (e) => e.preventDefault();
+    unlockEl._focus = null;
+  }
+  if (backId && backId !== currentFolder() && views.has(backId)) {
+    const b = folderList.find((f) => f.id === backId);
+    if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, `Back to ${b.name}`));
+  }
+  links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open another locked folder…"),
+    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "Create a new locked folder…"));
+  kids.push(el("div", { class: "unlock-links" }, ...links));
+  const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(form);
-  unlockEl._focus = () => pw.focus();
 }
 
 function showUnlock() {
   appEl.classList.add("hidden");
+  drawUnlock();
   unlockEl.classList.remove("hidden");
   unlockEl._focus && unlockEl._focus();
 }
 
-function teardown() {
-  for (const t of state.tabs) { clearTimeout(t.timer); t.editor && t.editor.destroy(); t.onClose && t.onClose(); }
-  state.tabs = []; state.active = null; state.files = []; state.sel.clear(); state.tags = []; state.lastNote = null;
-  clearInterval(finderTimer); finderTimer = null; finder = { shown: false, available: false, where: "", confirmed: false };
-  forgetFiles();
-  clearPrefs();
-  setPass(null);
-  closeSearch(); closeMenu(); closeVersions(); closeSettings(); closeBacklinks();
-  document.querySelectorAll(".toasts").forEach((t) => t.remove());
-  showUnlock();
-}
-onLocked(teardown);
-
-async function doLock() {
-  await Promise.all(state.tabs.map((t) => saveNow(t)));
-  await flushPrefs();
-  try { await api("lock"); } catch {}
-  teardown();
-}
-
 // ---------- app shell ----------
-let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill;
+let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill, sbName, sbBadge;
+
+function drawSwitcher() {
+  if (!sbName) return;
+  const info = curInfo();
+  sbName.textContent = info ? info.name : "Phygital Memory";
+  sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
+}
+
+async function openSwitcher() {
+  if (!sbName || appEl.classList.contains("hidden")) return;
+  await refreshFolders();
+  const head = appEl.querySelector(".sb-head");
+  const r = head.getBoundingClientRect();
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder,
+    createNew: createNewFolder, rename: renameFolder, lockThis: lockFolder, lockAll, forget: forgetFolder }), r.left + 6, r.bottom + 2);
+}
 
 function buildApp() {
   sidebarEl = el("aside", { class: "sidebar" });
@@ -129,6 +342,14 @@ function buildApp() {
     showMenu(SORTS.map(([k, t, hint]) => ({ label: t, hint, check: cur === k, fn: () => { setPref("sortMode", k); renderTree(); } })), r.left, r.bottom + 4);
   });
 
+  sbName = el("div", { class: "sb-name" }, "Phygital Memory");
+  sbBadge = el("span", { class: "fo-badge hidden", title: "Another folder is open in Finder" }, "Finder");
+  const sbHead = el("button", { class: "sb-head sb-switch", title: "Switch folder (⇧⌘O)", "aria-haspopup": "menu", onclick: openSwitcher },
+    el("div", { class: "app-icon" }, icon("file", 16, 2)),
+    el("div", { class: "sb-titles" }, sbName, el("div", { class: "sb-folder" }, "Phygital Memory")),
+    sbBadge, el("span", { class: "sb-chev" }, icon("updown", 14)));
+  if (sbWidth) sidebarEl.style.width = sbWidth;
+
   treeEl = el("div", { class: "tree", role: "tree" });
   treeEl.addEventListener("dragover", (e) => { if (dragPath && e.target === treeEl) { e.preventDefault(); treeEl.classList.add("drop"); } });
   treeEl.addEventListener("dragleave", (e) => { if (e.target === treeEl) treeEl.classList.remove("drop"); });
@@ -142,9 +363,7 @@ function buildApp() {
   finderBtn = el("button", { class: "icon-btn hidden", title: "Show in Finder", "aria-label": "Show in Finder", onclick: toggleFinder }, icon("folder", 15));
 
   sidebarEl.append(
-    el("div", { class: "sb-head" },
-      el("div", { class: "app-icon" }, icon("file", 16, 2)),
-      el("div", { class: "sb-titles" }, el("div", { class: "sb-name" }, "Phygital Memory"), el("div", { class: "sb-folder" }, "Locked notes"))),
+    sbHead,
     el("div", { class: "sb-home" }, homeRowEl),
     el("div", { class: "sb-section" },
       el("span", {}, "NOTES"),
@@ -158,7 +377,7 @@ function buildApp() {
     el("div", { class: "sb-foot" },
       el("span", { class: "sb-note" }, "🔒 Encrypted · AI reads through Engram"),
       el("span", { class: "sb-foot-btns" }, finderBtn, ib("gear", "Settings (⌘,)", openSettings),
-        el("button", { class: "btn small", onclick: doLock }, icon("lock", 13), "Lock"))),
+        el("button", { class: "btn small", onclick: lockFolder, title: "Lock this folder" }, icon("lock", 13), "Lock"))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -188,23 +407,30 @@ function buildApp() {
 async function enterApp() {
   unlockEl.classList.add("hidden");
   appEl.classList.remove("hidden");
+  resetState();
+  loadedFolder = currentFolder();
   buildApp();
+  drawSwitcher();
   try { await loadPrefs(); } catch {}
   await loadFiles();
   renderTabs();
   loadLinks();
   checkFinder(true);
   goHome();
+  refreshFolders();
 }
 
 async function loadFiles() {
+  const fid = loadedFolder;
   const j = await api("files");
+  if (fid !== loadedFolder) return;
   state.files = (j.files || []).filter((f) => !baseName(f.path).startsWith("."));
   renderTree();
 }
 
 async function loadLinks() {
-  try { state.tags = (await api("links")).tags || []; } catch {}
+  const fid = loadedFolder;
+  try { const j = await api("links"); if (fid === loadedFolder) state.tags = j.tags || []; } catch {}
 }
 let linksTimer = null;
 function scheduleLinksRefresh() {
@@ -217,13 +443,16 @@ let finder = { shown: false, available: false, where: "", confirmed: false };
 let finderTimer = null;
 
 async function checkFinder(first) {
+  const fid = loadedFolder;
   try {
     const s = await api("finder", { do: "status" });
+    if (fid !== loadedFolder) return;
     const was = finder.shown;
     finder.available = !!s.available || !!s.shown; finder.shown = !!s.shown; finder.where = s.where || "";
     if (!finder.shown && was) { await syncFromDisk(); }
     drawFinder();
-  } catch (e) { if (first) finder.available = false; }
+    refreshFolders();
+  } catch (e) { if (first && fid === loadedFolder) finder.available = false; }
 }
 function drawFinder() {
   if (!finderBtn) return;
@@ -231,7 +460,7 @@ function drawFinder() {
   finderBtn.classList.toggle("on", finder.shown);
   finderBtn.title = finder.shown ? "Close the Finder folder" : "Show in Finder";
   bannerHost.replaceChildren(...(finder.shown ? [el("div", { class: "banner", role: "alert" },
-    el("span", {}, el("b", {}, "Open in Finder"), " · any app can read these files"),
+    el("span", {}, el("b", {}, "Open in Finder"), " · any app can read these files", curInfo() && folderList.length > 1 ? ` · ${curInfo().name}` : ""),
     el("button", { class: "btn small", onclick: hideFinder }, "Close"))] : []));
   clearInterval(finderTimer); finderTimer = null;
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
@@ -245,18 +474,22 @@ async function toggleFinder() {
   }
   toast("Opening Finder…");
   finderBtn.disabled = true;
+  const fid = loadedFolder;
   try {
     const s = await api("finder", { do: "show" });
+    if (fid !== loadedFolder) { refreshFolders(); return; }
     finder.shown = !!s.shown; finder.where = s.where || "";
     if (finder.shown) toastOk("Opened in Finder."); else toastErr("Couldn't open Finder.");
   } catch (e) { toastErr(e.message); }
   finderBtn.disabled = false;
   drawFinder();
+  refreshFolders();
 }
 async function hideFinder() {
   try { await api("finder", { do: "hide" }); } catch (e) { toastErr(e.message); }
   finder.shown = false;
   drawFinder();
+  refreshFolders();
   syncFromDisk();
 }
 // Changes made in Finder: refresh the tree, and reload open notes that changed (unless they have unsaved edits).
@@ -648,7 +881,7 @@ function makeImageTab(path) {
   fileURL(path).then((u) => { img.src = u; }).catch((e) => toastErr(e.message));
   const pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, el("h1", { class: "img-title" }, baseName(path)), img));
   paneHost.append(pane);
-  return { path, kind: "image", pane, dirty: false };
+  return { path, kind: "image", make: "img", pane, dirty: false };
 }
 
 // Other files open as a preview tab: CSV/TSV as a table, PDF, video, audio, plain text and code as text,
@@ -677,7 +910,7 @@ function makeFileTab(path) {
     body.replaceChildren(el("p", { class: "file-note" },
       "This kind of file can't be previewed here. Use Show in Finder to open it with another app."));
   }
-  return { path, kind: "image", pane, dirty: false };
+  return { path, kind: "image", make: "file", pane, dirty: false };
 }
 
 function parseFM(text) {
@@ -701,7 +934,7 @@ function applyText(tab, text) {
 async function makeNoteTab(path) {
   const j = await api("read", { path });
   const { fm, body } = parseFM(j.text || "");
-  const tab = { path, kind: "note", fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
+  const tab = { path, kind: "note", folder: currentFolder(), fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
   tab.titleEl = el("input", { class: "title", spellcheck: "false", "aria-label": "Note title", value: label(path) });
   tab.titleErr = el("div", { class: "title-err" });
   tab.propsEl = el("div", { class: "props" });
@@ -801,7 +1034,7 @@ function saveNow(tab) {
     const v = tab.ver;
     tab.saving = true; renderStatus();
     try {
-      await api("save", { path: tab.path, text: compose(tab) });
+      await api("save", { path: tab.path, text: compose(tab), folder: tab.folder });
       if (tab.ver === v) tab.dirty = false;
       tab.err = null;
       const f = state.files.find((x) => x.path === tab.path);
@@ -955,18 +1188,25 @@ function renderHome(tab) {
 function openGraph() {
   let tab = state.tabs.find((t) => t.kind === "graph");
   if (!tab) {
-    const g = createGraph({ onOpen: (p) => openPath(p), colorFor: nodeColor, labelFor: label });
-    const pane = el("div", { class: "pane graph-pane hidden" }, g.root);
-    paneHost.append(pane);
-    tab = { path: GRAPH_ID, title: "Graph", kind: "graph", pane, graph: g, dirty: false, sig: "", onClose: () => g.destroy() };
+    tab = { path: GRAPH_ID, title: "Graph", kind: "graph", dirty: false, sig: "" };
+    makeGraphPane(tab);
     state.tabs.push(tab);
   }
   activate(tab);
 }
 
+function makeGraphPane(tab) {
+  const g = createGraph({ onOpen: (p) => openPath(p), colorFor: nodeColor, labelFor: label });
+  tab.pane = el("div", { class: "pane graph-pane hidden" }, g.root);
+  paneHost.append(tab.pane);
+  tab.graph = g; tab.sig = ""; tab.onClose = () => g.destroy();
+}
+
 async function loadGraph(tab) {
+  const fid = loadedFolder;
   try {
     const j = await api("links");
+    if (fid !== loadedFolder || !tab.graph) return;
     state.tags = j.tags || state.tags;
     const sig = JSON.stringify([j.nodes, j.edges, colorsPref()]);
     if (sig !== tab.sig) { tab.sig = sig; tab.graph.load({ nodes: j.nodes || [], edges: j.edges || [] }, state.lastNote); }
@@ -1154,6 +1394,7 @@ window.addEventListener("keydown", (e) => {
   if (!mod || e.altKey) return;
   if (e.key === ",") { e.preventDefault(); openSettings(); }
   else if (k === "h" && e.shiftKey) { e.preventDefault(); goHome(); }
+  else if (k === "o" && e.shiftKey) { e.preventDefault(); openSwitcher(); }
   else if (k === "g" && !e.shiftKey) { e.preventDefault(); openGraph(); }
   else if (k === "k" || k === "p") { e.preventDefault(); openSearch(); }
   else if (k === "f" && !e.shiftKey) {
@@ -1166,12 +1407,56 @@ window.addEventListener("keydown", (e) => {
 }, true);
 window.addEventListener("beforeunload", (e) => { if (state.tabs.some((t) => t.dirty)) { e.preventDefault(); e.returnValue = ""; } });
 
+// ---------- closing the app ----------
+// When the window closes while a folder is open in Finder, the program asks (through closestate) whether to keep
+// the notes open for a while. We only watch for it while some folder is shown in Finder.
+let closeTimer = null, closeBusy = false, closeTick = 0;
+
+function syncClosePoll() {
+  const need = folderList.some((f) => f.finder);
+  if (need && !closeTimer) { closeTick = 0; closeTimer = setInterval(pollClose, 1000); }
+  else if (!need && closeTimer) { clearInterval(closeTimer); closeTimer = null; }
+}
+
+async function pollClose() {
+  if (closeBusy) return;
+  if (++closeTick % 15 === 0) refreshFolders();   // notice a Finder view that ended by itself
+  let asked = false;
+  try { asked = !!(await api("closestate")).asked; } catch {}
+  if (!asked) return;
+  closeBusy = true;
+  try { await answerClose(); } finally { closeBusy = false; }
+}
+
+async function answerClose() {
+  const keep = await askClose();
+  try {
+    if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+    const pass = hasPass(currentFolder()) ? currentFolder() : (folderList.find((f) => hasPass(f.id)) || {}).id;
+    await api("closeanswer", { keep, ...(pass ? { folder: pass } : {}) });
+  } catch (e) {
+    toastErr(e.message);
+    await new Promise((r) => setTimeout(r, 3000));
+    return;
+  }
+  if (keep === 0) {
+    toastOk("Everything is locked. Closing now.");
+    for (const id of [...folderList.map((f) => f.id), ...views.keys()]) lockedLocally(id);
+    showUnlock();
+  } else {
+    toastOk(`Notes stay open in Finder for ${keep >= 60 ? (keep / 60) + (keep === 60 ? " hour" : " hours") : keep + " min"}. Then everything locks and the app quits.`);
+  }
+}
+
 // ---------- start ----------
 (async function start() {
-  buildUnlock();
-  try {
-    const j = await api("devunlock");
-    if (j && j.pass) { setPass(j.pass); await enterApp(); return; }
-  } catch {}
+  await refreshFolders();
+  if (folderList.length) {
+    setFolder(folderList[0].id);
+    try {
+      const j = await api("devunlock");
+      if (j && j.pass) { setPass(j.pass); await enterApp(); return; }
+    } catch {}
+  }
   showUnlock();
 })();
