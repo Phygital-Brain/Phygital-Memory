@@ -3,16 +3,27 @@
   "productName": "Phygital Memory",
   "version": "0.1.0",
   "identifier": "io.phygital.memory.test",
-  "build": { "frontendDist": "../src" },
+  "build": {
+    "frontendDist": "../src"
+  },
   "app": {
     "withGlobalTauri": true,
     "windows": [],
-    "security": { "csp": null }
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg"],
-    "icon": ["icons/icon.png", "icons/icon.icns"],
-    "externalBin": ["binaries/phygital-memory-server"]
+    "targets": [
+      "dmg"
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns"
+    ],
+    "externalBin": [
+      "binaries/phygital-memory-server"
+    ]
   }
 }

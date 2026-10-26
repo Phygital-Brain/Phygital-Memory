@@ -1,1 +1,1 @@
-{"default":{"identifier":"default","description":"","local":true,"windows":["*"],"permissions":["core:default"]}}
+{"default":{"identifier":"default","description":"Only the first-run setup window may call the app (to create the locked folder).","local":true,"windows":["setup"],"permissions":["core:default"]}}

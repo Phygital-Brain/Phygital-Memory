@@ -1,1 +1,10 @@
-{ "identifier": "default", "windows": ["*"], "permissions": ["core:default"] }
+{
+  "identifier": "default",
+  "description": "Only the first-run setup window may call the app (to create the locked folder).",
+  "windows": [
+    "setup"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

@@ -27,9 +27,18 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     Err("The server did not start.".into())
 }
 
+// The window may only ever show our own local page. A note, a link or injected HTML that tries to send it
+// anywhere else (a look-alike password page, say) is refused. Same class of bug as the "C1" finding
+// reported to Baalda.
+fn own_page(url: &tauri::Url) -> bool {
+    url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(8790)
+}
+
 fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
     WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:8790/".parse().unwrap()))
-        .title("Phygital Memory").inner_size(1200.0, 800.0).build().map_err(|e| e.to_string())?;
+        .title("Phygital Memory").inner_size(1200.0, 800.0).min_inner_size(720.0, 480.0)
+        .on_navigation(|url| own_page(url))
+        .build().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -63,7 +72,9 @@ fn main() {
                 });
             } else {
                 WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("index.html".into()))
-                    .title("Phygital Memory").inner_size(480.0, 420.0).build()?;
+                    .title("Phygital Memory").inner_size(480.0, 420.0)
+                    .on_navigation(|url| url.scheme() == "tauri" || url.host_str() == Some("tauri.localhost"))
+                    .build()?;
             }
             Ok(())
         })
