@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>Phygital Memory</title>
+<style>body{font:16px system-ui;display:grid;place-items:center;height:100vh;margin:0;background:#111;color:#eee}
+form{display:grid;gap:12px;width:300px}input,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #444;background:#222;color:#eee}
+button{background:#3a6;border:0}#m{color:#f88;min-height:1.2em}</style>
+<form id="f"><h2>Phygital Memory</h2><p>Pick a password for your new locked notes folder. It cannot be recovered.</p>
+<input id="a" type="password" placeholder="New password" required><input id="b" type="password" placeholder="Again" required>
+<button>Create</button><div id="m"></div></form>
+<script>
+f.onsubmit=async e=>{e.preventDefault();if(a.value!==b.value){m.textContent="The two passwords differ.";return}
+m.textContent="Working...";try{await window.__TAURI__.core.invoke("create_vault",{password:a.value});}catch(x){m.textContent=String(x)}};
+</script>

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Phygital Memory",
+  "version": "0.1.0",
+  "identifier": "io.phygital.memory.test",
+  "build": { "frontendDist": "../src" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg"],
+    "icon": ["icons/icon.png", "icons/icon.icns"],
+    "externalBin": ["binaries/phygital-memory-server"]
+  }
+}
