@@ -1,5 +1,6 @@
 import { api, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
 import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
+import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
@@ -657,6 +658,10 @@ async function hideFinder() {
 async function syncFromDisk() {
   try { await loadFiles(); } catch { return; }
   for (const t of [...state.tabs]) {
+    if (t.docx && t.editable && !t.dirty && !t.saving && exists(t.path)) {
+      try { const j = await api("docxread", { path: t.path, folder: t.folder }); if (j.base !== t.base && !t.dirty) t.show(j); } catch {}
+      continue;
+    }
     if (t.editable && !t.dirty && !t.saving && exists(t.path)) {
       try { const text = await readFileForEdit(t.path); if (text !== null && text !== t.base && !t.dirty) t.show(text); } catch {}
       continue;
@@ -1063,6 +1068,10 @@ function makeFileTab(path) {
     editableFile(tab, body, fail);
     return tab;
   }
+  if (/\.docx$/i.test(path)) {
+    wordFile(tab, body, fail);
+    return tab;
+  }
   if (PDF.test(path)) {
     const frame = el("iframe", { class: "file-pdf", title: baseName(path), sandbox: "" });
     fileURL(path).then((u) => { frame.src = u; }).catch(fail);
@@ -1073,7 +1082,8 @@ function makeFileTab(path) {
     body.replaceChildren(media);
   } else {
     body.replaceChildren(el("p", { class: "file-note" },
-      "This kind of file can't be previewed here. Use Show in Finder to open it with another app."));
+      "This kind of file can't be previewed here. Open it in its own app, or use Show in Finder."),
+      el("button", { class: "btn small file-open", type: "button", onclick: () => openInApp(path) }, "Open in its app"));
   }
   return tab;
 }
@@ -1109,6 +1119,30 @@ function editableFile(tab, body, fail) {
   }).catch(fail);
 }
 
+// Word files: change the words of each paragraph; the server keeps the rest of the .docx exactly as it was.
+function wordFile(tab, body, fail) {
+  tab.docx = true;
+  tab.show = (j) => {
+    tab.base = j.base; tab.changes = {};
+    tab.editable = true;
+    body.replaceChildren(docxEditor(j.paragraphs || [], (i, text) => { tab.changes[i] = text; fileTouch(tab); },
+                                    () => openInApp(tab.path)));
+  };
+  api("docxread", { path: tab.path }).then(tab.show).catch(fail);
+}
+
+// Open a file in its own Mac app (Word, Pages, Numbers…). Needs the Finder view, which asks first.
+async function openInApp(path) {
+  const tab = state.tabs.find((t) => t.path === path);
+  if (tab && tab.dirty) await saveNow(tab);
+  if (!finder.shown) {
+    await toggleFinder();
+    if (!finder.shown) return;
+  }
+  try { await api("finder", { do: "openfile", path }); toastOk("Opened. Changes you save there go back into the locked folder."); }
+  catch (e) { toastErr(e.message); }
+}
+
 function fileTouch(tab) {
   tab.ver = (tab.ver || 0) + 1;
   tab.dirty = true;
@@ -1123,6 +1157,25 @@ function saveFileNow(tab) {
     if (!tab.dirty) return;
     const v = tab.ver, text = tab.text;
     tab.saving = true; renderStatus();
+    if (tab.docx) {
+      const changes = tab.changes; tab.changes = {};
+      try {
+        const j = await api("docxsave", { path: tab.path, changes, base: tab.base, folder: tab.folder });
+        if ("conflict" in j) {
+          if (j.conflict) tellConflict(tab.path, j.conflict);
+          tab.dirty = false;
+          tab.show(await api("docxread", { path: tab.path, folder: tab.folder }));
+          loadFiles();
+        } else {
+          tab.base = j.base;
+          if (tab.ver === v) tab.dirty = false;
+        }
+        tab.err = null;
+      } catch (e) { tab.err = e.message; Object.assign(tab.changes, { ...changes, ...tab.changes }); }
+      tab.saving = false;
+      renderStatus(); renderTabs();
+      return;
+    }
     try {
       const j = await writeFileText(tab.path, text, tab.base, tab.folder);
       if (j.conflict) {   // changed somewhere else meanwhile: ours went to a conflict copy, show theirs

@@ -362,6 +362,12 @@ def _unlock(f, password: str):
     return _ok({**s, "pass": p, "folder": f.id})
 
 
+# Documents the app may open in their own Mac app (Open in Word and similar). Nothing that can run code.
+OPENABLE = {".docx", ".doc", ".rtf", ".odt", ".pages", ".xlsx", ".xls", ".ods", ".numbers", ".pptx", ".ppt", ".odp",
+            ".key", ".pdf", ".txt", ".csv", ".tsv", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".mp3",
+            ".m4a", ".wav", ".mp4", ".mov", ".m4v", ".epub"}
+
+
 @mcp.custom_route("/api/{action}", methods=["POST"])
 async def api(request: Request) -> Response:
     if not _local(request) or request.headers.get("content-type", "").split(";")[0] != "application/json":
@@ -462,6 +468,10 @@ async def api(request: Request) -> Response:
             return _ok({"files": m.list_files(), "conflicts": m.clashes[-20:]})
         if action == "readfile":   # images and other files, as base64 (the page makes a blob URL from it)
             return _ok({"path": body["path"], "base64": base64.b64encode(m.read_bytes(body["path"])).decode()})
+        if action == "docxread":   # a Word file's paragraphs, for editing the words in place
+            return _ok(m.docx_read(body["path"]))
+        if action == "docxsave":
+            return _ok(m.docx_save(body["path"], body.get("changes") or {}, str(body.get("base", ""))))
         if action == "writefile":   # the person edited a file (CSV, text) in the app; base guards against overwriting
             base = body.get("base")
             path = m.write_bytes(body["path"], base64.b64decode(body["base64"]),
@@ -495,7 +505,7 @@ async def api(request: Request) -> Response:
             if do == "revealvault":   # the encrypted folder itself (scrambled files only), in Finder
                 await asyncio.to_thread(subprocess.run, ["open", "-R", str(f.path)], timeout=30)
                 return _ok({"ok": True})
-            if do == "reveal":   # select one note or file in the open Finder view
+            if do in ("reveal", "openfile"):   # select one note or file in the open Finder view, or open it in its app
                 where = f.finder.where()
                 if not where:
                     return _ok({"error": "Show the folder in Finder first."}, 400)
@@ -503,7 +513,11 @@ async def api(request: Request) -> Response:
                 target = (root / str(body.get("path", "")).lstrip("/")).resolve()
                 if not target.is_relative_to(root) or not target.exists():
                     return _ok({"error": "That note isn't in the Finder view."}, 400)
-                await asyncio.to_thread(subprocess.run, ["open", "-R", str(target)], timeout=30)
+                if do == "openfile" and (target.is_dir() or target.suffix.lower() not in OPENABLE):
+                    # never hand an app, script or shortcut to "open": a synced-in file could run code that way
+                    return _ok({"error": "This kind of file can't be opened from here. Use Show in Finder."}, 400)
+                await asyncio.to_thread(subprocess.run, ["open", "-R", str(target)] if do == "reveal" else ["open", str(target)],
+                                        timeout=30)
                 return _ok({"shown": True, "where": where})
             if do == "hide":
                 await asyncio.to_thread(f.finder.hide)

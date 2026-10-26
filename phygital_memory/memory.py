@@ -6,6 +6,7 @@ memory only: nothing readable is written to disk, not even the index. Every AI r
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import secrets
@@ -14,6 +15,7 @@ import threading
 import time
 from pathlib import Path
 
+from . import docx
 from .engram_lib import ingest
 from .engram_lib.db import connect, remove_file
 from .engram_lib import search as engram
@@ -387,6 +389,36 @@ class Memory:
                     return self._clash_copy(parent, rel, data)
             self._writer.write_file(parent, name, data, replace=existing)
             return rel
+
+    # ---------- Word files: change words, keep the format (see docx.py) ----------
+
+    def docx_read(self, rel: str) -> dict:
+        data = self.read_bytes(rel)
+        return {"paragraphs": docx.paragraphs(data), "base": hashlib.sha256(data).hexdigest()}
+
+    def docx_save(self, rel: str, changes: dict, base: str) -> dict:
+        """Apply paragraph changes. If the file changed since `base` (its hash when read), nothing is written."""
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            entry = self._tree.resolve(rel)
+            data = self._tree.read_file(entry)
+            if hashlib.sha256(data).hexdigest() != base:
+                # changed somewhere else meanwhile: theirs stays, ours goes into a conflict copy next to it
+                try:
+                    ours = docx.edit(data, {int(k): v for k, v in changes.items()})
+                except docx.DocxError:
+                    ours = None
+                if ours is None or ours == data:
+                    return {"conflict": "", "base": hashlib.sha256(data).hexdigest()}
+                parent, _ = parent_and_name(self._tree, rel)
+                return {"conflict": self._clash_copy(parent, rel, ours), "base": hashlib.sha256(data).hexdigest()}
+            out = docx.edit(data, {int(k): v for k, v in changes.items()})
+            if len(out) > MAX_FILE_BYTES:
+                raise ValueError("That file is too big (25 MB at most).")
+            if out != data:
+                self._writer.write_file(None, entry.name, out, replace=entry)
+            return {"base": hashlib.sha256(out).hexdigest()}
 
     def save_bytes(self, rel: str, data: bytes) -> str:
         """An image or other file, stored encrypted like the notes. Picks a free name if the path is taken."""
