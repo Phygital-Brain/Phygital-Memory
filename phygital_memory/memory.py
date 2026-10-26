@@ -367,18 +367,24 @@ class Memory:
             self._need_open()
             return self._tree.read_file(self._tree.resolve(_clean_path(rel, md=False)))
 
-    def write_bytes(self, rel: str, data: bytes) -> str:
+    def write_bytes(self, rel: str, data: bytes, base: bytes | None = None) -> str:
         """Write any file at exactly this path (replacing it). Notes go through save(), so they keep versions
-        and stay searchable."""
+        and stay searchable. With base (the bytes the editor started from), a file that changed meanwhile is not
+        written over: this version goes to a conflict copy, whose path is returned."""
         rel = _clean_path(rel, md=False)
         if rel.lower().endswith(".md"):
-            return self.save(rel, data.decode("utf-8", "replace"))
+            return self.save(rel, data.decode("utf-8", "replace"),
+                             base=None if base is None else base.decode("utf-8", "replace"))
         if len(data) > MAX_FILE_BYTES:
             raise ValueError("That file is too big (25 MB at most).")
         with self._lock:
             self._need_open()
             parent, name = self._make_parents(rel)
             existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+            if existing and base is not None:
+                now = self._tree.read_file(existing)
+                if now != base and now != data:
+                    return self._clash_copy(parent, rel, data)
             self._writer.write_file(parent, name, data, replace=existing)
             return rel
 

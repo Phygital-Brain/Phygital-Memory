@@ -68,3 +68,23 @@ export async function readFileText(path) {
   const bytes = Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0));
   return new TextDecoder("utf-8").decode(bytes);
 }
+
+// For editing: the text, or null when the file isn't clean UTF-8 (editing it would damage it).
+export function decodeStrict(b64) {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))); }
+  catch { return null; }
+}
+export async function readFileForEdit(path) {
+  return decodeStrict((await api("readfile", { path })).base64);
+}
+function b64text(text) {
+  const buf = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+// Save an edited text file. base is the text the editor started from: if the file changed meanwhile, the server
+// keeps both and answers {conflict, base64} instead.
+export function writeFileText(path, text, base, folder) {
+  return api("writefile", { path, base64: b64text(text), base: base == null ? undefined : b64text(base), folder });
+}

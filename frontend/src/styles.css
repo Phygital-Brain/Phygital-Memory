@@ -553,3 +553,13 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .todo-x:hover { opacity: 1; }
 .act-tools { display: flex; align-items: center; gap: 8px; }
 .tab-graph.graph-on { color: var(--accent); background: var(--accent-soft); }
+/* editable files: CSV table and plain text */
+.csv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.csv-cap { margin-left: auto; font-size: 12px; color: var(--text-3); }
+.csv-edit th, .csv-edit td { min-width: 64px; white-space: pre-wrap; outline: none; }
+.csv-edit th:focus, .csv-edit td:focus { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.file-edit { display: block; width: 100%; min-height: 60vh; box-sizing: border-box; resize: vertical; padding: 12px 14px;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; color: var(--text); background: var(--bg-subtle);
+  border: 1px solid var(--border); border-radius: 10px; outline: none; tab-size: 2; }
+.file-edit:focus { border-color: var(--accent); }
+.file-ro { font-size: 12px; color: var(--text-3); margin-bottom: 6px; }

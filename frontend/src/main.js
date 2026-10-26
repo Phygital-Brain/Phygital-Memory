@@ -1,4 +1,5 @@
-import { api, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText } from "./api.js";
+import { api, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
+import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
@@ -397,6 +398,7 @@ function buildApp() {
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
+  new ResizeObserver(() => fitTabs()).observe(tabsEl);
   statusEl = el("div", { class: "status" });
   paneHost = el("div", { class: "panes" });
   const empty = el("div", { class: "empty" },
@@ -655,6 +657,10 @@ async function hideFinder() {
 async function syncFromDisk() {
   try { await loadFiles(); } catch { return; }
   for (const t of [...state.tabs]) {
+    if (t.editable && !t.dirty && !t.saving && exists(t.path)) {
+      try { const text = await readFileForEdit(t.path); if (text !== null && text !== t.base && !t.dirty) t.show(text); } catch {}
+      continue;
+    }
     if (t.kind !== "note" || t.dirty || t.saving) continue;
     if (!exists(t.path)) continue;
     try {
@@ -859,6 +865,7 @@ function rowMenu(n, x, y) {
     if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
     items.push({ sep: true }, { label: "Rename", fn: () => renameDialog(n) });
   }
+  items.push({ label: "Show in Finder", fn: () => revealInFinder(n.path) });
   items.push({ label: "Move to trash", cls: "danger", fn: () => trashDialog(n) });
   showMenu(items, x, y);
 }
@@ -1043,17 +1050,20 @@ function makeImageTab(path) {
   return { path, kind: "image", make: "img", pane, dirty: false };
 }
 
-// Other files open as a preview tab: CSV/TSV as a table, PDF, video, audio, plain text and code as text,
-// anything else as a card. Decrypted into memory only.
+// Other files open in a tab: CSV/TSV as an editable table, plain text and code in an editable box (both autosave
+// like notes), PDF, video and audio as previews, anything else as a card. Decrypted into memory only.
 const TEXT_EXT = /\.(txt|json|js|mjs|ts|py|rb|go|rs|java|c|h|cpp|css|html|xml|yml|yaml|toml|ini|sh|log|sql)$/i;
 function makeFileTab(path) {
   const body = el("div", { class: "file-view" });
   const pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, el("h1", { class: "img-title" }, baseName(path)), body));
   paneHost.append(pane);
   const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, `Can't open this file: ${e.message}`)); };
-  if (CSV.test(path)) {
-    readFileText(path).then((text) => body.replaceChildren(csvTable(text, path))).catch(fail);
-  } else if (PDF.test(path)) {
+  const tab = { path, kind: "image", make: "file", pane, dirty: false, folder: currentFolder() };
+  if (CSV.test(path) || TEXT_EXT.test(path)) {
+    editableFile(tab, body, fail);
+    return tab;
+  }
+  if (PDF.test(path)) {
     const frame = el("iframe", { class: "file-pdf", title: baseName(path), sandbox: "" });
     fileURL(path).then((u) => { frame.src = u; }).catch(fail);
     body.replaceChildren(frame);
@@ -1061,15 +1071,75 @@ function makeFileTab(path) {
     const media = el(VIDEO.test(path) ? "video" : "audio", { class: "file-media", controls: "" });
     fileURL(path).then((u) => { media.src = u; }).catch(fail);
     body.replaceChildren(media);
-  } else if (TEXT_EXT.test(path)) {
-    const pre = el("pre", { class: "file-text" });
-    readFileText(path).then((t) => { pre.textContent = t.length > 2_000_000 ? t.slice(0, 2_000_000) + "\n…" : t; }).catch(fail);
-    body.replaceChildren(pre);
   } else {
     body.replaceChildren(el("p", { class: "file-note" },
       "This kind of file can't be previewed here. Use Show in Finder to open it with another app."));
   }
-  return { path, kind: "image", make: "file", pane, dirty: false };
+  return tab;
+}
+
+// CSV and text files: shown editable when they are clean UTF-8 and not huge, read-only otherwise.
+const EDIT_MAX_CHARS = 2_000_000;
+function editableFile(tab, body, fail) {
+  const csv = CSV.test(tab.path);
+  tab.show = (text) => {
+    tab.base = text; tab.text = text;
+    const tooBig = text.length > EDIT_MAX_CHARS || (csv && parseCsv(text, /\.tsv$/i.test(tab.path) ? "\t" : ",").length > CSV_EDIT_MAX_ROWS);
+    if (tooBig) {
+      tab.editable = false;
+      body.replaceChildren(el("div", { class: "file-ro" }, "Too big to edit here, shown read-only."),
+        csv ? csvTable(text, tab.path) : el("pre", { class: "file-text" }, text.slice(0, EDIT_MAX_CHARS)));
+      return;
+    }
+    tab.editable = true;
+    const edited = (t) => { tab.text = t; fileTouch(tab); };
+    if (csv) body.replaceChildren(csvEditor(text, tab.path, edited));
+    else {
+      const box = el("textarea", { class: "file-edit", spellcheck: "false", "aria-label": baseName(tab.path) });
+      box.value = text;
+      box.addEventListener("input", () => edited(box.value));
+      body.replaceChildren(box);
+    }
+  };
+  readFileForEdit(tab.path).then((text) => {
+    if (text !== null) { tab.show(text); return; }
+    tab.editable = false;   // not clean UTF-8: editing would damage it
+    readFileText(tab.path).then((t) => body.replaceChildren(el("div", { class: "file-ro" }, "This file isn't plain UTF-8 text, so it's shown read-only."),
+      csv ? csvTable(t, tab.path) : el("pre", { class: "file-text" }, t.slice(0, EDIT_MAX_CHARS)))).catch(fail);
+  }).catch(fail);
+}
+
+function fileTouch(tab) {
+  tab.ver = (tab.ver || 0) + 1;
+  tab.dirty = true;
+  clearTimeout(tab.timer);
+  tab.timer = setTimeout(() => saveNow(tab), 800);
+  renderStatus(); renderTabs();
+}
+
+function saveFileNow(tab) {
+  clearTimeout(tab.timer);
+  tab.chain = (tab.chain || Promise.resolve()).then(async () => {
+    if (!tab.dirty) return;
+    const v = tab.ver, text = tab.text;
+    tab.saving = true; renderStatus();
+    try {
+      const j = await writeFileText(tab.path, text, tab.base, tab.folder);
+      if (j.conflict) {   // changed somewhere else meanwhile: ours went to a conflict copy, show theirs
+        tellConflict(tab.path, j.conflict);
+        tab.dirty = false;
+        tab.show(decodeStrict(j.base64) ?? "");
+        loadFiles();
+      } else {
+        tab.base = text;
+        if (tab.ver === v) tab.dirty = false;
+      }
+      tab.err = null;
+    } catch (e) { tab.err = e.message; }
+    tab.saving = false;
+    renderStatus(); renderTabs();
+  });
+  return tab.chain;
 }
 
 function parseFM(text) {
@@ -1205,6 +1275,7 @@ function compose(tab) {
 }
 
 function saveNow(tab) {
+  if (tab.editable) return saveFileNow(tab);
   if (tab.kind !== "note") return Promise.resolve();
   clearTimeout(tab.timer);
   tab.chain = tab.chain.then(async () => {
@@ -1240,7 +1311,7 @@ function renderStatus() {
   if (!statusEl) return;
   const t = state.active;
   let s = "", cls = "";
-  if (t && t.kind === "note") {
+  if (t && (t.kind === "note" || t.editable)) {
     if (t.err) { s = "Save failed"; cls = "bad"; }
     else if (t.saving) s = "Saving…";
     else if (t.dirty) s = "Unsaved";
@@ -1304,6 +1375,7 @@ function tabMenu(tab, x, y) {
     { label: "Close", fn: () => closeTab(tab) },
     { label: "Close others", fn: () => closeMany(state.tabs.filter((t) => t !== tab)) },
     { label: "Close tabs to the right", fn: () => closeMany(state.tabs.slice(i + 1)) },
+    ...(isSpecial(tab) ? [] : [{ sep: true }, { label: "Show in Finder", fn: () => revealInFinder(tab.path) }]),
     { sep: true },
     { label: "Close all", fn: () => closeMany([...state.tabs]) },
   ], x, y);
@@ -1340,8 +1412,23 @@ function renderTabs() {
     return el1;
   });
   tabsEl.replaceChildren(...nodes);   // the + button sits outside the strip, so it never scrolls away
+  // The Mac's web view sizes a scrolling flex strip too small, so say how wide the tabs want to be; it still
+  // shrinks (and scrolls) when the window is narrow.
+  tabsEl.style.flexBasis = `${state.tabs.length * 182 + 6}px`;
+  fitTabs();
+}
+
+// Bring the active tab into view by scrolling the strip only (scrollIntoView also scrolled the window's own layout).
+// Runs again whenever the strip changes size: at start the window is still tiny, and a scroll made then used to
+// stay, leaving the first tab cut off.
+function fitTabs() {
+  if (!tabsEl) return;
+  if (tabsEl.scrollWidth <= tabsEl.clientWidth + 1) { tabsEl.scrollLeft = 0; return; }
   const a = tabsEl.querySelector(".tab.active");
-  if (a) a.scrollIntoView({ block: "nearest", inline: "nearest" });
+  if (!a) return;
+  const r = a.getBoundingClientRect(), b = tabsEl.getBoundingClientRect();
+  if (r.left < b.left) tabsEl.scrollLeft -= b.left - r.left;
+  else if (r.right > b.right && b.width >= r.width) tabsEl.scrollLeft += r.right - b.right;
 }
 
 // ---------- Home ----------

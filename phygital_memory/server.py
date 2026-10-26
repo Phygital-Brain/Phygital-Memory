@@ -34,7 +34,7 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from . import activity
 from .folders import Folders, cloud_places, pick_folder
-from .memory import Locked, Memory, _clean_path as _clean_note
+from .memory import Locked, Memory, _clean_path
 from .vault.keys import WrongPassword
 
 HERE = Path(__file__).resolve().parent
@@ -433,7 +433,7 @@ async def api(request: Request) -> Response:
         if action == "save":   # with base: if the note changed meanwhile, the text goes to a conflict copy
             base = body.get("base")
             path = m.save(body["path"], body["text"], new=bool(body.get("new")), base=base if isinstance(base, str) else None)
-            if path != _clean_note(body["path"]):
+            if path != _clean_path(body["path"]):
                 return _ok({"path": body["path"], "conflict": path, "text": m.read(body["path"])})
             return _ok({"path": path})
         if action == "search":   # the app's search: up to 40 results, optionally only inside one subfolder
@@ -462,6 +462,14 @@ async def api(request: Request) -> Response:
             return _ok({"files": m.list_files(), "conflicts": m.clashes[-20:]})
         if action == "readfile":   # images and other files, as base64 (the page makes a blob URL from it)
             return _ok({"path": body["path"], "base64": base64.b64encode(m.read_bytes(body["path"])).decode()})
+        if action == "writefile":   # the person edited a file (CSV, text) in the app; base guards against overwriting
+            base = body.get("base")
+            path = m.write_bytes(body["path"], base64.b64decode(body["base64"]),
+                                 base=base64.b64decode(base) if isinstance(base, str) else None)
+            if path != _clean_path(body["path"], md=False):
+                return _ok({"path": body["path"], "conflict": path,
+                            "base64": base64.b64encode(m.read_bytes(body["path"])).decode()})
+            return _ok({"path": path})
         if action == "savefile":
             return _ok({"path": m.save_bytes(body["path"], base64.b64decode(body["base64"]))})
         if action == "mkdir":
