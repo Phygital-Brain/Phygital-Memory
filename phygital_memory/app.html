@@ -96,6 +96,11 @@ section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 #toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel2);
   border: 1px solid var(--danger); color: var(--danger); padding: 8px 14px; border-radius: 8px; }
 @media (max-width: 700px) { aside { width: 200px; min-width: 160px; } header .tag { display: none; } }
+.askback { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.ask { background: var(--panel, #1c1d22); color: inherit; border: 1px solid var(--line, #333); border-radius: 10px; padding: 18px; width: min(420px, 90vw); box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.ask p { margin: 0 0 12px; }
+.ask input { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+.askrow { display: flex; gap: 8px; justify-content: flex-end; }
 </style>
 </head>
 <body>
@@ -188,9 +193,13 @@ section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   });
 
   $("lockbtn").addEventListener("click", function () {
-    if (!guard()) return;
-    api("lock").catch(function () {}).then(function () { showUnlock(""); });
+    guard().then(function (ok) {
+      if (ok) api("lock").catch(function () {}).then(function () { showUnlock(""); });
+    });
   });
+
+  // shortcut: test-only auto unlock; the server answers it only when started with a dev password file. Remove before release.
+  api("devunlock").then(function (j) { pass = j.pass; showMain(); return loadNotes(); }).catch(function () {});
 
   /* ---------- tree ---------- */
   function loadNotes() {
@@ -262,7 +271,31 @@ section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
   /* ---------- editor ---------- */
   function dirty() { return cur !== null && $("text").value !== loaded; }
-  function guard() { return !dirty() || confirm("This note has unsaved changes. Leave without saving?"); }
+  // The Mac app's window has no prompt()/confirm(), so questions are asked in a box on the page. Resolves to the
+  // typed text (input) or true (yes), and null when cancelled.
+  function ask(message, input, okLabel) {
+    return new Promise(function (resolve) {
+      var back = document.createElement("div"); back.className = "askback";
+      var box = document.createElement("form"); box.className = "ask";
+      var p = document.createElement("p"); p.textContent = message; box.appendChild(p);
+      var field = null;
+      if (input) { field = document.createElement("input"); field.type = "text"; field.placeholder = input; box.appendChild(field); }
+      var row = document.createElement("div"); row.className = "askrow";
+      var no = document.createElement("button"); no.type = "button"; no.textContent = "Cancel";
+      var yes = document.createElement("button"); yes.type = "submit"; yes.className = "primary"; yes.textContent = okLabel || "OK";
+      row.appendChild(no); row.appendChild(yes); box.appendChild(row); back.appendChild(box); document.body.appendChild(back);
+      function done(v) { back.remove(); document.removeEventListener("keydown", esc, true); resolve(v); }
+      function esc(e) { if (e.key === "Escape") { e.preventDefault(); done(null); } }
+      document.addEventListener("keydown", esc, true);
+      no.addEventListener("click", function () { done(null); });
+      box.addEventListener("submit", function (e) { e.preventDefault(); done(field ? (field.value.trim() || null) : true); });
+      (field || yes).focus();
+    });
+  }
+  function guard() {
+    return dirty() ? ask("This note has unsaved changes. Leave without saving?", null, "Leave").then(Boolean)
+                   : Promise.resolve(true);
+  }
   function showNote(on) {
     $("blank").hidden = on; $("bar").hidden = !on;
     $("text").hidden = !on || previewing; $("preview").hidden = !on || !previewing;
@@ -272,7 +305,9 @@ section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
   function openNote(path) {
     if (path === cur) return;
-    if (!guard()) return;
+    guard().then(function (ok) { if (ok) readNote(path); });
+  }
+  function readNote(path) {
     api("read", { path: path }).then(function (j) {
       cur = j.path; loaded = j.text || ""; $("text").value = loaded; $("curpath").textContent = cur;
       previewing = false; $("pvbtn").textContent = "Preview"; showNote(true); updDirty(); markCurrent();
@@ -297,12 +332,14 @@ section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   window.addEventListener("beforeunload", function (e) { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
 
   $("newbtn").addEventListener("click", function () {
-    if (!guard()) return;
-    var p = prompt("Path for the new note, like Ideas/name.md");
-    if (!p) return;
-    p = p.trim().replace(/^\/+/, ""); if (!/\.md$/i.test(p)) p += ".md";
-    api("save", { path: p, text: "", new: true }).then(function (j) {
-      cur = null; loaded = ""; return loadNotes().then(function () { openNote(j.path || p); });
+    guard().then(function (ok) {
+      return ok && ask("New note. Where does it go?", "Ideas/name.md", "Create");
+    }).then(function (p) {
+      if (!p) return;
+      p = p.trim().replace(/^\/+/, ""); if (!/\.md$/i.test(p)) p += ".md";
+      return api("save", { path: p, text: "", new: true }).then(function (j) {
+        cur = null; loaded = ""; return loadNotes().then(function () { readNote(j.path || p); });
+      });
     }).catch(function (e) { if (e.message !== "locked") toast(e.message); });
   });
 

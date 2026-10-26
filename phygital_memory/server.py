@@ -176,6 +176,13 @@ async def api(request: Request) -> Response:
     try:
         if action == "status":
             return JSONResponse({"open": memory.is_open}, headers=HEADERS)
+        # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
+        # fields). Works only when the app is started with PHYGITAL_MEMORY_DEV_PASSWORD_FILE. Remove before release.
+        if action == "devunlock" and os.environ.get("PHYGITAL_MEMORY_DEV_PASSWORD_FILE"):
+            s = memory.unlock(Path(os.environ["PHYGITAL_MEMORY_DEV_PASSWORD_FILE"]).read_text().strip())
+            p = secrets.token_urlsafe(32)
+            _passes.add(p)
+            return JSONResponse({**s, "pass": p}, headers=HEADERS)
         if action == "unlock":
             if time.time() < _fails["until"]:
                 return JSONResponse({"error": "Too many wrong tries. Wait a minute."}, status_code=429)
