@@ -15,6 +15,7 @@ import asyncio
 import base64
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -23,7 +24,7 @@ import time
 from pathlib import Path
 from typing import Annotated
 
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp_types import ToolAnnotations
@@ -56,6 +57,19 @@ WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world
 ResultId = Annotated[str, Field(description="The id of a search_notes result, for example 'a1b2:12'.")]
 
 mcp = MCPServer("phygital-memory", instructions=INSTRUCTIONS, title="Phygital Memory", version="0.0.2")
+
+
+# Which AI apps used the notes lately (name and time only, in memory): the app shows it as a small light.
+ai_seen: dict[str, float] = {}
+
+
+def _seen(ctx) -> None:
+    try:
+        info = ctx.session.client_params.client_info
+        name = (info.title or info.name or "AI app").strip()[:60]
+    except Exception:
+        name = "AI app"
+    ai_seen[name] = time.time()
 
 
 def _guard(fn, *a, **k):
@@ -101,8 +115,9 @@ def _split(rid: str):
 
 
 @mcp.tool(annotations=READ)
-def status() -> str:
+def status(ctx: Context) -> str:
     """Which locked folders exist, which are unlocked, how many notes each holds."""
+    _seen(ctx)
     lines = []
     for f in folders.items.values():
         s = f.memory.status()
@@ -112,10 +127,11 @@ def status() -> str:
 
 
 @mcp.tool(annotations=READ)
-def search_notes(question: Annotated[str, Field(description="What to look for, in plain words.")],
+def search_notes(ctx: Context, question: Annotated[str, Field(description="What to look for, in plain words.")],
                  limit: Annotated[int, Field(ge=1, le=20, description="How many results (default 8).")] = 8) -> str:
     """Search the person's notes with Engram, in every unlocked folder. Returns ranked results: id, folder, note
     path, heading and a short snippet. Then call open_result with an id to read it."""
+    _seen(ctx)
     rows = []
     for f in _open_or_fail():
         for r in _guard(f.memory.search, question, limit):
@@ -130,10 +146,11 @@ def search_notes(question: Annotated[str, Field(description="What to look for, i
 
 
 @mcp.tool(annotations=READ)
-def open_result(id: ResultId,
+def open_result(ctx: Context, id: ResultId,
                 whole_note: Annotated[bool, Field(description="True for the whole note, not just the section.")] = False
                 ) -> str:
     """Read one search result: its section, or the whole note."""
+    _seen(ctx)
     f, cid = _split(id)
     r = _guard(f.memory.get, cid, whole_note)
     if not r:
@@ -142,8 +159,9 @@ def open_result(id: ResultId,
 
 
 @mcp.tool(annotations=READ)
-def around_result(id: ResultId) -> str:
+def around_result(ctx: Context, id: ResultId) -> str:
     """The sections just before and after a result, and other notes from the same day."""
+    _seen(ctx)
     f, cid = _split(id)
     r = _guard(f.memory.around, cid)
     if not r:
@@ -152,19 +170,21 @@ def around_result(id: ResultId) -> str:
 
 
 @mcp.tool(annotations=READ)
-def read_note(id: ResultId) -> str:
+def read_note(ctx: Context, id: ResultId) -> str:
     """The exact text of the note behind a result, as it is saved (with its info block). Use it before changing
     the note with replace_in_note."""
+    _seen(ctx)
     f, cid = _split(id)
     rel, text = _guard(f.memory.raw_of, cid)
     return LABEL + f"{rel}\n---8<---\n{text}"
 
 
 @mcp.tool(annotations=WRITE)
-def replace_in_note(id: ResultId,
+def replace_in_note(ctx: Context, id: ResultId,
                     old_text: Annotated[str, Field(description="Exact text now in the note (from read_note).")],
                     new_text: Annotated[str, Field(description="What to put in its place.")]) -> str:
     """Change part of a note: replaces old_text, which must appear exactly once."""
+    _seen(ctx)
     f, cid = _split(id)
     rel, text = _guard(f.memory.raw_of, cid)
     count = text.count(old_text)
@@ -176,8 +196,9 @@ def replace_in_note(id: ResultId,
 
 
 @mcp.tool(annotations=WRITE)
-def append_to_note(id: ResultId, text: Annotated[str, Field(description="Text to add at the end of the note.")]) -> str:
+def append_to_note(ctx: Context, id: ResultId, text: Annotated[str, Field(description="Text to add at the end of the note.")]) -> str:
     """Add text at the end of the note behind a result."""
+    _seen(ctx)
     f, cid = _split(id)
     rel, old = _guard(f.memory.raw_of, cid)
     _guard(f.memory.save, rel, old.rstrip("\n") + "\n\n" + text.strip("\n") + "\n")
@@ -185,11 +206,12 @@ def append_to_note(id: ResultId, text: Annotated[str, Field(description="Text to
 
 
 @mcp.tool(annotations=WRITE)
-def create_note(path: Annotated[str, Field(description="Where it goes, like 'Projects/new-idea.md'.")],
+def create_note(ctx: Context, path: Annotated[str, Field(description="Where it goes, like 'Projects/new-idea.md'.")],
                 text: Annotated[str, Field(description="The note's text.")],
                 folder: Annotated[str, Field(description="Which unlocked folder (its name, from status). "
                                                          "Leave empty when only one is open.")] = "") -> str:
     """Make a new note. Refuses if a note is already at that path."""
+    _seen(ctx)
     open_ = _open_or_fail()
     if folder:
         match = [f for f in open_ if f.name.casefold() == folder.casefold() or f.id == folder]
@@ -297,6 +319,13 @@ async def api(request: Request) -> Response:
         f = folders.get(body.get("folder"))
         if action == "status":
             return _ok({"open": f.memory.is_open, "folder": f.id})
+        if action == "bar":   # the small status icons at the bottom of the sidebar
+            st = f.memory.status() if _has_pass(request, f) else {"open": False}
+            now = time.time()
+            return _ok({"lockMinutes": st.get("locks_in_minutes") if st.get("open") else None,
+                        "cloud": cloud_place(f.path),
+                        "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(ai_seen.items(), key=lambda x: -x[1])
+                               if now - t < 30 * 60]})
         # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
         # fields). Works only when the app is started with PHYGITAL_MEMORY_DEV_PASSWORD_FILE. Remove before release.
         if action == "devunlock" and os.environ.get("PHYGITAL_MEMORY_DEV_PASSWORD_FILE"):
@@ -373,6 +402,23 @@ async def api(request: Request) -> Response:
     except Exception as e:
         return _ok({"error": str(e)}, 400)
     return _ok({"error": "Unknown action."}, 404)
+
+
+def cloud_place(path: Path) -> str | None:
+    """Which cloud the folder sits in, judged by where it is (iCloud Drive, a File Provider cloud, Nextcloud...)."""
+    p = str(Path(path).expanduser().resolve())
+    home = str(Path.home())
+    if "/Library/Mobile Documents/" in p:
+        return "iCloud Drive"
+    m = re.search(r"/Library/CloudStorage/([^/]+)", p)
+    if m:
+        name = m.group(1).split("-")[0]
+        return {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "Dropbox": "Dropbox", "Box": "Box"}.get(name, name)
+    for folder, label in (("Nextcloud", "Nextcloud"), ("Dropbox", "Dropbox"), ("ownCloud", "ownCloud"),
+                          ("Sync", "Sync"), ("pCloud Drive", "pCloud"), ("Filen", "Filen")):
+        if p.startswith(f"{home}/{folder}/") or p == f"{home}/{folder}":
+            return label
+    return None
 
 
 # ---------- closing the Mac app ----------

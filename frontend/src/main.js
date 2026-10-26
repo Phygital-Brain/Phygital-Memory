@@ -314,6 +314,7 @@ function drawSwitcher() {
   sbPath.textContent = info ? shortPath(info.path) : "No folder yet";
   sbPath.title = info ? info.path : "";
   sbTile.replaceChildren(folderTile(info || {}, !!(info && unlocked(info.id)), 34));
+  refreshBar();
   sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
 }
 
@@ -388,9 +389,8 @@ function buildApp() {
     selBarEl,
     treeEl,
     el("div", { class: "sb-foot" },
-      el("span", { class: "sb-note" }, "🔒 Encrypted · AI reads through Engram"),
-      el("span", { class: "sb-foot-btns" }, finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere),
-        el("button", { class: "btn small", onclick: lockFolder, title: "Lock this folder" }, icon("lock", 13), "Lock"))),
+      statusBar(),
+      el("span", { class: "sb-foot-btns" }, finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -485,6 +485,43 @@ function openSettingsHere() {
     name: info.name, finderShown: finder.shown, finderAvailable: finder.available,
     toggleFinder: async () => { await toggleFinder(); return finder.shown; },
   } : null);
+}
+
+// ---------- the small status icons at the bottom of the sidebar ----------
+// Lock timer (click to lock), where the folder lives (a cloud, or only this Mac), and a light for AI apps.
+let barEls = null, barTimer = null;
+function statusBar() {
+  const pill = (cls, title) => el("button", { class: "sb-stat " + cls, type: "button", title });
+  barEls = {
+    lock: pill("st-lock", "Lock this folder now"),
+    cloud: pill("st-cloud", ""),
+    ai: pill("st-ai", ""),
+  };
+  barEls.lock.addEventListener("click", () => lockFolder());
+  barEls.lock.setAttribute("aria-label", "Lock this folder");
+  clearInterval(barTimer);
+  barTimer = setInterval(refreshBar, 15000);
+  setTimeout(refreshBar, 300);
+  return el("span", { class: "sb-stats" }, barEls.lock, barEls.cloud, barEls.ai);
+}
+
+async function refreshBar() {
+  if (!barEls || !barEls.lock.isConnected) return;
+  let b = null;
+  try { b = await api("bar"); } catch { return; }
+  const mins = b.lockMinutes;
+  barEls.lock.replaceChildren(icon("lock", 13, 1.9), el("span", {}, mins == null ? "Locked" : mins < 1 ? "<1 min" : `${mins} min`));
+  barEls.lock.title = mins == null ? "Locked" : `Locks by itself in about ${mins} min without use. Click to lock now.`;
+  barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 14, 1.8));
+  barEls.cloud.classList.toggle("on", !!b.cloud);
+  barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}, encrypted. The cloud only sees scrambled files.` : "Only on this Mac.";
+  const recent = (b.ai || []).filter((a) => a.ago < 120);
+  barEls.ai.replaceChildren(icon("sparkle", 14, 1.7));
+  barEls.ai.classList.toggle("on", recent.length > 0);
+  const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
+  barEls.ai.title = (b.ai || []).length
+    ? "AI apps using your notes:\n" + b.ai.map((a) => `${a.name}, ${ago(a.ago)}`).join("\n")
+    : "No AI app is using your notes right now.";
 }
 
 // Click a note's path: copy it in the form you need.
