@@ -31,7 +31,8 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     let token = app.state::<ShellToken>().0.clone();
     let cmd = app.shell().sidecar("phygital-memory-server").map_err(|e| e.to_string())?
         .env("PHYGITAL_MEMORY_FOLDER", folder()).env("PHYGITAL_MEMORY_PORT", "8790")
-        .env("PHYGITAL_MEMORY_SHELL_TOKEN", token);
+        .env("PHYGITAL_MEMORY_SHELL_TOKEN", token)
+        .env("PHYGITAL_MEMORY_APP_PID", std::process::id().to_string());
     let (mut rx, child) = cmd.spawn().map_err(|e| e.to_string())?;
     tauri::async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
     *app.state::<Server>().0.lock().unwrap() = Some(child);
@@ -59,6 +60,7 @@ fn shell(app: &tauri::AppHandle, action: &str) -> Option<String> {
 }
 
 fn quit(app: &tauri::AppHandle) {
+    let _ = shell(app, "lockall");   // lock every folder and close every Finder view before we go
     MAY_EXIT.store(true, Ordering::SeqCst);
     app.exit(0);
 }
