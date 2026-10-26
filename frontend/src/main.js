@@ -473,6 +473,15 @@ async function loadFiles() {
   if (fid !== loadedFolder) return;
   state.files = (j.files || []).filter((f) => !baseName(f.path).startsWith("."));
   renderTree();
+  for (const c of j.conflicts || []) tellConflict(c.path, c.copy);
+}
+// A note changed in two places (two devices, or here and an AI app). Both versions are kept; say so once.
+const toldConflicts = new Set();
+function tellConflict(path, copy) {
+  const key = currentFolder() + ":" + copy;
+  if (toldConflicts.has(key)) return;
+  toldConflicts.add(key);
+  toast(`"${label(path)}" was changed in two places. Both versions are kept: the other one is "${label(copy)}".`);
 }
 
 async function loadLinks() {
@@ -1075,7 +1084,7 @@ function parseFM(text) {
 // Put new text into an open note (restore a version, or the file changed on disk). Saves only if asked.
 function applyText(tab, text) {
   const { fm, body } = parseFM(text);
-  tab.fm = fm; tab.body = body;
+  tab.fm = fm; tab.body = body; tab.base = text;
   renderProps(tab);
   tab.editor && tab.editor.setText(body);
 }
@@ -1083,7 +1092,7 @@ function applyText(tab, text) {
 async function makeNoteTab(path) {
   const j = await api("read", { path });
   const { fm, body } = parseFM(j.text || "");
-  const tab = { path, kind: "note", folder: currentFolder(), fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
+  const tab = { path, kind: "note", folder: currentFolder(), base: j.text || "", fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
   tab.titleEl = el("input", { class: "title", spellcheck: "false", "aria-label": "Note title", value: label(path) });
   tab.titleErr = el("div", { class: "title-err" });
   tab.crumbText = el("button", { class: "crumb-path", type: "button", title: "Copy path",
@@ -1202,8 +1211,19 @@ function saveNow(tab) {
     const v = tab.ver;
     tab.saving = true; renderStatus();
     try {
-      await api("save", { path: tab.path, text: compose(tab), folder: tab.folder });
-      if (tab.ver === v) tab.dirty = false;
+      const text = compose(tab);
+      const j = await api("save", { path: tab.path, text, base: tab.base, folder: tab.folder });
+      if (j.conflict) {
+        // Someone else changed this note since we loaded it: our text went to a conflict copy, theirs stays here.
+        if (tab.ver !== v) await api("save", { path: j.conflict, text: compose(tab), folder: tab.folder });
+        tellConflict(tab.path, j.conflict);
+        applyText(tab, j.text || "");
+        tab.dirty = false;
+        loadFiles();
+      } else {
+        tab.base = text;
+        if (tab.ver === v) tab.dirty = false;
+      }
       tab.err = null;
       const f = state.files.find((x) => x.path === tab.path);
       if (f) f.mtime = Date.now() / 1000;

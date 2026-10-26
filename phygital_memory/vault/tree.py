@@ -8,7 +8,7 @@ Inside a folder's directory d/XX/YYYY..., each entry is:
 - name.c9s/ (a shortened long name): name.c9s holds the full encrypted name, and one of contents.c9r (file),
   dir.c9r (folder) or symlink.c9r (link).
 dirid.c9r (the folder's own ID, as a backup) and anything starting with "." or not ending in .c9r/.c9s are skipped.
-Conflict copies (like "ABC (1).c9r") are reported, not read, until conflict handling is built.
+Conflict copies (like "ABC (1).c9r") are collected in Tree.conflicts as (path, folder ID); memory.py sorts them out.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class Tree:
         self.content = Content(key, config.cipher_combo)
         self.cipher_combo = config.cipher_combo
         self.vault_id = config.vault_id
-        self.conflicts: list[Path] = []
+        self.conflicts: list[tuple[Path, bytes]] = []
 
     def dir_location(self, dir_id: bytes) -> Path:
         xx, rest = self.names.dir_path(dir_id)
@@ -80,7 +80,7 @@ class Tree:
         try:
             clear = self.names.decrypt(name, dir_id)
         except VaultError:
-            self.conflicts.append(path)   # most often a sync conflict copy like "ABC (1).c9r"
+            self.conflicts.append((path, dir_id))   # most often a sync conflict copy like "ABC (1).c9r"
             return None
         if path.is_dir():
             if (path / "dir.c9r").is_file():

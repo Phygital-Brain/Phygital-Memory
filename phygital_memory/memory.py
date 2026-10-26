@@ -18,7 +18,7 @@ from .engram_lib.db import connect, remove_file
 from .engram_lib import search as engram
 from .vault import keys
 from .vault.manage import create_vault
-from .vault.tree import NotFound, Tree
+from .vault.tree import Entry, NotFound, Tree
 from .vault.writer import Exists, Writer, parent_and_name
 
 HERE = Path(__file__).resolve().parent
@@ -53,6 +53,9 @@ class Memory:
         self.on_lock: list = []
         self._gen = 0              # goes up whenever a note changes; the links cache is only good for one value
         self._links_cache = None   # called after every lock (the Finder view closes itself here)
+        self._synced = 0.0         # when notes changed by a cloud drive were last picked up
+        self._skipped: dict[str, float] = {}
+        self.clashes: list[dict] = []   # clash copies made since unlock, for the app to tell the person once
 
     # ---------- open and close ----------
 
@@ -85,7 +88,9 @@ class Memory:
                 raise
             self._key, self._tree, self._writer, self._con = key, tree, Writer(tree), con
             self._touch()
+            self._fix_clash_copies()
             self._index_all()
+            self._synced = time.time()
             return self.status()
 
     def lock(self) -> None:
@@ -97,6 +102,7 @@ class Memory:
                 self._key.wipe()
             self._key = self._tree = self._writer = self._con = None
             self._links_cache = None
+            self.clashes = []
         if was_open:   # on its own thread: unmounting Finder talks to us, and we may still hold the lock here
             def run():
                 for fn in list(self.on_lock):
@@ -169,6 +175,7 @@ class Memory:
     def search(self, q: str, n: int = 8) -> list[dict]:
         with self._lock:
             self._need_open()
+            self._sync()
             return engram.search(self.cfg, q, n, con=self._con, private=False)
 
     def get(self, chunk_id: int, whole_note: bool = False) -> dict | None:
@@ -195,8 +202,12 @@ class Memory:
             rel = self.path_of(chunk_id)
             return rel, self.read(rel)
 
-    def save(self, rel: str, text: str, new: bool = False) -> str:
-        """Write a note (encrypted) and update the index. new=True refuses to replace an existing note."""
+    def save(self, rel: str, text: str, new: bool = False, base: str | None = None) -> str:
+        """Write a note (encrypted) and update the index. new=True refuses to replace an existing note.
+
+        base is the note's text as the editor last saw it. If the note changed since (a cloud drive brought another
+        device's edit, or an AI app changed it), nothing is written over that change: this text goes into a clash
+        copy next to it instead, and the clash copy's path is returned."""
         rel = _clean_path(rel)
         data = text.encode("utf-8")
         if len(data) > MAX_NOTE_BYTES:
@@ -207,6 +218,10 @@ class Memory:
             existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
             if existing and new:
                 raise Exists(f"'{rel}' already exists. Open it from a search result to change it.")
+            if existing and base is not None:
+                now = self._tree.read_file(existing)
+                if now != base.encode("utf-8") and now != data:
+                    return self._clash_copy(parent, rel, data)
             if existing:
                 self._keep_version(rel, existing, data)
             entry = self._writer.write_file(parent, name, data, replace=existing)
@@ -226,6 +241,97 @@ class Memory:
                 self._writer.make_dir(parent, name)
         return parent_and_name(self._tree, rel)
 
+    # ---------- sync clashes (two devices, or the app and an AI app, changed the same note) ----------
+    # Same rule as Baalda: never write over a change this side hasn't seen. Both versions are kept, the other side's
+    # under the note's own name and ours as "name (conflict YYYY-MM-DD).md", and the person is told once.
+
+    def _clash_copy(self, parent, rel: str, data: bytes) -> str:
+        stem, dot, ext = Path(rel).name.rpartition(".") if "." in Path(rel).name else (Path(rel).name, "", "")
+        taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
+        name, n = f"{stem} (conflict {time.strftime('%Y-%m-%d')}){dot}{ext}", 1
+        while name in taken:
+            n += 1
+            name = f"{stem} (conflict {time.strftime('%Y-%m-%d')} {n}){dot}{ext}"
+        entry = self._writer.write_file(parent, name, data)
+        copy = "/".join(rel.split("/")[:-1] + [name])
+        if copy.lower().endswith(".md") and copy.split("/")[0] not in HIDDEN:
+            remove_file(self._con, copy)
+            self._index_one(copy, entry)
+            self._con.commit()
+        self.clashes.append({"path": rel, "copy": copy, "t": time.time()})
+        return copy
+
+    def _fix_clash_copies(self) -> int:
+        """Cloud drives keep both sides of a clash as an extra encrypted file, like "ABC (1).c9r" or "ABC (conflicted
+        copy ...).c9r". Its name no longer decrypts, so it would just vanish. Exact duplicates are removed; the rest
+        get a readable clash name next to the note. Returns how many were sorted out."""
+        self._tree.conflicts = []
+        for _ in self._tree.walk():
+            pass
+        found, self._tree.conflicts = list(dict.fromkeys(self._tree.conflicts)), []
+        fixed = 0
+        for path, dir_id in found:
+            m = re.match(r"[A-Za-z0-9_=-]+", path.name)
+            if not path.is_file() or not m:
+                continue   # a clashed folder is left as it is (rare; nothing in it is lost)
+            try:
+                clear = self._tree.names.decrypt(m.group(0), dir_id)
+                data = self._tree.read_file(Entry(clear, "file", path))
+            except Exception:
+                continue   # not from this folder's key: leave it alone
+            parent = Entry("", "dir", self._tree.dir_location(dir_id), dir_id)
+            main = next((e for e in self._tree.list_dir(dir_id) if e.name == clear), None)
+            if main is None:
+                self._writer.write_file(parent, clear, data)
+            elif self._tree.read_file(main) != data:
+                rel = self._rel_in(dir_id, clear)
+                if rel is None:
+                    continue
+                self._clash_copy(parent, rel, data)
+            path.unlink()
+            fixed += 1
+        return fixed
+
+    def _rel_in(self, dir_id: bytes, name: str) -> str | None:
+        if dir_id == b"":
+            return name
+        for p, e in self._tree.walk():
+            if e.kind == "dir" and e.dir_id == dir_id:
+                return f"{p.lstrip('/')}/{name}"
+        return None
+
+    def _sync(self) -> None:
+        """Pick up notes a cloud drive (or Finder) changed on disk: at most every few seconds, only what changed."""
+        if time.time() - self._synced < SYNC_EVERY:
+            return
+        self._synced = time.time()
+        self._tree.conflicts = []
+        disk = {}
+        for path, entry in self._tree.walk():
+            rel = path.lstrip("/")
+            if entry.kind == "file" and rel.lower().endswith(".md") and rel.split("/")[0] not in HIDDEN:
+                disk[rel] = entry
+        if self._tree.conflicts and self._fix_clash_copies():
+            self._synced = 0
+            return self._sync()
+        known = dict(self._con.execute("SELECT path, mtime FROM files"))
+        changed = False
+        for rel in known.keys() - disk.keys():
+            remove_file(self._con, rel)
+            changed = True
+        for rel, entry in disk.items():
+            mtime = self._tree.contents_path(entry).stat().st_mtime
+            if known.get(rel) != mtime and self._skipped.get(rel) != mtime:
+                remove_file(self._con, rel)
+                self._index_one(rel, entry)
+                if not self._con.execute("SELECT 1 FROM files WHERE path=?", (rel,)).fetchone():
+                    self._skipped[rel] = mtime   # too big, not text, or marked to skip: don't retry until it changes
+                changed = True
+        if changed:
+            self._gen += 1
+            ingest.count_backlinks(self._con, self.cfg)
+            self._con.commit()
+
     # ---------- what only the person's own app shows ----------
 
     def list_notes(self) -> list[str]:
@@ -242,6 +348,7 @@ class Memory:
         """Every folder and file (notes, images, other files), for the person's own sidebar."""
         with self._lock:
             self._need_open()
+            self._sync()
             out = []
             for path, entry in self._tree.walk():
                 rel = path.lstrip("/")
@@ -457,6 +564,7 @@ PREFS = ".phygital/prefs.json"
 HIDDEN = (TRASH, VERSIONS, ".phygital")
 VERSION_EVERY = 5 * 60
 VERSION_KEEP = 50
+SYNC_EVERY = 5
 MAX_FILE_BYTES = 25_000_000
 
 
