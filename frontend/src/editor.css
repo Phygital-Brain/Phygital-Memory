@@ -81,8 +81,19 @@ a.md-wiki-missing { color: var(--text-3); border-bottom-style: dashed; border-bo
 .md-table th, .md-table td { border: 1px solid var(--border); padding: 6px 12px; vertical-align: top; }
 .md-table th { background: var(--bg-subtle); font-weight: 650; }
 .md-table-source { font-family: var(--font-mono); font-size: .88em; color: var(--text-2); }
-.md-embed { display: inline-block; max-width: 100%; }
-.md-embed img { max-width: 100%; border-radius: 8px; display: block; margin: 4px 0; }
+.md-embed { display: inline-block; max-width: 100%; position: relative; line-height: 0; margin: 4px 0; }
+.md-embed img { max-width: 100%; border-radius: 8px; display: block; cursor: zoom-in; }
+.md-resize { position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px; border-radius: 4px; cursor: nwse-resize;
+             background: var(--bg-surface); border: 1px solid var(--border); opacity: 0; transition: opacity .12s; }
+.md-embed:hover .md-resize, .md-resizing .md-resize { opacity: .9; }
+.md-resizing img { outline: 2px solid var(--accent); }
+.md-lightbox { position: fixed; inset: 0; z-index: 100; background: rgba(8, 8, 10, .9); display: flex; flex-direction: column;
+               align-items: center; justify-content: center; gap: 12px; cursor: zoom-out; animation: md-fade .16s cubic-bezier(.2,0,0,1); }
+.md-lightbox img { max-width: 94vw; max-height: 88vh; object-fit: contain; border-radius: 6px; cursor: zoom-in; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.md-lightbox img.md-lightbox-actual { max-width: none; max-height: none; cursor: zoom-out; }
+.md-lightbox:has(.md-lightbox-actual) { overflow: auto; justify-content: flex-start; align-items: flex-start; }
+.md-lightbox-caption { color: #c9c9d1; font-size: 12.5px; }
+@keyframes md-fade { from { opacity: 0; } to { opacity: 1; } }
 .md-missing { color: var(--danger); font-size: .9em; background: color-mix(in srgb, var(--danger) 8%, transparent); border-radius: 6px; padding: 2px 8px; }
 .md-note-embed { display: inline-block; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px;
                  padding: 4px 12px; color: var(--accent); cursor: pointer; background: var(--bg-subtle); }

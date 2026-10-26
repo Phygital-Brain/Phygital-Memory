@@ -156,20 +156,67 @@ class RuleWidget extends WidgetType {
   toDOM() { const d = document.createElement("div"); d.className = "md-hr"; return d; }
 }
 
+// Images: click opens the full view; drag the corner to resize, and the width is written into the note
+// (![[pic.png|300]] or ![alt|300](pic.png)), like Baalda and Obsidian.
 class ImageWidget extends WidgetType {
   constructor(src, alt, width, opts) { super(); this.src = src; this.alt = alt; this.width = width; this.opts = opts; }
   eq(o) { return o.src === this.src && o.width === this.width && o.alt === this.alt; }
-  toDOM() {
+  toDOM(view) {
     const wrap = document.createElement("span"); wrap.className = "md-embed";
     const path = this.opts.resolveFile(this.src);
     if (!path) { wrap.classList.add("md-missing"); wrap.textContent = `Not found: ${this.src}`; return wrap; }
-    const img = document.createElement("img"); img.alt = this.alt || this.src;
+    const img = document.createElement("img"); img.alt = this.alt || this.src; img.draggable = false;
     if (this.width) img.style.width = `${this.width}px`;
     this.opts.loadImage(path).then((url) => { img.src = url; })
       .catch(() => { wrap.classList.add("md-missing"); wrap.textContent = `Can't open ${this.src}`; });
-    wrap.append(img);
+    const handle = document.createElement("span"); handle.className = "md-resize"; handle.title = "Drag to resize";
+    wrap.append(img, handle);
+
+    img.addEventListener("mousedown", (e) => { e.preventDefault(); });
+    img.addEventListener("click", (e) => { e.preventDefault(); openLightbox(img.src, img.alt); });
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const startX = e.clientX, startW = img.getBoundingClientRect().width;
+      const max = view.contentDOM.getBoundingClientRect().width;
+      wrap.classList.add("md-resizing");
+      const move = (ev) => { img.style.width = `${Math.round(Math.max(48, Math.min(max, startW + ev.clientX - startX)))}px`; };
+      const up = () => {
+        document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up);
+        wrap.classList.remove("md-resizing");
+        setImageWidth(view, view.posAtDOM(wrap), Math.round(img.getBoundingClientRect().width));
+      };
+      document.addEventListener("mousemove", move); document.addEventListener("mouseup", up);
+    });
     return wrap;
   }
+  ignoreEvent() { return true; }
+}
+
+function setImageWidth(view, pos, width) {
+  const line = view.state.doc.lineAt(pos);
+  const text = line.text, at = pos - line.from;
+  let m = /^!\[\[([^\]|]+)(\|[^\]]*)?\]\]/.exec(text.slice(at));
+  if (m) {
+    const insert = `![[${m[1]}|${width}]]`;
+    view.dispatch({ changes: { from: pos, to: pos + m[0].length, insert } });
+    return;
+  }
+  m = /^!\[([^\]|]*)(\|\d+)?\]\(([^)]*)\)/.exec(text.slice(at));
+  if (m) view.dispatch({ changes: { from: pos, to: pos + m[0].length, insert: `![${m[1]}|${width}](${m[3]})` } });
+}
+
+function openLightbox(src, alt) {
+  if (!src) return;
+  const back = document.createElement("div"); back.className = "md-lightbox";
+  const img = document.createElement("img"); img.src = src; img.alt = alt || "";
+  const cap = document.createElement("div"); cap.className = "md-lightbox-caption"; cap.textContent = alt || "";
+  back.append(img, cap);
+  const close = () => { back.remove(); document.removeEventListener("keydown", key, true); };
+  const key = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
+  img.addEventListener("click", (e) => { e.stopPropagation(); img.classList.toggle("md-lightbox-actual"); });
+  back.addEventListener("click", close);
+  document.addEventListener("keydown", key, true);
+  document.body.append(back);
 }
 
 class NoteEmbedWidget extends WidgetType {
@@ -340,8 +387,12 @@ function buildDecorations(state, opts) {
         if (touches(from, to)) return false;
         const url = node.node.getChild("URL");
         const src = url ? doc.sliceString(url.from, url.to) : "";
-        const alt = doc.sliceString(from, to).replace(/^!\[|\]\(.*$/gs, "");
-        if (src && !/^[a-z]+:/i.test(src)) add(from, to, Decoration.replace({ widget: new ImageWidget(decodeURI(src), alt, null, opts) }));
+        const label = doc.sliceString(from, to).replace(/^!\[|\]\(.*$/gs, "");
+        const sized = /^(.*?)\|(\d+)$/.exec(label);   // ![alt|300](pic.png)
+        const alt = sized ? sized[1] : label, width = sized ? parseInt(sized[2], 10) : null;
+        if (src && !/^[a-z]+:/i.test(src)) {
+          add(from, to, Decoration.replace({ widget: new ImageWidget(decodeURI(src).replace(/^\//, ""), alt, width, opts) }));
+        }
         return false;
       }
       if (name === "WikiLink" || name === "Embed") {
@@ -561,6 +612,7 @@ export function createEditor(parent, opts) {
     fileDrops(opts),
     Prec.high(keymap.of([
       { key: "Mod-s", run: () => { opts.onSave?.(); return true; }, preventDefault: true },
+      { key: "Escape", run: (view) => { view.contentDOM.blur(); return true; } },   // back to view mode
       { key: "Mod-b", run: wrapWith("**") },
       { key: "Mod-i", run: wrapWith("*") },
       { key: "Mod-Shift-x", run: wrapWith("~~") },

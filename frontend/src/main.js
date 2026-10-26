@@ -505,7 +505,9 @@ function activate(tab, opts = {}) {
   if (tab.kind === "note") {
     requestAnimationFrame(() => {
       tab.editor.refresh();
-      if (opts.focusTitle) { tab.titleEl.focus(); tab.titleEl.select(); } else tab.editor.focus();
+      // A note opens in view mode (fully formatted, no cursor). Editing starts when you click or type in it.
+      if (opts.focusTitle) { tab.titleEl.focus(); tab.titleEl.select(); }
+      else if (document.activeElement && document.activeElement.closest(".cm-editor")) document.activeElement.blur();
     });
   }
 }
