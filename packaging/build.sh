@@ -6,6 +6,7 @@ uv run pyinstaller --noconfirm --clean --onefile --name phygital-memory-server \
   --distpath packaging/dist --workpath packaging/build --specpath packaging \
   --paths . \
   --collect-submodules phygital_memory \
+  --collect-all wsgidav --collect-submodules cheroot \
   --add-data "$PWD/$P/app.html:$P" \
   --add-data "$PWD/$P/web:$P/web" \
   --add-data "$PWD/$P/engram_config.json:$P" \

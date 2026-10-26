@@ -50,6 +50,7 @@ class Memory:
         self._key = self._tree = self._writer = self._con = None
         self._last_use = 0.0
         self._last_version: dict[str, float] = {}
+        self.on_lock: list = []   # called after every lock (the Finder view closes itself here)
 
     # ---------- open and close ----------
 
@@ -85,9 +86,18 @@ class Memory:
         with self._lock:
             if self._con is not None:
                 self._con.close()
+            was_open = self._key is not None
             if self._key is not None:
                 self._key.wipe()
             self._key = self._tree = self._writer = self._con = None
+        if was_open:   # on its own thread: unmounting Finder talks to us, and we may still hold the lock here
+            def run():
+                for fn in list(self.on_lock):
+                    try:
+                        fn()
+                    except Exception:
+                        pass
+            threading.Thread(target=run, name="on-lock", daemon=True).start()
 
     def status(self) -> dict:
         with self._lock:
@@ -240,6 +250,21 @@ class Memory:
         with self._lock:
             self._need_open()
             return self._tree.read_file(self._tree.resolve(_clean_path(rel, md=False)))
+
+    def write_bytes(self, rel: str, data: bytes) -> str:
+        """Write any file at exactly this path (replacing it). Notes go through save(), so they keep versions
+        and stay searchable."""
+        rel = _clean_path(rel, md=False)
+        if rel.lower().endswith(".md"):
+            return self.save(rel, data.decode("utf-8", "replace"))
+        if len(data) > MAX_FILE_BYTES:
+            raise ValueError("That file is too big (25 MB at most).")
+        with self._lock:
+            self._need_open()
+            parent, name = self._make_parents(rel)
+            existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+            self._writer.write_file(parent, name, data, replace=existing)
+            return rel
 
     def save_bytes(self, rel: str, data: bytes) -> str:
         """An image or other file, stored encrypted like the notes. Picks a free name if the path is taken."""

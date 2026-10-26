@@ -112,3 +112,39 @@ a.md-wiki-missing { color: var(--text-3); border-bottom-style: dashed; border-bo
   border: 1px solid var(--border); border-radius: 6px; }
 .cm-searchMatch { background: rgba(255, 208, 0, .25); }
 .cm-selectionMatch { background: var(--accent-soft); }
+
+/* other files inside a note */
+.md-media { margin: 6px 0; max-width: 100%; }
+.md-media video { max-width: 100%; border-radius: 10px; background: #000; display: block; }
+.md-media audio { width: min(100%, 520px); display: block; }
+.md-pdf iframe { width: 100%; height: 70vh; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle); }
+.md-media-caption { color: var(--text-3); font-size: 12px; margin-top: 4px; }
+.md-file-card { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px;
+                padding: 4px 10px; background: var(--bg-subtle); font-size: .92em; }
+.md-file-ext { font-size: 10px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 1px 5px; }
+.md-mermaid { margin: 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-subtle);
+              text-align: center; color: var(--text-3); font-size: 13px; cursor: text; }
+.md-mermaid img { max-width: 100%; }
+
+/* tables edited in place */
+.md-table-live { position: relative; padding-bottom: 2px; }
+.md-table-live td, .md-table-live th { cursor: text; min-width: 60px; }
+.md-table-live td:hover, .md-table-live th:hover { background: var(--accent-soft); }
+.md-cell-input { width: 100%; min-width: 80px; font: inherit; color: var(--text); background: var(--bg-surface);
+                 border: 1px solid var(--accent); border-radius: 4px; padding: 2px 4px; outline: none; box-sizing: border-box; }
+.md-table-bar { display: flex; gap: 4px; margin-top: 4px; opacity: 0; transition: opacity .12s; }
+.md-table-live:hover .md-table-bar, .md-table-live:focus-within .md-table-bar { opacity: 1; }
+.md-table-bar button { font: inherit; font-size: 11.5px; color: var(--text-2); background: var(--bg-subtle);
+                       border: 1px solid var(--border); border-radius: 6px; padding: 1px 8px; cursor: pointer; }
+.md-table-bar button:hover { color: var(--text); border-color: var(--accent); }
+
+/* folding */
+.cm-gutters { background: transparent; border: 0; }
+.cm-foldGutter .cm-gutterElement { width: 18px; display: flex; align-items: center; justify-content: center; }
+.md-fold { display: inline-block; color: var(--text-faint); cursor: pointer; font-size: 15px; line-height: 1;
+           transform: rotate(90deg); transition: transform .12s cubic-bezier(.2,0,0,1), opacity .12s; opacity: 0; }
+.cm-editor:hover .md-fold { opacity: .7; }
+.md-fold:hover { color: var(--text); opacity: 1 !important; }
+.md-fold-closed { transform: rotate(0deg); opacity: .9; color: var(--accent); }
+.md-fold-placeholder { display: inline-block; margin-left: 6px; padding: 0 8px; border-radius: 6px; background: var(--bg-subtle);
+                       color: var(--text-3); cursor: pointer; font-size: .85em; line-height: 1.4; }

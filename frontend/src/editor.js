@@ -30,7 +30,7 @@ import tagsFeature from "./ed/tags.js";
 import guides from "./ed/guides.js";
 import tables from "./ed/tables.js";
 import folding from "./ed/folding.js";
-import media from "./ed/media.js";
+import media, { mediaWidget, MermaidWidget } from "./ed/media.js";
 
 const FEATURES = [slash, shortcuts, paste, comments, tagsFeature, guides, tables, folding, media];
 
@@ -286,35 +286,131 @@ class CalloutLabelWidget extends WidgetType {
   }
 }
 
+// Tables are edited in place: click a cell to edit it (Enter saves, Tab / Shift+Tab move, Esc cancels).
+// The bar under the table adds or removes rows and columns, or opens the Markdown text.
+let pendingCell = null;   // { from, r, c }: reopen this cell after a save redraws the table
+
 class TableWidget extends WidgetType {
   constructor(text, from, opts) { super(); this.text = text; this.from = from; this.opts = opts; }
   eq(o) { return o.text === this.text; }
   toDOM(view) {
-    const lines = this.text.split("\n").filter((l) => l.trim());
-    const rows = lines.map(splitRow);
-    const aligns = (rows[1] || []).map((c) => (/^:-+:$/.test(c) ? "center" : /-+:$/.test(c) ? "right" : "left"));
-    const wrap = document.createElement("div"); wrap.className = "md-table-wrap";
+    const model = parseTable(this.text);
+    const wrap = document.createElement("div"); wrap.className = "md-table-wrap md-table-live";
     const table = document.createElement("table"); table.className = "md-table";
-    rows.forEach((cells, i) => {
-      if (i === 1) return;
-      const tr = document.createElement("tr");
-      cells.forEach((c, j) => {
-        const td = document.createElement(i === 0 ? "th" : "td");
-        td.style.textAlign = aligns[j] || "left";
-        inlineDOM(c, td, this.opts);
-        tr.append(td);
+    let last = { r: model.rows.length - 1, c: model.width - 1 };
+    const cellEls = [];
+    model.rows.forEach((cells, r) => {
+      const tr = document.createElement("tr"); cellEls.push([]);
+      for (let c = 0; c < model.width; c++) {
+        const td = document.createElement(r === 0 ? "th" : "td");
+        td.style.textAlign = model.aligns[c] || "left";
+        inlineDOM(cells[c] ?? "", td, this.opts);
+        td.addEventListener("mousedown", (e) => {
+          if (e.target.closest("a") || e.target.tagName === "INPUT") return;
+          e.preventDefault(); edit(r, c);
+        });
+        tr.append(td); cellEls[r].push(td);
+      }
+      (r === 0 ? table.createTHead() : (table.tBodies[0] || table.createTBody())).append(tr);
+    });
+
+    const write = (rows, aligns, reopen) => {
+      const range = tableRange(view, view.posAtDOM(wrap));
+      if (!range) return;
+      pendingCell = reopen ? { from: range.from, ...reopen } : null;
+      view.dispatch({ changes: { from: range.from, to: range.to, insert: serializeTable(rows, aligns) } });
+    };
+    const edit = (r, c) => {
+      last = { r, c };
+      const td = cellEls[r]?.[c]; if (!td) return;
+      const input = document.createElement("input");
+      input.className = "md-cell-input"; input.value = model.rows[r][c] ?? "";
+      td.textContent = ""; td.append(input); input.focus(); input.select();
+      let done = false;
+      const finish = (save, move) => {
+        if (done) return; done = true;
+        const rows = model.rows.map((row) => row.slice());
+        rows[r][c] = input.value.replace(/\n/g, " ");
+        let next = null;
+        if (move) {
+          let i = r * model.width + c + move;
+          if (i >= 0 && i < rows.length * model.width) next = { r: Math.floor(i / model.width), c: i % model.width };
+        }
+        if (save && rows[r][c] !== (model.rows[r][c] ?? "")) write(rows, model.aligns, next);
+        else if (next) edit(next.r, next.c);
+        else { td.textContent = ""; inlineDOM(model.rows[r][c] ?? "", td, this.opts); }
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); finish(true, 0); }
+        else if (e.key === "Escape") { e.preventDefault(); finish(false, 0); }
+        else if (e.key === "Tab") { e.preventDefault(); finish(true, e.shiftKey ? -1 : 1); }
+        e.stopPropagation();
       });
-      (i === 0 ? table.createTHead() : (table.tBodies[0] || table.createTBody())).append(tr);
+      input.addEventListener("blur", () => finish(true, 0));
+    };
+
+    const bar = document.createElement("div"); bar.className = "md-table-bar";
+    const button = (label, title, fn) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.title = title;
+      b.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); fn(); });
+      bar.append(b);
+    };
+    button("+ Row", "Add a row below", () => {
+      const rows = model.rows.map((x) => x.slice()); const at = Math.max(1, last.r + 1);
+      rows.splice(at, 0, Array(model.width).fill("")); write(rows, model.aligns, { r: at, c: 0 });
     });
-    wrap.append(table);
-    wrap.addEventListener("mousedown", (e) => {
-      if (e.target.closest("a")) return;
-      e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from } }); view.focus();
+    button("+ Column", "Add a column to the right", () => {
+      const at = last.c + 1;
+      const rows = model.rows.map((x, i) => { const y = x.slice(); y.splice(at, 0, i === 0 ? "Column" : ""); return y; });
+      const aligns = model.aligns.slice(); aligns.splice(at, 0, "left"); write(rows, aligns, { r: 0, c: at });
     });
+    button("− Row", "Remove this row", () => {
+      if (model.rows.length <= 2 || last.r === 0) return;
+      const rows = model.rows.filter((_, i) => i !== last.r); write(rows, model.aligns, null);
+    });
+    button("− Column", "Remove this column", () => {
+      if (model.width <= 1) return;
+      const rows = model.rows.map((x) => x.filter((_, i) => i !== last.c));
+      write(rows, model.aligns.filter((_, i) => i !== last.c), null);
+    });
+    button("Markdown", "Edit the table as text", () => {
+      view.dispatch({ selection: { anchor: view.posAtDOM(wrap) } }); view.focus();
+    });
+    wrap.append(table, bar);
+    if (pendingCell && Math.abs(pendingCell.from - this.from) < 2) {
+      const { r, c } = pendingCell; pendingCell = null;
+      requestAnimationFrame(() => edit(r, c));
+    }
     return wrap;
   }
-  ignoreEvent() { return false; }
+  ignoreEvent() { return true; }
+}
+
+function parseTable(text) {
+  const lines = text.split("\n").filter((l) => l.trim());
+  const all = lines.map(splitRow);
+  const aligns = (all[1] || []).map((c) => (/^:-+:$/.test(c) ? "center" : /-+:$/.test(c) ? "right" : "left"));
+  const rows = all.filter((_, i) => i !== 1);
+  const width = Math.max(1, ...all.map((r) => r.length));
+  rows.forEach((r) => { while (r.length < width) r.push(""); });
+  while (aligns.length < width) aligns.push("left");
+  return { rows, aligns, width };
+}
+
+function serializeTable(rows, aligns) {
+  const esc = (s) => s.replace(/(^|[^\\])\|/g, "$1\\|").trim();
+  const line = (cells) => `| ${cells.map(esc).join(" | ")} |`;
+  const delim = aligns.map((a) => (a === "center" ? ":---:" : a === "right" ? "---:" : "---"));
+  return [line(rows[0]), `| ${delim.join(" | ")} |`, ...rows.slice(1).map(line)].join("\n");
+}
+
+function tableRange(view, pos) {
+  const tree = syntaxTree(view.state);
+  let node = tree.resolveInner(Math.min(pos + 1, view.state.doc.length), 1);
+  while (node && node.name !== "Table") node = node.parent;
+  if (!node) return null;
+  const doc = view.state.doc;
+  return { from: doc.lineAt(node.from).from, to: doc.lineAt(node.to).to };
 }
 
 function splitRow(line) {
@@ -403,7 +499,9 @@ function buildDecorations(state, opts) {
         const sized = /^(.*?)\|(\d+)$/.exec(label);   // ![alt|300](pic.png)
         const alt = sized ? sized[1] : label, width = sized ? parseInt(sized[2], 10) : null;
         if (src && !/^[a-z]+:/i.test(src)) {
-          add(from, to, Decoration.replace({ widget: new ImageWidget(decodeURI(src).replace(/^\//, ""), alt, width, opts) }));
+          const file = decodeURI(src).replace(/^\//, "");
+          const widget = IMAGE_EXT.test(file) ? new ImageWidget(file, alt, width, opts) : mediaWidget(file, opts);
+          if (widget) add(from, to, Decoration.replace({ widget }));
         }
         return false;
       }
@@ -414,7 +512,8 @@ function buildDecorations(state, opts) {
         if (name === "Embed") {
           const file = target.split("#")[0];
           const size = /^\d+(x\d+)?$/.test(alias) ? parseInt(alias, 10) : null;
-          const widget = IMAGE_EXT.test(file) ? new ImageWidget(file, size ? file : alias, size, opts) : new NoteEmbedWidget(target, opts);
+          const widget = IMAGE_EXT.test(file) ? new ImageWidget(file, size ? file : alias, size, opts)
+            : mediaWidget(file, opts) || new NoteEmbedWidget(target, opts);
           add(from, to, Decoration.replace({ widget }));
         } else {
           add(from, to, Decoration.replace({ widget: new WikiWidget(target, alias, exists(target), opts) }));
@@ -462,6 +561,11 @@ function buildDecorations(state, opts) {
         const info = node.node.getChild("CodeInfo");
         const lang = info ? doc.sliceString(info.from, info.to) : "";
         const text = node.node.getChild("CodeText");
+        if (!active && lang.trim().toLowerCase() === "mermaid" && lastLine.number > firstLine.number) {
+          add(firstLine.from, lastLine.to, Decoration.replace({
+            widget: new MermaidWidget(text ? doc.sliceString(text.from, text.to) : "", firstLine.from), block: true }));
+          return false;
+        }
         for (let pos = firstLine.from; pos <= lastLine.to;) {
           const l = doc.lineAt(pos);
           const edge = l.number === firstLine.number ? " md-codeblock-first" : l.number === lastLine.number ? " md-codeblock-last" : "";

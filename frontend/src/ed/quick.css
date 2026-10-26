@@ -1,0 +1,3 @@
+/* Styles for the quick editor helpers: comments and indent guides. Colours come from the app variables only. */
+.cm-md-comment { color: var(--text-faint); font-style: italic; }
+.cm-md-guide { box-shadow: inset 1px 0 0 var(--border); }

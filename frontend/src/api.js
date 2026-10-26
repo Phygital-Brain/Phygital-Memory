@@ -24,7 +24,10 @@ export async function api(action, body = {}) {
 // Images and other files come back as base64; the page shows them through short-lived blob URLs.
 const blobCache = new Map();
 const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
-               svg: "image/svg+xml", avif: "image/avif", pdf: "application/pdf" };
+               svg: "image/svg+xml", avif: "image/avif", pdf: "application/pdf",
+               mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+               mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg",
+               oga: "audio/ogg", flac: "audio/flac", csv: "text/csv", tsv: "text/tab-separated-values" };
 
 export function mimeOf(path) { return MIME[(path.split(".").pop() || "").toLowerCase()] || "application/octet-stream"; }
 
@@ -49,4 +52,11 @@ export async function uploadFile(path, file) {
   let bin = "";
   for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
   return api("savefile", { path, base64: btoa(bin) });
+}
+
+// A file's text (for previews like CSV): decoded as UTF-8.
+export async function readFileText(path) {
+  const j = await api("readfile", { path });
+  const bytes = Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
 }
