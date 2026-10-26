@@ -245,6 +245,18 @@ async def api(request: Request) -> Response:
         if action == "trash":
             memory.trash(body["path"])
             return JSONResponse({"ok": True}, headers=HEADERS)
+        if action == "versions":
+            return JSONResponse({"versions": memory.versions(body["path"])}, headers=HEADERS)
+        if action == "version":
+            return JSONResponse({"text": memory.version(body["path"], body["id"])}, headers=HEADERS)
+        if action == "links":
+            return JSONResponse(memory.links(), headers=HEADERS)
+        if action == "backlinks":
+            return JSONResponse({"backlinks": memory.backlinks(body["path"])}, headers=HEADERS)
+        if action == "prefs":
+            return JSONResponse({"prefs": memory.prefs()}, headers=HEADERS)
+        if action == "saveprefs":
+            return JSONResponse({"prefs": memory.save_prefs(body.get("prefs") or {})}, headers=HEADERS)
     except WrongPassword:
         return JSONResponse({"error": "Wrong password."}, status_code=400)
     except Locked as e:

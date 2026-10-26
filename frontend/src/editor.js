@@ -21,6 +21,18 @@ import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } 
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { tags as t, styleTags, Tag } from "@lezer/highlight";
 import "./editor.css";
+// Feature files: each returns { extensions, completions } (see ed/*.js).
+import slash from "./ed/slash.js";
+import shortcuts from "./ed/shortcuts.js";
+import paste from "./ed/paste.js";
+import comments from "./ed/comments.js";
+import tagsFeature from "./ed/tags.js";
+import guides from "./ed/guides.js";
+import tables from "./ed/tables.js";
+import folding from "./ed/folding.js";
+import media from "./ed/media.js";
+
+const FEATURES = [slash, shortcuts, paste, comments, tagsFeature, guides, tables, folding, media];
 
 // ---------- extra Markdown syntax: ==highlight==, [[wikilinks]], ![[embeds]], #tags ----------
 
@@ -585,7 +597,9 @@ function wrapWith(mark) {
 
 export function createEditor(parent, opts) {
   let silent = false;
+  const features = FEATURES.map((f) => f(opts));
   const extensions = [
+    ...features.flatMap((f) => f.extensions || []),
     history(),
     drawSelection(),
     dropCursor(),
@@ -608,7 +622,7 @@ export function createEditor(parent, opts) {
       ".cm-activeLine": { backgroundColor: "transparent" },
       "&.cm-focused": { outline: "none" },
     }),
-    autocompletion({ override: [wikiCompletion(opts)], icons: false }),
+    autocompletion({ override: [wikiCompletion(opts), ...features.flatMap((f) => f.completions || [])], icons: false }),
     fileDrops(opts),
     Prec.high(keymap.of([
       { key: "Mod-s", run: () => { opts.onSave?.(); return true; }, preventDefault: true },

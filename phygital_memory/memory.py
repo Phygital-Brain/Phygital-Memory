@@ -49,6 +49,7 @@ class Memory:
         self._lock = threading.RLock()
         self._key = self._tree = self._writer = self._con = None
         self._last_use = 0.0
+        self._last_version: dict[str, float] = {}
 
     # ---------- open and close ----------
 
@@ -115,7 +116,7 @@ class Memory:
     def _index_all(self) -> None:
         redact = ingest.make_redactor(self.cfg)
         for path, entry in self._tree.walk():
-            if entry.kind == "file" and path.lower().endswith(".md") and not path.startswith(f"/{TRASH}/"):
+            if entry.kind == "file" and path.lower().endswith(".md") and path.split("/")[1] not in HIDDEN:
                 self._index_one(path.lstrip("/"), entry, redact)
         ingest.count_backlinks(self._con, self.cfg)
         self._con.commit()
@@ -188,6 +189,8 @@ class Memory:
             existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
             if existing and new:
                 raise Exists(f"'{rel}' already exists. Open it from a search result to change it.")
+            if existing:
+                self._keep_version(rel, existing, data)
             entry = self._writer.write_file(parent, name, data, replace=existing)
             remove_file(self._con, rel)
             self._index_one(rel, entry)
@@ -224,9 +227,13 @@ class Memory:
             out = []
             for path, entry in self._tree.walk():
                 rel = path.lstrip("/")
-                if rel.split("/")[0] == TRASH or entry.kind == "link":
+                if rel.split("/")[0] in HIDDEN or entry.kind == "link":
                     continue
-                out.append({"path": rel, "kind": "folder" if entry.kind == "dir" else "file"})
+                item = {"path": rel, "kind": "folder" if entry.kind == "dir" else "file"}
+                if entry.kind == "file":
+                    st = self._tree.contents_path(entry).stat()
+                    item.update(mtime=st.st_mtime, size=self._tree.file_size(entry))
+                out.append(item)
             return out
 
     def read_bytes(self, rel: str) -> bytes:
@@ -288,6 +295,113 @@ class Memory:
             self._writer.move(entry, bin_, f"{time.strftime('%Y%m%d-%H%M%S')} {Path(rel).name}")
             self._reindex()
 
+    # ---------- version history (kept inside the lock, in a hidden folder) ----------
+
+    def _keep_version(self, rel: str, entry, new_data: bytes) -> None:
+        """Before a note changes, keep its old text as a version: at most one every VERSION_EVERY seconds per note
+        (autosave runs often), the newest VERSION_KEEP per note. AI changes are kept the same way, so they can be undone."""
+        now = time.time()
+        if now - self._last_version.get(rel, 0) < VERSION_EVERY:
+            return
+        old = self._tree.read_file(entry)
+        if old == new_data:
+            return
+        self._last_version[rel] = now
+        folder = f"{VERSIONS}/{rel}"
+        parent, _ = self._make_parents(f"{folder}/x")
+        name = f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}.md"
+        same = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+        self._writer.write_file(parent, name, old, replace=same)
+        kept = sorted(e for e in self._tree.list_dir(parent.dir_id) if e.kind == "file")
+        for e in sorted(kept, key=lambda e: e.name)[:-VERSION_KEEP]:
+            self._writer.remove(e)
+
+    def versions(self, rel: str) -> list[dict]:
+        rel = _clean_path(rel)
+        with self._lock:
+            self._need_open()
+            try:
+                folder = self._tree.resolve(f"{VERSIONS}/{rel}")
+            except NotFound:
+                return []
+            out = [{"id": e.name[:-3], "size": self._tree.file_size(e)}
+                   for e in self._tree.list_dir(folder.dir_id) if e.kind == "file"]
+            return sorted(out, key=lambda v: v["id"], reverse=True)
+
+    def version(self, rel: str, vid: str) -> str:
+        rel = _clean_path(rel)
+        if not re.fullmatch(r"\d{8}-\d{6}", vid):
+            raise ValueError("Unknown version.")
+        with self._lock:
+            self._need_open()
+            return self._tree.read_file(self._tree.resolve(f"{VERSIONS}/{rel}/{vid}.md")).decode("utf-8", "replace")
+
+    # ---------- links between notes (for backlinks and the graph) ----------
+
+    def links(self) -> dict:
+        """Every [[link]] between notes: {"nodes": [paths], "edges": [[from, to], ...], "missing": {from: [names]}}."""
+        with self._lock:
+            self._need_open()
+            notes = [r[0] for r in self._con.execute("SELECT path FROM files ORDER BY path")]
+            by_path = {p[:-3].lower(): p for p in notes}
+            by_name: dict[str, str] = {}
+            for p in notes:
+                by_name.setdefault(Path(p).stem.lower(), p)
+            edges, missing, tags = set(), {}, {}
+            for p in notes:
+                text = self.read(p)
+                for t in re.findall(r"(?:^|\s)#([\w][\w/-]*)", re.sub(r"```.*?```", "", text, flags=re.S)):
+                    if not t.isdigit():
+                        tags[t] = tags.get(t, 0) + 1
+                fm = re.match(r"---\n(.*?)\n---", text, re.S)
+                if fm:
+                    tm = re.search(r"^tags:\s*\[(.*?)\]|^tags:\s*\n((?:\s*-\s*.+\n?)+)", fm.group(1), re.M)
+                    if tm:
+                        for t in re.split(r"[,\n]", tm.group(1) or tm.group(2)):
+                            t = t.strip().lstrip("-").strip().strip("'\"").lstrip("#")
+                            if t:
+                                tags[t] = tags.get(t, 0) + 1
+                for m in re.finditer(r"!?\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]", text):
+                    name = m.group(1).strip().lower().removesuffix(".md")
+                    target = by_path.get(name) or by_name.get(name.split("/")[-1])
+                    if target and target != p:
+                        edges.add((p, target))
+                    elif not target and not re.search(r"\.\w{2,5}$", name):
+                        missing.setdefault(p, []).append(m.group(1).strip())
+            return {"nodes": notes, "edges": sorted(edges), "missing": missing,
+                    "tags": sorted(tags.items(), key=lambda kv: (-kv[1], kv[0]))}
+
+    def backlinks(self, rel: str) -> list[dict]:
+        rel = _clean_path(rel)
+        graph = self.links()
+        out = []
+        for src, dst in graph["edges"]:
+            if dst == rel:
+                line = next((l.strip() for l in self.read(src).splitlines() if "[[" in l and Path(rel).stem.lower() in l.lower()), "")
+                out.append({"path": src, "line": line[:240]})
+        return out
+
+    # ---------- the person's settings for this folder (kept inside the lock) ----------
+
+    def prefs(self) -> dict:
+        with self._lock:
+            self._need_open()
+            try:
+                return json.loads(self._tree.read_file(self._tree.resolve(PREFS)))
+            except (NotFound, ValueError):
+                return {}
+
+    def save_prefs(self, prefs: dict) -> dict:
+        data = json.dumps(prefs, ensure_ascii=False).encode()
+        if len(data) > 200_000:
+            raise ValueError("Settings too big.")
+        with self._lock:
+            self._need_open()
+            parent, name = self._make_parents(PREFS)
+            existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+            self._writer.write_file(parent, name, data, replace=existing)
+            return prefs
+
     def _reindex(self) -> None:
         for (path,) in self._con.execute("SELECT path FROM files").fetchall():
             remove_file(self._con, path)
@@ -295,6 +409,11 @@ class Memory:
 
 
 TRASH = ".trash"
+VERSIONS = ".versions"
+PREFS = ".phygital/prefs.json"
+HIDDEN = (TRASH, VERSIONS, ".phygital")
+VERSION_EVERY = 5 * 60
+VERSION_KEEP = 50
 MAX_FILE_BYTES = 25_000_000
 
 
