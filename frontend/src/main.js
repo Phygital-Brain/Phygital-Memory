@@ -420,7 +420,8 @@ function buildApp() {
 
   bannerHost = el("div", { class: "banner-host" });
   const graphBtn = el("button", { class: "icon-btn tab-graph", title: "Graph view (⌘G)", "aria-label": "Graph view", onclick: openGraph }, icon("graph", 16));
-  appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl, graphBtn, statusEl), paneHost));
+  const searchBtn = el("button", { class: "icon-btn tab-graph", title: "Search every note (⇧⌘F)", "aria-label": "Search", onclick: () => openSearchView() }, icon("search", 16));
+  appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl, searchBtn, graphBtn, statusEl), paneHost));
 }
 
 async function enterApp() {
@@ -543,6 +544,8 @@ async function openStoragePanel() {
     pick: (prompt) => pickFolder(prompt),
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     move: async (parent, label) => {
+      const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then the scrambled files move to ${shortPath(parent)}. You unlock it again after.`, `Move to ${label}`, false);
+      if (!sure) throw new Error("Not moved.");
       if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
       await api("movefolder", { parent });
       toastOk(`Moved to ${label}. Unlock it again to keep working.`);
