@@ -1,0 +1,206 @@
+{
+  "vault": "~/Notes",
+  "db": "data/engram.sqlite",
+  "skip_dirs": [
+    ".context",
+    ".obsidian",
+    ".git",
+    ".claude",
+    "node_modules",
+    ".trash"
+  ],
+  "exclude_paths": [],
+  "max_file_bytes": 2000000,
+  "chunk_max_chars": 2000,
+  "chunk_min_chars": 150,
+  "chunk_overlap_chars": 200,
+  "recency": {
+    "half_life_days": 180,
+    "boost": 0.5
+  },
+  "evergreen_paths": [
+    "*CLAUDE.md",
+    "*AGENTS.md",
+    "Context/*",
+    "*/decisions/*",
+    "Library/*"
+  ],
+  "results_default": 10,
+  "max_chunks_per_file_in_results": 2,
+  "status_weights": {
+    "archived": 0.4,
+    "closed": 0.5,
+    "done": 0.6,
+    "paused": 0.7,
+    "legacy": 0.3
+  },
+  "hide_status": [
+    "superseded",
+    "deprecated",
+    "replaced"
+  ],
+  "skip_markers": [
+    "engram: skip",
+    "#engram-skip"
+  ],
+  "path_weights": [
+    {
+      "match": "*/archive/*",
+      "weight": 0.35
+    },
+    {
+      "match": "archive/*",
+      "weight": 0.35
+    },
+    {
+      "match": "Library/*",
+      "weight": 0.6
+    },
+    {
+      "match": "*CLAUDE.md",
+      "weight": 2.0
+    },
+    {
+      "match": "*AGENTS.md",
+      "weight": 2.0
+    },
+    {
+      "match": "Context/*",
+      "weight": 1.6
+    }
+  ],
+  "conversations": {
+    "path": "AI Conversations/",
+    "age_steps": [
+      [
+        0,
+        0.5
+      ],
+      [
+        182,
+        0.25
+      ]
+    ],
+    "expire_days": 365,
+    "half_life_days": 60,
+    "max_in_results": 3,
+    "keep_weight": 1.0,
+    "value_factor": {
+      "high": 1.5,
+      "medium": 1.0,
+      "low": 0.6
+    },
+    "high_value_ages_at": 0.5,
+    "decision_factor": 1.3,
+    "decision_expire_factor": 1.5,
+    "linked_note_factor": 0.7,
+    "superseded_factor": 0.5
+  },
+  "private": {
+    "enabled": true,
+    "paths": [
+      "Finances/",
+      "Memory/finances/"
+    ],
+    "db": "data/private.sqlite",
+    "id_patterns": [
+      "(?<![A-Z0-9])(?:[A-Z]{2})?\\d{2}[ .]?\\d{3}[ .]?\\d{3}[ .]?\\d{3}\\b",
+      "(?<![A-Z0-9])(?:[A-Z]{2})?\\d{3}[ .]?\\d{3}[ .]?\\d{3}\\b",
+      "\\b[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\\b",
+      "\\b(?:\\d[ -]?){13,19}\\b",
+      "\\b\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}\\b",
+      "\\b\\d{2}-\\d{7}\\b",
+      "\\b\\d{3}[ .]?\\d{3}[ .]?\\d{3}[ .]?\\d{2}\\b",
+      "\\b\\d{9}\\b",
+      "\\b\\d{11}\\b"
+    ]
+  },
+  "cards": {
+    "model": "claude-haiku-5-5",
+    "sources": [
+      "vault",
+      "chat"
+    ],
+    "max_tokens": 1500,
+    "workers": 12
+  },
+  "redact_patterns": [
+    "sk-[A-Za-z0-9_\\-]{20,}",
+    "ghp_[A-Za-z0-9]{30,}",
+    "github_pat_[A-Za-z0-9_]{30,}",
+    "AKIA[0-9A-Z]{16}",
+    "xox[baprs]-[A-Za-z0-9\\-]{10,}",
+    "Bearer [A-Za-z0-9._\\-]{25,}",
+    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----",
+    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]{0,4000}",
+    "(?i)\\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_KEY|CLIENT_ID)[A-Z0-9_]*\\s*[=:]\\s*[\\\"']?[^\\s\\\"'<]{12,}",
+    "\\b(?:NIF|NIPC|NISS|CPF|CNPJ|EIN|SSN|[Cc]ontribuinte|[Tt]ax [Ii][Dd]|VAT (?:no|number))\\b[^\\n\\d]{0,12}(?:PT ?)?\\d[\\d .\\-/]{7,16}\\d",
+    "\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b",
+    "\\b(?:\\d{4}[ -]){3}\\d{1,4}\\b"
+  ],
+  "type_weights": {
+    "batch": 0.4,
+    "queue": 0.4,
+    "log": 0.5
+  },
+  "evergreen_exclude": [],
+  "exact_boost": 0.15,
+  "store_text_once": true,
+  "shelves": {
+    "enabled": true,
+    "background_paths": [
+      "*/archive/*",
+      "archive/*"
+    ],
+    "mode": "after",
+    "background_query": "and",
+    "max_in_results": 3
+  },
+  "common_words": {
+    "enabled": true,
+    "min_sections": 200000,
+    "doc_share": 0.25
+  },
+  "tidy_every_days": 7,
+  "speed_warn_ms": 300,
+  "usage": {
+    "enabled": true,
+    "min_total_opens": 50,
+    "half_life_days": 90,
+    "open_boost": 0.3,
+    "opens_for_full_boost": 5,
+    "ignored_after_shown": 20,
+    "ignored_factor": 0.85
+  },
+  "backlinks": {
+    "enabled": true,
+    "boost": 0.1,
+    "cap": 30
+  },
+  "callouts": {
+    "enabled": true
+  },
+  "folder_hints": {
+    "boost": 2.0,
+    "rules": [
+      {
+        "when": "\\bdecision",
+        "folders": [
+          "*/decisions/*"
+        ]
+      },
+      {
+        "when": "\\bdaily\\b|\\bjournal\\b",
+        "folders": [
+          "Daily/*"
+        ]
+      },
+      {
+        "when": "\\bclients?\\b|\\bwork(ed)? (with|for)\\b",
+        "folders": [
+          "*/Clients/*"
+        ]
+      }
+    ]
+  }
+}
