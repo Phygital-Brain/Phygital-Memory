@@ -9,7 +9,7 @@ import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPr
 import { openSettings, closeSettings, onSettings } from "./shell/settings.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
-import { switcherItems, createFolderForm } from "./shell/folders.js";
+import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
 import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
@@ -210,16 +210,16 @@ async function createNewFolder() {
   } catch (e) { toastErr(e.message); }
 }
 
-async function renameFolder() {
-  const info = curInfo();
+async function renameFolder(id) {
+  const info = (id && folderList.find((f) => f.id === id)) || curInfo();
   if (!info) return;
   const v = await askText("Rename folder", info.name, "Rename", (x) => (x.trim() ? "" : "Name can't be empty."));
   if (v == null) return;
   try { await api("renamefolder", { folder: info.id, name: v.trim() }); await refreshFolders(); } catch (e) { toastErr(e.message); }
 }
 
-async function forgetFolder() {
-  const info = curInfo();
+async function forgetFolder(id) {
+  const info = (id && folderList.find((f) => f.id === id)) || curInfo();
   if (!info) return;
   const ok = await confirmDialog(`Remove "${info.name}" from the list? Nothing is deleted: the folder and its notes stay where they are. It locks, and you can add it again later.`, "Remove from list", true);
   if (!ok) return;
@@ -235,8 +235,8 @@ async function forgetFolder() {
   toast(`Removed "${info.name}" from the list.`);
 }
 
-async function lockFolder() {
-  const fid = currentFolder();
+async function lockFolder(id) {
+  const fid = typeof id === "string" ? id : currentFolder();
   if (loadedFolder === fid) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
   try { await api("lock", { folder: fid }); } catch {}
   lockedLocally(fid);
@@ -305,12 +305,15 @@ function showUnlock() {
 }
 
 // ---------- app shell ----------
-let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill, sbName, sbBadge;
+let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill, sbName, sbBadge, sbPath, sbTile;
 
 function drawSwitcher() {
   if (!sbName) return;
   const info = curInfo();
   sbName.textContent = info ? info.name : "Phygital Memory";
+  sbPath.textContent = info ? shortPath(info.path) : "No folder yet";
+  sbPath.title = info ? info.path : "";
+  sbTile.replaceChildren(folderTile(info || {}, !!(info && unlocked(info.id)), 34));
   sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
 }
 
@@ -320,7 +323,14 @@ async function openSwitcher() {
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder,
-    createNew: createNewFolder, rename: renameFolder, lockThis: lockFolder, lockAll, forget: forgetFolder }), r.left + 6, r.bottom + 2);
+    createNew: createNewFolder, manage: openManage, rename: () => renameFolder(), lockThis: () => lockFolder(), lockAll,
+    home: () => goHome() }), r.left + 6, r.bottom + 2);
+}
+
+async function openManage() {
+  await refreshFolders();
+  manageFolders(folderList, { switchTo, rename: renameFolder, lock: lockFolder, forget: forgetFolder, unlocked,
+    createNew: createNewFolder, openOther: openOtherFolder });
 }
 
 function buildApp() {
@@ -343,10 +353,12 @@ function buildApp() {
   });
 
   sbName = el("div", { class: "sb-name" }, "Phygital Memory");
+  sbPath = el("div", { class: "sb-folder" }, "");
+  sbTile = el("div", { class: "sb-tile" });
   sbBadge = el("span", { class: "fo-badge hidden", title: "Another folder is open in Finder" }, "Finder");
   const sbHead = el("button", { class: "sb-head sb-switch", title: "Switch folder (⇧⌘O)", "aria-haspopup": "menu", onclick: openSwitcher },
-    el("div", { class: "app-icon" }, icon("file", 16, 2)),
-    el("div", { class: "sb-titles" }, sbName, el("div", { class: "sb-folder" }, "Phygital Memory")),
+    sbTile,
+    el("div", { class: "sb-titles" }, sbName, sbPath),
     sbBadge, el("span", { class: "sb-chev" }, icon("updown", 14)));
   if (sbWidth) sidebarEl.style.width = sbWidth;
 
@@ -1395,6 +1407,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === ",") { e.preventDefault(); openSettings(); }
   else if (k === "h" && e.shiftKey) { e.preventDefault(); goHome(); }
   else if (k === "o" && e.shiftKey) { e.preventDefault(); openSwitcher(); }
+  else if (/^[1-9]$/.test(k) && !e.shiftKey && !e.altKey && folderList[Number(k) - 1]) { e.preventDefault(); switchTo(folderList[Number(k) - 1].id); }
   else if (k === "g" && !e.shiftKey) { e.preventDefault(); openGraph(); }
   else if (k === "k" || k === "p") { e.preventDefault(); openSearch(); }
   else if (k === "f" && !e.shiftKey) {
