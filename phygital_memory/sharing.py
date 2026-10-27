@@ -52,13 +52,20 @@ def _unb64(s: str) -> bytes:
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
+_me: list = []   # the personal key, read from the Keychain once per run (each read can make macOS ask)
+
+
 def _identity() -> X25519PrivateKey:
+    if _me:
+        return _me[0]
     raw = keychain.read(IDENTITY, "x25519")
     if raw:
-        return X25519PrivateKey.from_private_bytes(_unb64(raw.strip()))
-    key = X25519PrivateKey.generate()
-    keychain.save(IDENTITY, "x25519", _b64(key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
-                                                              serialization.NoEncryption())))
+        key = X25519PrivateKey.from_private_bytes(_unb64(raw.strip()))
+    else:
+        key = X25519PrivateKey.generate()
+        keychain.save(IDENTITY, "x25519", _b64(key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+                                                                  serialization.NoEncryption())))
+    _me.append(key)
     return key
 
 
