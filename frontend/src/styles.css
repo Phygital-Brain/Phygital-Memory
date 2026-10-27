@@ -449,7 +449,7 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .sb-stat { white-space: nowrap; }
 
 /* storage panel */
-.dlg.storage { width: min(560px, 92vw); }
+.dlg.storage { width: min(560px, 92vw); max-height: 92vh; overflow-y: auto; }
 .dlg.storage.busy { opacity: .6; pointer-events: none; }
 .st-where { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 12.5px; margin: -2px 0 12px; }
 .st-where > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

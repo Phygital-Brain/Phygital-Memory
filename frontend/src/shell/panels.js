@@ -62,11 +62,11 @@ export function openStorage(ctx) {
           + `In Finder, right-click the folder and choose "Keep Downloaded" (iCloud) or "Make available offline".`),
         el("button", { class: "btn small", type: "button", onclick: () => ctx.download() }, "Download now")) : null,
       ...(s.cloudOnly ? [] : [option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
-        local ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
+        local || s.github ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
           const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) moveTo(p, "this Mac");
         } }, "Move to a place on this Mac…")),
       option("cloud", "This Mac + cloud", "On this Mac, and synced by your cloud app. The cloud only sees encrypted files.", !!s.cloud && !s.github,
-        el("div", {}, cloudCards,
+        s.github ? null : el("div", {}, cloudCards,
           el("button", { class: "btn small st-other", type: "button", onclick: async () => {
             const p = await ctx.pick("Choose any synced folder"); if (p) moveTo(p, "that folder");
           } }, "Other synced folder…"))),
@@ -77,6 +77,7 @@ export function openStorage(ctx) {
         s.cloudOnly || s.github ? null : el("button", { class: "btn small", type: "button", onclick: () => done("tocloud") },
           "Move to cloud…")),
       el("div", { class: "st-note" }, s.cloudOnly ? "A cloud memory stays in the cloud. Moving it to this Mac comes later."
+        : s.github ? "To move it somewhere else, stop GitHub sync first."
         : "Moving locks the folder first, so only encrypted files move. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
