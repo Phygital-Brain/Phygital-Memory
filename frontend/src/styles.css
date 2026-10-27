@@ -118,8 +118,9 @@ input:focus-visible { outline: none; }
 .tab-x:hover { background: var(--bg-subtle); color: var(--text); }
 .tab-plus { width: 28px; height: 28px; margin: 0 4px 2px; display: grid; place-items: center; border-radius: 6px; color: var(--text-3); flex: none; align-self: center; }
 .tab-plus:hover { background: var(--bg-subtle); color: var(--text); }
-.status { flex: none; padding: 0 16px; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.status { position: absolute; top: 16px; right: 64px; z-index: 6; width: 140px; text-align: right; font-size: 11px; color: var(--text-3); white-space: nowrap; pointer-events: none; }
 .status.bad { color: var(--danger); }
+.status.warn { color: var(--warning); }
 
 .panes { flex: 1; min-height: 0; position: relative; }
 .pane { position: absolute; inset: 0; overflow-y: auto; }
@@ -586,3 +587,5 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .win-drag-top { position: absolute; top: 0; left: 0; right: 0; height: 40px; }
 .ai-head-left { display: flex; align-items: center; gap: 12px; }
 .ai-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.ai-count { min-width: 14px; height: 14px; padding: 0 4px; border-radius: 7px; background: var(--accent); color: var(--on-accent, #111); font-size: 10px; font-weight: 700; line-height: 14px; text-align: center; }
+.status.bad { pointer-events: auto; }

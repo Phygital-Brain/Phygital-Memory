@@ -405,7 +405,7 @@ function buildApp() {
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
   new ResizeObserver(() => fitTabs()).observe(tabsEl);
-  statusEl = el("div", { class: "status" });
+  statusEl = el("div", { class: "status", role: "status", "aria-live": "polite" });   // top right of the note, so the top bar never shifts
   paneHost = el("div", { class: "panes" });
   const empty = el("div", { class: "empty" },
     el("div", { class: "empty-card" }, icon("file", 28, 1.4),
@@ -424,7 +424,7 @@ function buildApp() {
     el("button", { class: "icon-btn", title: "Give AI a task with this note", "aria-label": "Give AI a task", onclick: giveToAI }, icon("sparkle", 16)),
     el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 16)));
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
-  paneHost.append(noteTools, blPill);
+  paneHost.append(statusEl, noteTools, blPill);
 
   bannerHost = el("div", { class: "banner-host" });
   // A small search bar beside the graph button: typing here opens the search page with what you typed.
@@ -441,7 +441,7 @@ function buildApp() {
     icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
   appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl,
     el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 15)),
-    el("span", { class: "tabbar-gap", "data-tauri-drag-region": "" }), searchBtn, statusEl), paneHost));
+    el("span", { class: "tabbar-gap", "data-tauri-drag-region": "" }), searchBtn), paneHost));
 }
 
 async function enterApp() {
@@ -491,6 +491,7 @@ function tellConflict(path, copy) {
   if (toldConflicts.has(key)) return;
   toldConflicts.add(key);
   toast(`"${label(path)}" was changed in two places. Both versions are kept: the other one is "${label(copy)}".`);
+  if (state.active && state.active.path === path) flashStatus("Kept both versions", "warn");
 }
 
 async function loadLinks() {
@@ -552,7 +553,7 @@ function statusBar() {
   barEls.lock.addEventListener("click", () => lockFolder());
   barEls.cloud.style.cursor = barEls.ai.style.cursor = "pointer";
   barEls.cloud.addEventListener("click", openStoragePanel);
-  barEls.ai.addEventListener("click", openActivityPanel);
+  barEls.ai.addEventListener("click", () => openAI(openTasks ? "tasks" : "activity"));
   barEls.lock.setAttribute("aria-label", "Lock this folder");
   clearInterval(barTimer);
   barTimer = setInterval(refreshBar, 15000);
@@ -571,13 +572,22 @@ async function refreshBar() {
   barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 14, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
   barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}, encrypted. The cloud only sees scrambled files.` : "Only on this Mac.";
-  const recent = (b.ai || []).filter((a) => a.ago < 120);
-  barEls.ai.replaceChildren(icon("pulse", 14, 1.8));
+  aiApps = b.ai || [];
+  drawAI();
+}
+
+// The one AI button: glows while an AI app is working, shows how many tasks wait, opens the AI panel.
+let aiApps = [], openTasks = 0;
+function drawAI() {
+  if (!barEls) return;
+  const recent = aiApps.filter((a) => a.ago < 120);
+  barEls.ai.replaceChildren(icon("pulse", 14, 1.8), openTasks ? el("span", { class: "ai-count" }, String(openTasks)) : null);
   barEls.ai.classList.toggle("on", recent.length > 0);
   const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
-  barEls.ai.title = (b.ai || []).length
-    ? "AI apps using your notes:\n" + b.ai.map((a) => `${a.name}, ${ago(a.ago)}`).join("\n")
-    : "No AI app is using your notes right now.";
+  barEls.ai.title = "AI: tasks and activity\n"
+    + (openTasks ? `${openTasks} task${openTasks === 1 ? "" : "s"} waiting\n` : "No tasks waiting\n")
+    + (aiApps.length ? "Using your notes: " + aiApps.map((a) => `${a.name}, ${ago(a.ago)}`).join("; ") : "No AI app is using your notes right now.");
+  barEls.ai.setAttribute("aria-label", openTasks ? `AI, ${openTasks} tasks waiting` : "AI");
 }
 
 async function openStoragePanel() {
@@ -616,7 +626,6 @@ async function openTrashPanel() {
   });
 }
 
-async function openActivityPanel() { return openAI("activity"); }
 
 // Click a note's path: copy it in the form you need.
 function copyPathMenu(path, anchor) {
@@ -1377,12 +1386,21 @@ function saveNow(tab) {
   return tab.chain;
 }
 
+// Short-lived words after an action (Undone, Restored…), then back to the save state.
+let statusFlash = null;
+function flashStatus(text, tone = "") {
+  statusFlash = { text, tone, tab: state.active, until: Date.now() + 2200 };
+  renderStatus();
+  setTimeout(renderStatus, 2300);
+}
+
 function renderStatus() {
   if (!statusEl) return;
   const t = state.active;
   let s = "", cls = "";
   if (t && (t.kind === "note" || t.editable)) {
     if (t.err) { s = "Save failed"; cls = "bad"; }
+    else if (statusFlash && statusFlash.tab === t && Date.now() < statusFlash.until) { s = statusFlash.text; cls = statusFlash.tone; }
     else if (t.saving) s = "Saving…";
     else if (t.dirty) s = "Unsaved";
     else s = "Saved";
@@ -1586,7 +1604,7 @@ async function openAt(path, heading) {
 
 function editAct(what) {
   const t = state.active;
-  if (t && t.editor && t.editor[what]) { t.editor[what](); t.editor.focus(); }
+  if (t && t.editor && t.editor[what]) { t.editor[what](); t.editor.focus(); flashStatus(what === "undo" ? "Undone" : "Redone"); }
 }
 
 // ---------- give AI a task with a note (the AI tasks list) ----------
@@ -1643,6 +1661,8 @@ async function watchTodo() {
     for (const i of todo) if (i.done && !todoDone.has(i.id) && i.by !== "you") toastOk(`${i.by || "Your AI"} finished “${label(i.path)}”.`);
   }
   todoDone = now;
+  openTasks = todo.filter((i) => !i.done).length;
+  drawAI();
 }
 
 function openGraph() {
@@ -1688,7 +1708,7 @@ function toggleVersions() {
   openVersions({
     host: paneHost, path: t.path,
     currentText: () => compose(t),
-    restore: async (text) => { applyText(t, text); touch(t); await saveNow(t); },
+    restore: async (text) => { applyText(t, text); touch(t); await saveNow(t); flashStatus("Restored"); },
   });
 }
 
