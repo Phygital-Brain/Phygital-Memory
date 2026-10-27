@@ -33,7 +33,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, gitsync
+from . import activity, github_auth, gitsync
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -419,6 +419,24 @@ async def api(request: Request) -> Response:
                      "canUndo": bool(a.get("undo")) and a["undo"] in activity.undo}
                     for a in reversed(activity.log) if a["folder"] in mine]
             return _ok({"activity": rows[:200]})
+        # ---- Sign in with GitHub (only when the person presses the button; nothing talks to GitHub before) ----
+        if action == "githubsignin":   # a code to type on github.com, which opens in their browser
+            d = await asyncio.to_thread(github_auth.start)
+            github_pending.update(device=d["device"], until=time.time() + d["expires"])
+            await asyncio.to_thread(subprocess.run, ["open", d["url"]], timeout=30)
+            return _ok({"code": d["code"], "url": d["url"], "interval": d["interval"]})
+        if action == "githubpoll":   # asked every few seconds while the person approves on github.com
+            if not github_pending.get("device") or time.time() > github_pending.get("until", 0):
+                return _ok({"state": "expired"})
+            r = await asyncio.to_thread(github_auth.finish, github_pending["device"])
+            if r["state"] in ("done", "denied", "expired"):
+                github_pending.clear()
+            return _ok(r)
+        if action == "githubsignout":
+            await asyncio.to_thread(github_auth.sign_out)
+            return _ok({"ok": True})
+        if action == "githubaccount":   # only when the person presses Connect GitHub
+            return _ok({"account": await asyncio.to_thread(gitsync.signed_in)})
         if action == "fromgithub":   # another Mac: bring a private Phygital Memory repo down and add it
             parent = await asyncio.to_thread(pick_folder, "Choose where to keep it on this Mac")
             if not parent:
@@ -460,8 +478,6 @@ async def api(request: Request) -> Response:
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
-        if action == "githubaccount":   # only when the person presses Connect GitHub: nothing talks to GitHub before
-            return _ok({"account": await asyncio.to_thread(gitsync.signed_in), "tool": bool(gitsync.gh())})
         if action == "togithub":   # keep it in a new private GitHub repo (scrambled files only)
             return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id)})
         if action == "download":   # fetch the files a cloud app left only in the cloud
@@ -644,6 +660,7 @@ def cloud_place(path: Path) -> str | None:
 # Keeping it: the window hides, and when the time is up every folder locks (Finder views close) and the app quits.
 
 closing = {"asked": False, "answer": None, "exit": False}
+github_pending: dict = {}   # the Sign in with GitHub in progress (its device code stays here, never in the page)
 
 
 def _finish() -> None:

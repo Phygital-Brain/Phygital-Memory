@@ -9,7 +9,8 @@ what other devices pushed. Only the scrambled files ever leave the Mac, like any
 - Two devices changed the same scrambled file: git can't merge those. Theirs stays in place and ours is kept next
   to it as "NAME (1).c9r", which the app already turns into a readable conflict copy (and an AI task).
 - GitHub refuses files over 100 MB: those stay on this Mac only, and the app lists them.
-- Signing in: for now the GitHub CLI (gh) on this Mac does it; nothing is stored by the app.
+- Signing in: the app's own "Sign in with GitHub" (github_auth.py, key in the Keychain). Without it, the GitHub CLI
+  (gh) on this Mac is used if it's signed in.
 """
 from __future__ import annotations
 
@@ -21,6 +22,8 @@ import subprocess
 import threading
 import time
 from pathlib import Path
+
+from . import github_auth
 
 PUSH_AFTER = 5      # seconds after a change before it goes up
 PULL_EVERY = 30     # seconds between looks for other devices' changes
@@ -61,8 +64,23 @@ def _run(args, cwd=None, ok=(0,), timeout=120) -> subprocess.CompletedProcess:
     return r
 
 
+def _own() -> bool:
+    """Signed in with the app's own Sign in with GitHub (its key is in the Keychain)."""
+    return bool(github_auth.saved_token())
+
+
+def credential_helper() -> str:
+    """How git gets GitHub's password for a push or pull, without it ever being written down or passed around."""
+    if _own():
+        return ("!f() { test \"$1\" = get || exit 0; echo username=x-access-token; "
+                f"echo \"password=$(security find-generic-password -s '{github_auth.KEYCHAIN}' -w)\"; }}; f")
+    return f"!{gh()} auth git-credential" if gh() else ""
+
+
 def signed_in() -> str | None:
-    """The GitHub account the CLI is signed into, or None."""
+    """The GitHub account the app is signed into (or else the GitHub CLI's), or None. This asks GitHub."""
+    if _own():
+        return github_auth.account()
     if not gh():
         return None
     r = subprocess.run([gh(), "api", "user", "--jq", ".login"], capture_output=True, text=True, env=_env(), timeout=30)
@@ -70,6 +88,9 @@ def signed_in() -> str | None:
 
 
 def is_private(repo: str) -> bool:
+    if _own():
+        code, info = github_auth.api(f"/repos/{repo}")
+        return code == 200 and info.get("private") is True
     r = subprocess.run([gh(), "api", f"repos/{repo}", "--jq", ".private"], capture_output=True, text=True,
                        env=_env(), timeout=30)
     return r.returncode == 0 and r.stdout.strip() == "true"
@@ -92,8 +113,7 @@ class GitSync:
 
     # ---------- git with GitHub's sign-in, nothing stored by us ----------
     def git(self, *args, ok=(0,), timeout=120):
-        helper = f"!{gh()} auth git-credential" if gh() else ""
-        return _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={helper}",
+        return _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={credential_helper()}",
                      "-c", "user.name=Phygital Memory", "-c", "user.email=sync@phygital.memory", *args],
                     cwd=self.folder, ok=ok, timeout=timeout)
 
@@ -102,12 +122,21 @@ class GitSync:
         """Make the private repo on GitHub and push the folder. Returns 'owner/name'."""
         if (self.folder / ".git").exists():
             raise RuntimeError("This folder is already a git repo.")
-        if gh() is None or signed_in() is None:
-            raise RuntimeError("Sign in to GitHub first (GitHub CLI: gh auth login).")
-        r = _run([gh(), "repo", "create", self.repo, "--private", "--disable-issues", "--disable-wiki",
-                  "--description", "Phygital Memory: an encrypted notes folder (scrambled files only)."], timeout=60)
-        url = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else f"https://github.com/{self.repo}"
-        owner_repo = "/".join(url.rstrip("/").split("/")[-2:])
+        if signed_in() is None:
+            raise RuntimeError("Sign in with GitHub first.")
+        about = "Phygital Memory: an encrypted notes folder (scrambled files only)."
+        if _own():
+            code, made = github_auth.api("/user/repos", method="POST", body={
+                "name": self.repo, "private": True, "has_issues": False, "has_wiki": False, "has_projects": False,
+                "description": about})
+            if code != 201:
+                raise RuntimeError(made.get("message") or "GitHub didn't make the repo.")
+            owner_repo = made["full_name"]
+        else:
+            r = _run([gh(), "repo", "create", self.repo, "--private", "--disable-issues", "--disable-wiki",
+                      "--description", about], timeout=60)
+            url = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else f"https://github.com/{self.repo}"
+            owner_repo = "/".join(url.rstrip("/").split("/")[-2:])
         self.repo = self.state["repo"] = owner_repo
         if not is_private(owner_repo):
             raise RuntimeError("GitHub didn't make the repo private, so nothing was sent.")
@@ -129,8 +158,7 @@ class GitSync:
         """Another Mac: bring the private repo down into dest (a new folder), then keep it in step."""
         if not is_private(repo):
             raise RuntimeError("That repo isn't private, so it isn't used.")
-        helper = f"!{gh()} auth git-credential"
-        _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={helper}", "clone", "-q", "-b", branch,
+        _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={credential_helper()}", "clone", "-q", "-b", branch,
               f"https://github.com/{repo}.git", str(dest)], timeout=600)
         return GitSync(dest, repo, branch)
 

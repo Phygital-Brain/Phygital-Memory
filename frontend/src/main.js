@@ -13,7 +13,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openAIPanel, openTrash } from "./shell/panels.js";
+import { openStorage, openAIPanel, openTrash, openGithubSignIn } from "./shell/panels.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
@@ -193,6 +193,10 @@ async function pickFolder(prompt, start) {
 
 // Another Mac: bring a private "…-Phygital-Memory" repo down from GitHub, then unlock it with its password.
 async function openFromGithub() {
+  try {
+    if (!(await api("githubaccount")).account
+        && !(await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") }))) return;
+  } catch (e) { toastErr(e.message); return; }
   const repo = await askText("Open from GitHub", "", "Open", (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
   if (repo == null) return;
   try {
@@ -621,14 +625,12 @@ async function openStoragePanel() {
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
     toGithub: async () => {
-      const g = await api("githubaccount");   // the first time the app talks to GitHub
-      if (!g.account) {
-        await confirmDialog(g.tool
-          ? "This Mac isn't signed in to GitHub yet. Open Terminal, type: gh auth login, and follow the steps. Then press Connect GitHub again."
-          : "To connect GitHub, this test version needs the GitHub app for the Terminal (gh). A Sign in with GitHub button is coming.", "OK", false);
-        return false;
+      let account = (await api("githubaccount")).account;   // the first time the app talks to GitHub
+      if (!account) {
+        account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
+        if (!account) return false;
       }
-      const sure = await confirmDialog(`Keep "${info.name}" in a new private repo on the GitHub account ${g.account}? Only scrambled files go up, and the app keeps them in step. The repo always stays private.`, "Use private GitHub", false);
+      const sure = await confirmDialog(`Keep "${info.name}" in a new private repo on the GitHub account ${account}? Only scrambled files go up, and the app keeps them in step. The repo always stays private.`, "Use private GitHub", false);
       if (!sure) return false;
       toast("Making the private repo and sending the scrambled files…");
       await api("togithub");

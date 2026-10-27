@@ -33,11 +33,11 @@ export function openStorage(ctx) {
       ? el("div", { class: "st-gh" },
           el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · synced ${ago(gs && gs.ago)}`),
           gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null)
-      : el("div", {}, el("div", { class: "st-gh-note" }, "Nothing talks to GitHub until you press Connect."),
-          el("button", { class: "btn small", type: "button", onclick: async () => {
+      : el("div", {}, el("div", { class: "st-gh-note" }, "Nothing talks to GitHub until you press the button."),
+          el("button", { class: "btn gh-btn", type: "button", onclick: async () => {
             err.textContent = ""; busy(true);
             try { if (await ctx.toGithub()) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
-          } }, "Connect GitHub…"));
+          } }, githubMark(), "Sign in with GitHub"));
     const cloudCards = el("div", { class: "st-places" }, ...s.places.map((p) => {
       const here = s.cloud && s.path.startsWith(p.path + "/");
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
@@ -211,4 +211,59 @@ export function openTrash(ctx) {
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };
   });
+}
+
+// Sign in with GitHub: the app asks GitHub for a short code and opens github.com in the browser; the person types
+// the code there and approves. ctx: {start() -> {code, url, interval}, poll() -> {state, account}}.
+// Resolves with the GitHub account name, or null if cancelled or refused.
+export function openGithubSignIn(ctx) {
+  return modal((done) => {
+    let alive = true, timer = null;
+    const finish = (v) => { alive = false; clearTimeout(timer); done(v); };
+    const code = el("div", { class: "gh-code" }, "…");
+    const line = el("div", { class: "dlg-sub" }, "Asking GitHub for a sign-in code…");
+    const err = el("div", { class: "dlg-err" });
+    const copy = el("button", { class: "btn small", type: "button", disabled: true,
+      onclick: () => navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; }) }, "Copy code");
+    const card = el("div", { class: "dlg gh-signin", role: "dialog" },
+      el("div", { class: "dlg-title" }, "Sign in with GitHub"),
+      line, code, el("div", { class: "gh-row" }, copy),
+      el("div", { class: "mf-hint" }, "The app gets its own key from GitHub, kept in this Mac's Keychain. You can take it back any time on GitHub, under Settings › Applications."),
+      err,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => finish(null) }, "Cancel")));
+    (async () => {
+      try {
+        const s = await ctx.start();
+        code.textContent = s.code; copy.disabled = false;
+        line.textContent = `Your browser opened ${s.url.replace(/^https:\/\//, "")}. Type this code there and press Authorize.`;
+        let wait = (s.interval || 5) * 1000;
+        const tick = async () => {
+          if (!alive) return;
+          try {
+            const r = await ctx.poll();
+            if (r.state === "done") { finish(r.account || ""); return; }
+            if (r.state === "denied") { err.textContent = "GitHub said no, so nothing was connected."; return; }
+            if (r.state === "expired") { err.textContent = "The code ran out. Close this and press Connect GitHub again."; return; }
+            if (r.state === "slow") wait += 5000;
+          } catch (e) { err.textContent = e.message; }
+          timer = setTimeout(tick, wait);
+        };
+        timer = setTimeout(tick, wait);
+      } catch (e) { line.textContent = ""; err.textContent = e.message; }
+    })();
+    return { card };
+  });
+}
+
+// GitHub's own mark, for the Sign in with GitHub button (drawn here, nothing loaded from GitHub).
+function githubMark() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 16 16"); svg.setAttribute("width", "16"); svg.setAttribute("height", "16");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(ns, "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z");
+  svg.append(path);
+  return svg;
 }
