@@ -170,7 +170,7 @@ fn ask_window(app: &tauri::AppHandle) {
 fn own_page(url: &tauri::Url) -> bool {
     url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(8790)
 }
-// ...or the app's own "Starting…" page, built into the app, shown until the server is up.
+// ...or the app's own "Starting" page, built into the app, shown until the server is up.
 fn starting_page(url: &tauri::Url) -> bool {
     url.scheme() == "tauri" && url.host_str() == Some("localhost") && url.path() == "/starting.html"
 }
@@ -182,6 +182,7 @@ fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
         .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
         .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0))
         .on_navigation(|url| own_page(url) || starting_page(url))
+        .disable_drag_drop_handler()   // files dragged in from Finder reach the page (it adds them, encrypted)
         .build().map_err(|e| e.to_string())?;
     fit_to_screen(&win);
     Ok(())
@@ -222,7 +223,7 @@ fn main() {
             }
         })
         .setup(|app| {
-            // The window opens at once with "Starting…", and goes to the real page as soon as the server answers.
+            // The window opens at once with "Starting", and goes to the real page as soon as the server answers.
             // No first-run window any more: the page itself offers to create or open a locked folder.
             let _ = main_window(app.handle());
             let h = app.handle().clone();
