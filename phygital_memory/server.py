@@ -724,7 +724,7 @@ def _st_watch() -> None:
     def loop():
         while st.running():
             try:
-                inv = _st_invites()
+                inv = {c: i for c, i in _st_invites().items() if i.get("q")}   # invites from before request folders: skip
                 for dev, info in (st.pending_devices() or {}).items():
                     name = str(info.get("name", ""))
                     if not name.startswith("pm-join "):

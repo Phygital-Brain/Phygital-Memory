@@ -29,6 +29,7 @@ from .folders import STATE
 
 HOME = Path(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_HOME", STATE / "syncthing"))
 OFFLINE = bool(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_LOCAL"))   # tests: no discovery, relays or NAT, 127.0.0.1 only
+NO_LAN = bool(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_NO_LAN"))   # tests: found only through internet discovery
 IGNORE = ".DS_Store\n._*\n.encryptor-*\n.git\n.github\n.gitignore\n.gitattributes\n"
 
 
@@ -89,7 +90,7 @@ class Syncthing:
         for tag, value in (("urAccepted", "-1"), ("urSeen", "3"), ("crashReportingEnabled", "false"),
                            ("autoUpgradeIntervalH", "0"), ("startBrowser", "false"),
                            ("globalAnnounceEnabled", "false" if OFFLINE else "true"),
-                           ("localAnnounceEnabled", "false" if OFFLINE else "true"),
+                           ("localAnnounceEnabled", "false" if OFFLINE or NO_LAN else "true"),
                            ("relaysEnabled", "false" if OFFLINE else "true"), ("natEnabled", "false" if OFFLINE else "true")):
             x = put(tag, value, x)
         cfg.write_text(x)
