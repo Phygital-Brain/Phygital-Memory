@@ -660,6 +660,11 @@ class Memory:
             self._writer.move(entry, parent, name)
             self._reindex()
             self.todo_moved(old_entry_path, new)
+            priv = self.ai_private()   # a private folder stays private when it moves or is renamed
+            moved = [new + p[len(old_entry_path):] if p == old_entry_path or p.startswith(old_entry_path + "/") else p
+                     for p in priv]
+            if moved != priv:
+                self._save_ai_private(moved)
             return new
 
     def trash(self, rel: str) -> None:
@@ -945,6 +950,35 @@ class Memory:
             self._need_open()
             self._save_todo([i for i in self.todo() if i["id"] != tid])
 
+    # ---------- folders private for AI: AI search shows them locked, AI opens them only when asked ----------
+
+    def ai_private(self) -> list[str]:
+        with self._lock:
+            self._need_open()
+            try:
+                return [str(p) for p in json.loads(self._tree.read_file(self._tree.resolve(AI_PRIVATE)))]
+            except (NotFound, ValueError):
+                return []
+
+    def is_ai_private(self, rel: str) -> bool:
+        rel = str(rel).strip("/").lower()
+        return any(rel == p.lower() or rel.startswith(p.lower() + "/") for p in self.ai_private())
+
+    def set_ai_private(self, rel: str, on: bool) -> list[str]:
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            if self._tree.resolve(rel).kind != "dir":
+                raise ValueError("Only folders can be private.")
+            return self._save_ai_private([p for p in self.ai_private() if p != rel] + ([rel] if on else []))
+
+    def _save_ai_private(self, paths: list[str]) -> list[str]:
+        paths = sorted(set(paths))
+        parent, name = self._make_parents(AI_PRIVATE)
+        existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+        self._writer.write_file(parent, name, json.dumps(paths, ensure_ascii=False).encode(), replace=existing)
+        return paths
+
     def todo_moved(self, old: str, new: str) -> None:
         """A note or folder was renamed or moved: its to-do items follow it."""
         items = self.todo()
@@ -966,6 +1000,7 @@ TRASH = ".trash"
 VERSIONS = ".versions"
 PREFS = ".phygital/prefs.json"
 TODO = ".phygital/ai-todo.json"
+AI_PRIVATE = ".phygital/ai-private.json"
 TRASH_INDEX = ".phygital/trash.json"
 TRASH_DAYS = 90
 TODO_KEEP = 100
