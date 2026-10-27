@@ -1398,17 +1398,20 @@ async function setUpApprover(chip) {
   } catch (e) { toastErr(e.message); return false; }
 }
 
-// A short "sealed" moment after a signed yes: the lock closes, a ring draws round it, scrambled characters settle
-// into words. About a second; just a fade for people who turn motion down.
+// A short "sealed" moment after a signed yes: wires run in from you and from them, the lock between closes, a ring
+// draws round it and scrambled characters settle into words. Under two seconds; a plain fade with motion turned down.
 function sealAnimation() {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 64 64");
+  svg.setAttribute("viewBox", "0 0 176 64");
   svg.setAttribute("class", "pk-lock");
-  svg.innerHTML = '<circle class="pk-ring" cx="32" cy="32" r="29"/>'
+  svg.innerHTML = '<path class="pk-wire" d="M14 32h20l8-9h12l6 9"/>'          // you, wired in from the left
+    + '<path class="pk-wire pk-wire-r" d="M162 32h-20l-8 9h-12l-6-9"/>'        // them, from the right
+    + '<circle class="pk-node" cx="12" cy="32" r="4"/><circle class="pk-node pk-node-r" cx="164" cy="32" r="4"/>'
+    + '<g transform="translate(56 0)"><circle class="pk-ring" cx="32" cy="32" r="29"/>'
     + '<path class="pk-shackle" d="M24 29v-6a8 8 0 0 1 16 0v6"/>'
     + '<rect class="pk-body" x="19" y="29" width="26" height="19" rx="4"/>'
-    + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/>';
+    + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/></g>';
   const words = "Signed with Phygital Key";
   const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
   const box = el("div", { class: "pk-seal", "aria-hidden": "true" }, el("div", { class: "pk-card" }, svg, text));
@@ -1417,13 +1420,13 @@ function sealAnimation() {
   const start = performance.now();
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tick = (now) => {
-    const k = still ? 1 : Math.min(1, (now - start - 250) / 450);   // letters settle left to right
+    const k = still ? 1 : Math.min(1, (now - start - 500) / 450);   // letters settle left to right, once wired
     text.textContent = [...words].map((c, i) => c === " " || i / words.length < k ? c
       : glyphs[(Math.random() * glyphs.length) | 0]).join("");
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
-  setTimeout(() => box.remove(), still ? 900 : 1500);
+  setTimeout(() => box.remove(), still ? 900 : 1600);
 }
 
 const SIGNED_ACTIONS = new Set(["shareanswer", "shareadd", "shareremove", "sharerole", "sharestop", "shareforget"]);
