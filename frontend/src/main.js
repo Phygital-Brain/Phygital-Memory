@@ -8,7 +8,7 @@ import { askText, confirmDialog } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
-import { openSettings, closeSettings, onSettings } from "./shell/settings.js";
+import { openSettings, closeSettings, onSettings, settings } from "./shell/settings.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
@@ -454,7 +454,12 @@ async function enterApp() {
   await loadFiles();
   renderTabs();
   loadLinks();
-  checkFinder(true);
+  checkFinder(true).then(() => {   // "Open in Finder when unlocked" (on by default, in Settings)
+    if (settings().finderOnUnlock && finder.available && !finder.shown && loadedFolder === currentFolder()) {
+      finder.confirmed = true;
+      toggleFinder();
+    }
+  });
   goHome();
   refreshFolders();
   preloadGraph();
