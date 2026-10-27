@@ -18,6 +18,7 @@ from .memory import Memory
 from .vault.keys import VaultError
 
 BASE = Path(os.environ.get("PHYGITAL_MEMORY_MOUNTS", "~/Library/Application Support/Phygital Memory/Finder")).expanduser()
+DESKTOP = Path(os.environ.get("PHYGITAL_MEMORY_DESKTOP", "~/Desktop")).expanduser()   # where the shortcut goes
 NAME = "Phygital Memory"
 
 
@@ -100,6 +101,7 @@ class Finder:
         self.memory, self.volume = memory, volume
         self.session = None
         self.mounts = None
+        self.link = None   # the Desktop shortcut while shown
         memory.on_lock.append(self.hide)
 
     def available(self) -> bool:
@@ -117,9 +119,59 @@ class Finder:
             journal = _Journal(self.memory)
             BASE.mkdir(parents=True, exist_ok=True)
             self.mounts = finder_mount.Mounts(manager, lambda _s: journal, BASE)
-        return self.mounts.mount(self.session)
+        where = self.mounts.mount(self.session)
+        self.link = _add_desktop_link(self.volume, where)
+        return where
 
     def hide(self) -> None:
+        _remove_desktop_link(self.link)
+        self.link = None
         if self.mounts is not None:
             mounts, self.mounts, self.session = self.mounts, None, None
             mounts.unmount_all()
+
+
+# ---------- a shortcut on the Desktop while the folder is open in Finder ----------
+# Only ever our own shortcut: a link into the Finder view's place. Something else with that name is never touched.
+
+def _plain(path) -> Path:
+    """One spelling of a path: the system's own (macOS may report /System/Volumes/Data/Users/...)."""
+    return Path(os.path.realpath(str(path)).removeprefix("/System/Volumes/Data"))
+
+
+def _ours(link: Path) -> bool:
+    try:
+        return link.is_symlink() and _plain(os.readlink(link)).is_relative_to(_plain(BASE))
+    except (OSError, ValueError):
+        return False
+
+
+def _add_desktop_link(name: str, where: str) -> Path | None:
+    if not where or not DESKTOP.is_dir():
+        return None
+    for label in (name, f"{name} (Phygital Memory)"):
+        link = DESKTOP / label.replace("/", "-")
+        if _ours(link):
+            link.unlink()
+        if not os.path.lexists(link):
+            try:
+                link.symlink_to(where)
+                return link
+            except OSError:
+                return None
+    return None
+
+
+def _remove_desktop_link(link: Path | None) -> None:
+    if link is not None and _ours(link):
+        link.unlink(missing_ok=True)
+
+
+def clear_desktop_links() -> None:
+    """At start: remove shortcuts left from a run that ended without locking (a crash, a forced quit)."""
+    try:
+        for link in DESKTOP.iterdir():
+            if _ours(link):
+                link.unlink(missing_ok=True)
+    except OSError:
+        pass

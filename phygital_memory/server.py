@@ -34,6 +34,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from . import activity
+from . import finder as finder_links
 from .folders import STATE, Folders, cloud_places, is_vault, pick_files, pick_folder, pick_save, write_guides
 from .memory import Locked, Memory, _clean_path
 from .vault.keys import WrongPassword
@@ -738,6 +739,7 @@ def main() -> None:
         print(f"Made a locked notes folder at {FOLDER}")
         return
     print(f"Phygital Memory: app {PAGE}  ·  AI apps connect to {PAGE}mcp", file=sys.stderr)
+    finder_links.clear_desktop_links()   # shortcuts left by a run that ended without locking
     _watch_parent()
     try:
         mcp.run("streamable-http", host="127.0.0.1", port=PORT,
