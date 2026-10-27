@@ -897,7 +897,6 @@ async function watchAllow() {
     const v = await allowDialog(req.name, folders);
     try {
       await api("allowanswer", { id: req.id, ...v });
-      if (v.allow) sealAnimation();
       if (v.allow) toastOk(`“${req.name}” can use your notes now. Change it any time in Settings › AI apps.`);
       document.dispatchEvent(new Event("ai-apps-changed"));
     } catch (e) { toastErr(e.message); }
@@ -1401,10 +1400,10 @@ async function setUpApprover(chip) {
   } catch (e) { toastErr(e.message); return false; }
 }
 
-// The "sealed" moment: wires run in from both sides, the lock between closes, a ring draws round it and scrambled
+// The splash screen: wires run in from both sides, the lock between closes, a ring draws round it and scrambled
 // characters settle into the app's name, on one colour over the whole screen, then it all fades out (about three
-// seconds; a click skips it). On unlock it's solid from the start, so the notes appear behind it. Plays after a signed
-// sharing yes, an unlock, being let in, allowing an AI app and making a new memory. A plain fade with motion turned down.
+// seconds; a click skips it). Shown when the app opens and when a memory is unlocked, solid from the first moment so
+// the notes appear behind it. A plain fade with motion turned down.
 function sealAnimation(cover = false) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -1434,15 +1433,10 @@ function sealAnimation(cover = false) {
   setTimeout(() => box.remove(), still ? 900 : 3200);
 }
 
-const SIGNED_ACTIONS = new Set(["shareanswer", "shareadd", "shareremove", "sharerole", "sharestop", "shareforget"]);
 
 async function shareApi(action, body = {}) {
   for (let i = 0; i < 4; i++) {
-    try {
-      const j = await api(action, body);
-      if (SIGNED_ACTIONS.has(action) && !(action === "shareanswer" && !body.allow)) sealAnimation();
-      return j;
-    }
+    try { return await api(action, body); }
     catch (e) {
       const d = e.data || {};
       if (d.needApprover) { if (!(await setUpApprover(d.chip))) throw new Error("Not approved."); continue; }
@@ -2732,6 +2726,7 @@ window.phygitalOpenFolder = async (id) => {
 };
 
 (async function start() {
+  sealAnimation(true);   // the splash screen, while the app gets ready behind it
   await refreshFolders();
   if (folderList.length) {
     let first = folderList[0].id;
