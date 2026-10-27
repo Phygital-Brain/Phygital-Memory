@@ -968,8 +968,7 @@ class Memory:
         rel = _clean_path(rel, md=False)
         with self._lock:
             self._need_open()
-            if self._tree.resolve(rel).kind != "dir":
-                raise ValueError("Only folders can be private.")
+            self._tree.resolve(rel)   # a folder, note or file that exists
             return self._save_ai_private([p for p in self.ai_private() if p != rel] + ([rel] if on else []))
 
     def _save_ai_private(self, paths: list[str]) -> list[str]:

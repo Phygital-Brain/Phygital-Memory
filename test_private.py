@@ -104,5 +104,26 @@ check("Berlin" in out[0] and "🔒" not in out[0] and "Berlin" in out[1], "open 
 whats = [r["what"] for r in api("approvals", {}, P, fid)[1]["approvals"]]
 check("Private for AI: People" in whats and "Open to AI again: Contacts" in whats, "both show in Approvals", whats)
 
+# one note on its own
+code, j = api("aiprivate", {"path": "Ideas/Secret-Recipe.md", "on": True}, P, fid)
+check(code == 200 and j["paths"] == ["Ideas/Secret-Recipe.md"], "a single note can be private", j)
+out = run(("list_notes", {}), ("read_file_text", {"path": "Ideas/Secret-Recipe.md"}),
+          ("read_file_text", {"path": "Ideas/Secret-Recipe.md", "private": True}), ("recent_changes", {"limit": 50}),
+          ("list_notes", {"inside": "Ideas"}))
+check("Ideas/Secret-Recipe.md  (private: ask first)" in out[0], "listed with its mark", out[0])
+check(out[1].startswith("ERROR") and not out[2].startswith("ERROR"), "opens only with private=true")
+check("Secret-Recipe" not in out[3], "left out of recent changes")
+check("Ideas/Pocket-Library.md" in out[4] and "(private: ask first)" in out[4], "the notes next to it stay open", out[4])
+q = api("files", {}, P, fid)[1]["files"]
+words = run(("read_file_text", {"path": "Ideas/Secret-Recipe.md", "private": True}))[0].split("---8<---")[-1].split()
+w = " ".join(x for x in words if x.isalpha() and len(x) > 4)[:40].rsplit(" ", 1)[0]
+out = run(("search_notes", {"question": w}))
+line = next((l for l in out[0].splitlines() if "Secret-Recipe" in l), "")
+check("🔒 private" in line, "search shows it locked", out[0])
+api("move", {"from": "Ideas/Secret-Recipe.md", "to": "Recipe.md"}, P, fid)
+check(api("aiprivate", {}, P, fid)[1]["paths"] == ["Recipe.md"], "moved, it stays private")
+code, j = api("aiprivate", {"path": "Nope.md", "on": True}, P, fid)
+check(code != 200, "a path that isn't there is refused", j)
+
 print(f"\n{sum(ok)}/{len(ok)} passed")
 raise SystemExit(0 if all(ok) else 1)

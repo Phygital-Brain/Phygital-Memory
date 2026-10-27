@@ -1049,7 +1049,7 @@ function rowFor(n, depth) {
   ic,
   el("span", { class: "row-name" }, folder || !isMd(n.name) ? n.name : label(n.name)),
   pinned ? el("span", { class: "row-pin", title: "Pinned" }, icon("pin", 11, 2)) : null,
-  folder && (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: "Private for AI: it asks first" }, icon("lock", 11, 2)) : null,
+  (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: "Private for AI: it asks first" }, icon("lock", 11, 2)) : null,
   more);
   row.addEventListener("dragover", (e) => {
     const z = dropZone(e, row, n);
@@ -1087,6 +1087,7 @@ function rowMenu(n, x, y) {
   } else {
     items.push({ label: "Open in new tab", fn: () => openPath(n.path) });
     items.push({ label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) });
+    items.push({ label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : "Private for AI", fn: () => toggleAiPrivate(n.path) });
     if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
     items.push({ sep: true });
   }
@@ -1143,7 +1144,8 @@ async function toggleAiPrivate(path) {
   try {
     state.aiPrivate = (await api("aiprivate", { path, on })).paths || [];
     renderTree();
-    toastOk(on ? `"${baseName(path)}" is private. AI only opens it when you ask.` : `"${baseName(path)}" is open to AI again.`);
+    const name = isMd(path) ? label(path) : baseName(path);
+    toastOk(on ? `"${name}" is private. AI only opens it when you ask.` : `"${name}" is open to AI again.`);
   } catch (e) { toastErr(e.message); }
 }
 
