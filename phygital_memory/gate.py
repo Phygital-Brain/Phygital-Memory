@@ -166,6 +166,15 @@ class Gate:
                                  "name": (client.client_name or "An AI app")[:60], "answer": None}
             return f"{ISSUER}/allow/{rid}"
 
+    def name_of(self, rid: str) -> str:
+        with self._lock:
+            p = self.pending.get(rid)
+            return p["name"] if p else "An AI app"
+
+    def list_names(self) -> dict:
+        with self._lock:
+            return {aid: a["name"] for aid, a in self.apps.items()}
+
     def waiting(self) -> list[dict]:
         """Sign-ins the person hasn't answered yet, for the Allow window in the app."""
         with self._lock:

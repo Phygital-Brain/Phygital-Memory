@@ -4,7 +4,7 @@ import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
-import { askText, confirmDialog } from "./shell/dialogs.js";
+import { askText, askPassword, confirmDialog } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
@@ -309,10 +309,13 @@ async function lockAll() {
 // ---------- unlock ----------
 async function unlockCurrent(password) {
   const fid = currentFolder();
-  const j = await api("unlock", { password, folder: fid });
+  const j = await api(password === TOUCH ? "touchidunlock" : "unlock", { password, folder: fid });
   setPass(j.pass, fid);
+  touchTried.add(fid);   // locked by hand later: don't ask by itself again
   await enterApp();
 }
+const TOUCH = {};             // unlockCurrent(TOUCH): open with Touch ID instead of a password
+const touchTried = new Set(); // memories whose Touch ID ask already came up by itself since the app opened
 
 function drawUnlock() {
   const info = curInfo();
@@ -329,7 +332,19 @@ function drawUnlock() {
       sel.addEventListener("change", () => switchTo(sel.value));
       kids.push(sel);
     } else kids.push(el("div", { class: "unlock-folder" }, info.name));
-    kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This folder is locked." : "Your notes are locked."), pw, btn, err);
+    const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), "Unlock with Touch ID");
+    const viaTouch = async () => {
+      err.textContent = ""; touch.disabled = true;
+      try { await unlockCurrent(TOUCH); } catch (x) { err.textContent = x.message; pw.focus(); }
+      touch.disabled = false;
+    };
+    touch.addEventListener("click", viaTouch);
+    kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This folder is locked." : "Your notes are locked."), pw, btn, touch, err);
+    if (info.exists) api("touchidinfo", { folder: info.id }).then((j) => {
+      if (!j.on || currentFolder() !== info.id || !touch.isConnected) return;
+      touch.classList.remove("hidden");
+      if (!touchTried.has(info.id)) { touchTried.add(info.id); viaTouch(); }   // opening the app: ask at once
+    }).catch(() => {});
     unlockEl._submit = async (e) => {
       e.preventDefault();
       if (!pw.value) return;
@@ -583,9 +598,16 @@ function drawFinder() {
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
 }
 // Settings with this folder's options (Show in Finder). Resolves the switch's new state.
-function openSettingsHere() {
+async function openSettingsHere() {
   const info = curInfo();
+  let touch = null;
+  if (info && unlocked(info.id)) try { touch = await api("touchidinfo", { folder: info.id }); } catch {}
   openSettings(info && unlocked(info.id) ? {
+    touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
+      const password = v ? await askPassword("Your password, once, to unlock with Touch ID from now on", "Turn on") : "";
+      if (v && !password) return false;
+      try { return (await api("touchid", { on: v, password })).on; } catch (e) { toastErr(e.message); return !v; }
+    } } : null,
     name: info.name, finderShown: finder.shown, finderAvailable: finder.available, where: shortPath(info.path),
     toggleFinder: async () => { await toggleFinder(); return finder.shown; },
     rename: () => renameFolder(), storage: openStoragePanel, lock: () => lockFolder(),
@@ -1857,8 +1879,9 @@ async function openTodoList(path) { return openAI("tasks", path); }
 
 // The AI panel: Tasks and Activity tabs.
 async function openAI(start, path) {
-  let todo, rows;
-  try { [todo, rows] = await Promise.all([api("aitodo").then((j) => j.todo || []), api("aiactivity").then((j) => j.activity || [])]); }
+  let todo, rows, approvals;
+  try { [todo, rows, approvals] = await Promise.all([api("aitodo").then((j) => j.todo || []), api("aiactivity").then((j) => j.activity || []),
+                                                     api("approvals").then((j) => j.approvals || [])]); }
   catch (e) { toastErr(e.message); return; }
   await openAIPanel({
     tasks: {
@@ -1874,6 +1897,7 @@ async function openAI(start, path) {
       load: async () => (await api("aitodo")).todo || [],
       open: (p) => openPath(p),
     },
+    approvals,
     activity: {
       rows, open: (p) => openPath(p),
       undo: async (r) => {

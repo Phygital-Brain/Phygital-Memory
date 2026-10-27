@@ -92,7 +92,7 @@ export function openStorage(ctx) {
 export function openAIPanel(ctx, start = "tasks") {
   return modal((done) => {
     const tasks = tasksView(ctx.tasks, done), activity = activityView(ctx.activity, done);
-    const views = { tasks, activity };
+    const views = { tasks, activity, approvals: approvalsView(ctx.approvals) };
     const body = el("div", { class: "ai-body" });
     const tools = el("div", { class: "act-tools" });
     const tabs = el("div", { class: "seg", role: "tablist" });
@@ -102,7 +102,7 @@ export function openAIPanel(ctx, start = "tasks") {
       tools.replaceChildren(...(views[k].tools || []));
       if (k === "tasks" && tasks.focus) tasks.focus.focus();
     };
-    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"]]) {
+    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"], ["approvals", "Approvals"]]) {
       tabs.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
     }
     const card = el("div", { class: "dlg activity", role: "dialog" },
@@ -142,6 +142,21 @@ function activityView(ctx, done) {
   draw();
   return { tools: apps.length > 1 ? [filter] : [],
            body: [el("div", { class: "mf-hint" }, "What AI apps did with your unlocked notes. Kept only until you lock."), list] };
+}
+
+// Your yeses (unlocks, AI apps let in, what each may reach), each sealed: a line changed later shows as broken.
+function approvalsView(rows) {
+  const now = Date.now() / 1000;
+  const list = el("div", { class: "act-list" }, ...(rows.length ? rows.map((r) =>
+    el("div", { class: "act-row" + (r.sealed ? "" : " broken") },
+      el("div", { class: "act-time", title: new Date(r.t * 1000).toLocaleString() }, clock(r.t), el("span", {}, ago(Math.max(0, now - r.t)))),
+      el("div", { class: "act-main" },
+        el("div", { class: "act-line" }, r.what),
+        el("div", { class: "act-folder" }, [r.detail, r.how && `by ${r.how}`].filter(Boolean).join(" · "))),
+      el("span", { class: "seal", title: r.sealed ? "Sealed: unchanged since it was written" : "Changed or removed after it was written" },
+        r.sealed ? icon("check", 14, 2) : "!")))
+    : [el("div", { class: "act-empty" }, "Nothing yet.")]));
+  return { tools: [], body: [list] };
 }
 
 function tasksView(ctx, done) {

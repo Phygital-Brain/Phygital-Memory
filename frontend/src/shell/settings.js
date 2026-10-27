@@ -89,6 +89,11 @@ export function openSettings(folderOpts) {
     hide.addEventListener("change", async () => { hide.checked = !!(await folderOpts.setAiHidden(hide.checked)); });
     rows.push(row("AI can't see this", "No AI app can reach this memory, whatever its access says.",
       el("label", { class: "switch" }, hide, el("span", { class: "switch-t" }))));
+    if (folderOpts.touchId) {
+      const tid = el("input", { type: "checkbox", checked: !!folderOpts.touchId.on, "aria-label": "Unlock with Touch ID" });
+      tid.addEventListener("change", async () => { tid.checked = !!(await folderOpts.touchId.set(tid.checked)); });
+      rows.push(row("Unlock with Touch ID", null, el("label", { class: "switch" }, tid, el("span", { class: "switch-t" }))));
+    }
     rows.push(row("Lock", "Locks this memory now. AI apps can't reach it until you unlock it again.",
       el("div", { class: "set-btns" }, btn("Lock", folderOpts.lock), folderOpts.lockAll ? btn("Lock all", folderOpts.lockAll) : null)));
     return rows;

@@ -33,6 +33,16 @@ export function askText(title, value, okLabel, validate) {
   });
 }
 
+export function askPassword(title, okLabel) {
+  return modal((done) => {
+    const input = el("input", { class: "dlg-input", type: "password", autocomplete: "off", "aria-label": "Password", placeholder: "Password" });
+    const submit = () => { if (input.value) done(input.value); };
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, title), input,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Cancel"), el("button", { class: "btn primary", onclick: submit }, okLabel)));
+    return { card, focus: input, submit };
+  });
+}
+
 export function confirmDialog(message, okLabel, danger) {
   return modal((done) => {
     const ok = el("button", { class: "btn " + (danger ? "danger" : "primary"), onclick: () => done(true) }, okLabel);

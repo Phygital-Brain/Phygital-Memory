@@ -35,7 +35,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, cloud, gate as gate_mod, github_auth, gitsync
+from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, touchid
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -564,11 +564,19 @@ async def asset(request: Request) -> Response:
     return Response(f.read_bytes(), media_type=ASSET_TYPES[f.suffix], headers=HEADERS)
 
 
+def _reach(body: dict) -> str:
+    """What an AI app may reach, in words, for the approvals list."""
+    fs = body.get("folders", "all")
+    names = "all memories" if fs == "all" else ", ".join(
+        folders.items[i].name for i in (fs or []) if i in folders.items) or "no memories"
+    return names + (", may edit" if body.get("write") else ", read only")
+
+
 def _ok(data, status=200):
     return JSONResponse(data, status_code=status, headers=HEADERS)
 
 
-def _unlock(f, password: str):
+def _unlock(f, password: str, how: str = "password"):
     if time.time() < f.fails["until"]:
         return _ok({"error": "Too many wrong tries. Wait a minute."}, 429)
     if not f.memory.is_open:
@@ -583,6 +591,7 @@ def _unlock(f, password: str):
             f.fails.update(n=0, until=time.time() + 60)
         raise
     f.fails["n"] = 0
+    approvals.add("Unlocked", f.name, how)
     write_guides(f.path)   # folders made before the guide and opener existed get them now
     p = secrets.token_urlsafe(32)
     f.passes.add(p)
@@ -687,12 +696,24 @@ async def api(request: Request) -> Response:
                                if now - t < 30 * 60]})
         # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
         # fields). Works only when the app is started with PHYGITAL_MEMORY_DEV_PASSWORD_FILE. Remove before release.
-        if action in ("unlock", "devunlock") and not f.memory.is_open:
+        if action in ("unlock", "devunlock", "touchidunlock") and not f.memory.is_open:
             await asyncio.to_thread(f.ready)   # a cloud memory: open its hidden drive first
         if action == "devunlock" and os.environ.get("PHYGITAL_MEMORY_DEV_PASSWORD_FILE"):
             return _unlock(f, Path(os.environ["PHYGITAL_MEMORY_DEV_PASSWORD_FILE"]).read_text().strip())
         if action == "unlock":
             return _unlock(f, body.get("password", ""))
+        if action == "touchidinfo":   # the unlock screen: can this memory open with Touch ID?
+            can = await asyncio.to_thread(touchid.available)
+            return _ok({"available": can, "on": can and await asyncio.to_thread(touchid.has, f.id)})
+        if action == "touchidunlock":
+            pw = await asyncio.to_thread(touchid.get, f.id, f"unlock “{f.name}”")
+            if pw is None:
+                return _ok({"error": "Touch ID didn't confirm. Use your password."}, 403)
+            try:
+                return _unlock(f, pw, "Touch ID")
+            except WrongPassword:   # the password changed since: forget the old one
+                await asyncio.to_thread(touchid.forget, f.id)
+                return _ok({"error": "The kept password no longer works. Use your password."}, 403)
         if not _has_pass(request, f):
             return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
 
@@ -741,19 +762,50 @@ async def api(request: Request) -> Response:
         if action == "aiappadd":   # a new key: shown once here, never stored
             app, key = gate.add_key(str(body.get("name", "")), str(body.get("kind", "other")),
                                     body.get("folders", "all"), bool(body.get("write")))
+            approvals.add(f"New key for {app['name']}", _reach(app), "click")
             return _ok({"app": app, "key": key, "door": f"{PAGE}mcp"})
         if action == "aiappupdate":
-            return _ok({"app": gate.update(str(body.get("id")), body.get("folders"), body.get("write"))})
+            app = gate.update(str(body.get("id")), body.get("folders"), body.get("write"))
+            approvals.add(f"Changed {app['name']}", _reach(app), "click")
+            return _ok({"app": app})
         if action == "aiappremove":
+            gone = gate.list_names().get(str(body.get("id")))
             gate.remove(str(body.get("id")))
+            if gone:
+                approvals.add(f"Removed {gone}", "", "click")
             return _ok({"ok": True})
         if action == "aihide":   # "AI can't see this" for the selected memory
+            approvals.add("Hidden from AI" if body.get("hidden") else "Shown to AI", f.name, "click")
             return _ok({"folder": folders.hide_from_ai(f.id, bool(body.get("hidden")))})
         if action == "allowwaiting":   # AI apps waiting for the person's Allow
             return _ok({"waiting": gate.waiting()})
         if action == "allowanswer":
-            gate.answer(str(body.get("id")), bool(body.get("allow")), body.get("folders", "all"), bool(body.get("write")))
+            rid, allow = str(body.get("id")), bool(body.get("allow"))
+            name = gate.name_of(rid)
+            how = "click"
+            if allow and await asyncio.to_thread(touchid.available):
+                if not await asyncio.to_thread(touchid.ask, f"let “{name}” use your notes"):
+                    return _ok({"error": "Touch ID didn't confirm, so it wasn't allowed. Start the sign-in again."}, 403)
+                how = "Touch ID"
+            gate.answer(rid, allow, body.get("folders", "all"), bool(body.get("write")))
+            approvals.add(f"Let {name} in" if allow else f"Said no to {name}", _reach(body), how)
             return _ok({"ok": True})
+        if action == "touchid":   # Settings: unlock this memory with Touch ID from now on (or not)
+            if not body.get("on"):
+                await asyncio.to_thread(touchid.forget, f.id)
+                approvals.add("Touch ID unlock off", f.name, "click")
+                return _ok({"on": False})
+            if not await asyncio.to_thread(touchid.available):
+                return _ok({"error": "This Mac can't use Touch ID."}, 400)
+            try:
+                await asyncio.to_thread(m.unlock, str(body.get("password", "")))   # open already: checks it's right
+            except WrongPassword:
+                return _ok({"error": "That's not the password."}, 403)
+            await asyncio.to_thread(touchid.save, f.id, str(body.get("password", "")))
+            approvals.add("Touch ID unlock on", f.name, "password")
+            return _ok({"on": True})
+        if action == "approvals":   # the sealed list of yeses, for Activity
+            return _ok({"approvals": approvals.listing()})
         if action == "claudecodeadd":   # one button: add the door, with its key, to Claude Code
             return _ok(await asyncio.to_thread(_claude_code_add, str(body.get("key", ""))))
         if action == "forgetfolder":
