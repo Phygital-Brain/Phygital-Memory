@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest import mock
 
 tmp = Path(tempfile.mkdtemp(prefix="pm-gitbackup-"))
+os.environ["PHYGITAL_MEMORY_OFFLINE"] = "1"   # never touch the real GitHub account
 os.environ["PHYGITAL_MEMORY_STATE"] = str(tmp / "state")
 os.environ["PHYGITAL_MEMORY_TRASH"] = str(tmp / "Trash")
 os.environ["PHYGITAL_MEMORY_CLOUD_KEYCHAIN"] = "Phygital Memory cloud TEST"

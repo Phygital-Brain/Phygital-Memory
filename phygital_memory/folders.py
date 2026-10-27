@@ -72,12 +72,14 @@ def write_guides(path: Path) -> None:
             pass   # a read-only place: the folder still works without them
 
 
+MIRRORS = STATE / "webdav"   # Mac + WebDAV: rclone's notes about the two-way sync, one folder per memory
 GITDIRS = STATE / "git"   # GitHub backup: git's own files, one folder per memory, never inside the memory itself
 CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (hidden drives), and their caches
 
 
 class Folder:
-    def __init__(self, fid: str, name: str, path: Path, github: str | None = None, cloud_at: dict | None = None):
+    def __init__(self, fid: str, name: str, path: Path, github: str | None = None, cloud_at: dict | None = None,
+                 mirror_at: dict | None = None):
         # cloud_at: {kind, url, user, path} for a memory that lives only in the cloud; its files appear at
         # path (a hidden drive) only while it's unlocked
         self.cloud_at = cloud_at
@@ -100,6 +102,26 @@ class Folder:
             shutil.move(str(self.path / ".git"), str(self.gitdir))
         if github and not cloud_at and (self.gitdir / "HEAD").exists():
             self.start_sync()
+        # mirror_at: {kind, url, user, path} for Mac + WebDAV: on this Mac, kept in step with that WebDAV folder
+        self.mirror_at, self.mirror = (None if cloud_at else mirror_at), None
+        if self.mirror_at:
+            self.start_mirror()
+
+    def start_mirror(self) -> None:
+        conn = {k: self.mirror_at[k] for k in ("kind", "url", "user")}
+        self.mirror = cloud.Mirror(conn, self.mirror_at["path"], self.path, MIRRORS / self.id, watch=lambda: self.memory._gen)
+        self.mirror.start()
+
+    def pause_mirror(self, last: bool = True) -> None:
+        """Send the last changes to WebDAV, then stop (before the folder moves)."""
+        if self.mirror:
+            if last:
+                try:
+                    self.mirror.sync_once()
+                except Exception:
+                    pass
+            self.mirror.stop()
+            self.mirror = None
 
     def start_sync(self) -> None:
         self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen, git_dir=self.gitdir)
@@ -114,6 +136,7 @@ class Folder:
         return {"id": self.id, "name": self.name, "path": place, "open": self.memory.is_open,
                 "exists": True if self.cloud_at else is_vault(self.path), "finder": bool(self.finder.where()),
                 "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None,
+                "webdav": cloud.where(self.mirror_at, self.mirror_at["path"]) if self.mirror_at else None,
                 "aiHidden": self.ai_hidden}
 
     def ready(self) -> None:
@@ -158,7 +181,7 @@ class Folders:
         for e in entries:
             if isinstance(e, dict) and e.get("id") and e.get("path"):
                 self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
-                                             e.get("github"), e.get("cloud"))
+                                             e.get("github"), e.get("cloud"), e.get("mirror"))
                 self.items[e["id"]].ai_hidden = bool(e.get("aiHidden"))
         for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
@@ -171,7 +194,8 @@ class Folders:
     def _save(self) -> None:
         STATE.mkdir(parents=True, exist_ok=True)
         data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {}),
-                             **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"aiHidden": True} if f.ai_hidden else {})}
+                             **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"mirror": f.mirror_at} if f.mirror_at else {}),
+                             **({"aiHidden": True} if f.ai_hidden else {})}
                             for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1))
@@ -276,10 +300,19 @@ class Folders:
         if f.cloud_at:
             raise ValueError("This memory is already in the cloud.")
         conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
+        if f.mirror_at and not conn.get("url"):   # WebDAV only, from Mac + WebDAV: the WebDAV copy is the memory now
+            conn = {k: f.mirror_at[k] for k in ("kind", "url", "user")}
         if not cloud.has_password(conn):
             raise ValueError(f"Connect to {cloud.label(conn)} first.")
         f.lock()
         f.pause_backup()
+        if f.mirror_at and all(f.mirror_at[k] == conn[k] for k in ("kind", "url", "user")):
+            m = f.mirror or cloud.Mirror(conn, f.mirror_at["path"], f.path, MIRRORS / f.id)
+            m.stop()
+            m.sync_once()   # the last changes must be up before the Mac copy goes: a failure stops here
+            f.mirror = None
+            return self._now_cloud_only(f, conn, f.mirror_at["path"])
+        f.pause_mirror()
         size = sum(p.stat().st_size for p in f.path.rglob("*") if p.is_file() and p.name != ".DS_Store")
         free = cloud.free_space(conn)
         if free is not None and size > free:
@@ -292,16 +325,22 @@ class Folders:
         except Exception:
             cloud.remove_folder(conn, path)   # only the half-copied folder this move just made
             raise
+        return self._now_cloud_only(f, conn, path)
+
+    def _now_cloud_only(self, f: Folder, conn: dict, path: str) -> dict:
+        """The cloud copy is complete: the Mac's copy goes to the Trash (it can come back), and the memory opens
+        from the cloud from now on."""
         trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
         shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
+        shutil.rmtree(MIRRORS / f.id, ignore_errors=True)
         with self._lock:
             moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path})
             moved.ai_hidden = f.ai_hidden
-            self.items[fid] = moved
+            self.items[f.id] = moved
             self._save()
         return moved.info()
 
-    def to_mac(self, fid: str, parent: str) -> dict:
+    def to_mac(self, fid: str, parent: str, keep_sync: bool = False) -> dict:
         """Bring a cloud-only memory onto this Mac (a plain place, or a folder a cloud app syncs): it locks, its
         encrypted files come down and are checked, and it opens from the Mac from now on. The cloud copy stays where
         it was, for the person to delete there."""
@@ -325,11 +364,56 @@ class Folders:
             shutil.rmtree(dest, ignore_errors=True)   # only the half-copied folder this move just made
             raise
         with self._lock:
-            moved = Folder(f.id, f.name, dest, f.github)
+            moved = Folder(f.id, f.name, dest, f.github, None, f.cloud_at if keep_sync else None)
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()
-        return {**moved.info(), "cloudCopy": cloud.where(f.cloud_at, f.cloud_at["path"])}
+        return {**moved.info(), "cloudCopy": None if keep_sync else cloud.where(f.cloud_at, f.cloud_at["path"])}
+
+    # ---------- Mac + WebDAV ----------
+
+    def to_webdav(self, fid: str, conn: dict, parent: str) -> dict:
+        """Keep a Mac memory in step with a new folder on a WebDAV server (both ways). Room is checked first; the
+        encrypted files go up, are checked, then the two-way sync starts."""
+        f = self.get(fid)
+        if f.cloud_at:
+            raise ValueError("This memory is in the cloud only.")
+        if f.mirror_at:
+            raise ValueError("This memory is already kept in step with WebDAV.")
+        conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
+        if not cloud.has_password(conn):
+            raise ValueError(f"Connect to {cloud.label(conn)} first.")
+        size = sum(p.stat().st_size for p in f.path.rglob("*") if p.is_file() and ".git" not in p.parts)
+        free = cloud.free_space(conn)
+        if free is not None and size > free:
+            raise ValueError(f"Not enough room: your {cloud.label(conn)} has {cloud.human(free)} free, and this memory "
+                             f"needs {cloud.human(size)}.")
+        path = "/".join(p for p in (parent.strip().strip("/"), f.path.name) if p)
+        cloud.make_folder(conn, path)
+        try:
+            cloud.upload(conn, f.path, path)
+        except Exception:
+            cloud.remove_folder(conn, path)
+            raise
+        shutil.rmtree(MIRRORS / f.id, ignore_errors=True)
+        with self._lock:
+            f.mirror_at = {**conn, "path": path}
+            self._save()
+        f.start_mirror()
+        return f.info()
+
+    def stop_webdav(self, fid: str) -> str:
+        """This Mac only from now on. The WebDAV copy is left where it is. Returns where it is."""
+        f = self.get(fid)
+        if not f.mirror_at:
+            raise ValueError("This memory isn't kept in step with WebDAV.")
+        f.pause_mirror()
+        where = cloud.where(f.mirror_at, f.mirror_at["path"])
+        shutil.rmtree(MIRRORS / f.id, ignore_errors=True)
+        with self._lock:
+            f.mirror_at = None
+            self._save()
+        return where
 
     # ---------- a private GitHub repo ----------
 
@@ -434,8 +518,9 @@ class Folders:
                 raise ValueError(f"This memory lives in {cloud.label(f.cloud_at)}, so it stays there.")
             f.lock()
             f.pause_backup()
+            f.pause_mirror()
             new_path = move_folder_on_disk(f.path, Path(parent))
-            moved = Folder(f.id, f.name, new_path, f.github)
+            moved = Folder(f.id, f.name, new_path, f.github, None, f.mirror_at)
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()

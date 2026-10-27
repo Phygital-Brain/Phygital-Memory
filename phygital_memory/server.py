@@ -800,7 +800,13 @@ async def api(request: Request) -> Response:
             except gitsync.SameMemoryRepo as e:   # connected before: ask whether to use that repo again
                 return _ok({"existing": e.repo})
         if action == "tomac":   # a cloud-only memory comes down to this Mac (locks first; unlock it again after)
-            return _ok({"folder": await asyncio.to_thread(folders.to_mac, f.id, str(body.get("parent", "")))})
+            return _ok({"folder": await asyncio.to_thread(folders.to_mac, f.id, str(body.get("parent", "")),
+                                                          bool(body.get("keepSync")))})
+        if action == "towebdav":   # Mac + WebDAV: keep this Mac memory in step with a WebDAV folder
+            return _ok({"folder": await asyncio.to_thread(folders.to_webdav, f.id, body.get("conn") or {},
+                                                          str(body.get("parent", "")))})
+        if action == "stopwebdav":
+            return _ok({"where": await asyncio.to_thread(folders.stop_webdav, f.id)})
         if action == "tocloud":   # move it from this Mac into the cloud (locks first; the page asks for the password again)
             return _ok({"folder": await asyncio.to_thread(folders.to_cloud, f.id, body.get("conn") or {},
                                                           str(body.get("parent", "")))})

@@ -21,6 +21,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from base64 import b64encode
@@ -331,3 +332,75 @@ def unmount(point: Path) -> None:
 def make_key(conn: dict) -> str:
     """One cloud account: the same address and user name."""
     return _account(conn)
+
+
+SKIP = ["--exclude", ".DS_Store", "--exclude", "._*", "--exclude", ".git/**", "--exclude", "*.tmp"]
+MIRROR_AFTER = 5     # seconds after a change before it goes up
+MIRROR_EVERY = 60    # seconds between looks for changes made on other devices
+
+
+class Mirror:
+    """Mac + WebDAV: the memory lives on this Mac (fast, works offline) and stays in step with a folder on the
+    WebDAV server both ways (rclone bisync). Only encrypted files ever go. A note changed on two devices at once
+    keeps both: the extra copy gets a clash name the app already knows how to show."""
+
+    def __init__(self, conn: dict, path: str, folder: Path, workdir: Path, watch=None):
+        self.conn, self.path, self.folder, self.workdir, self.watch = conn, path, Path(folder), Path(workdir), watch
+        self.state = {"last": None, "error": "", "stopped": False}
+        self._wake = threading.Event()
+        self._lock = threading.Lock()
+        self._thread = None
+
+    def sync_once(self) -> None:
+        with self._lock:
+            first = not (self.workdir / "done").exists()
+            self.workdir.mkdir(parents=True, exist_ok=True)
+            _run(self.conn, "bisync", str(self.folder), _remote(self.path), "--workdir", str(self.workdir / "bisync"),
+                 *(["--resync"] if first else []), "--resilient", "--recover", "--create-empty-src-dirs",
+                 # a clash: the newer one keeps the name, the other becomes "NAME.conflict1.c9r", which the app
+                 # turns into a readable clash copy next to the note (nothing is lost)
+                 "--conflict-resolve", "newer", "--conflict-loser", "num", "--suffix-keep-extension", *SKIP, timeout=3600)
+            (self.workdir / "done").touch()
+            self.state.update(last=time.time(), error="")
+
+    def poke(self) -> None:
+        self._wake.set()
+
+    def start(self) -> None:
+        if self._thread:
+            return
+
+        def seen():
+            try:
+                return self.watch() if self.watch else None
+            except Exception:
+                return None
+
+        def loop():
+            last, waited = seen(), MIRROR_EVERY
+            while not self.state["stopped"]:
+                if waited < MIRROR_EVERY and not self._wake.is_set() and seen() == last:
+                    self._wake.wait(MIRROR_AFTER)
+                    waited += MIRROR_AFTER
+                    continue
+                if self._wake.is_set() or seen() != last:
+                    time.sleep(MIRROR_AFTER)
+                self._wake.clear()
+                last, waited = seen(), 0
+                try:
+                    self.sync_once()
+                except Exception as e:
+                    self.state["error"] = str(e)[:300]
+        self._thread = threading.Thread(target=loop, name=f"mirror {self.path}", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self.state["stopped"] = True
+        self._wake.set()
+        with self._lock:
+            pass
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(timeout=30)
+
+    def status(self) -> dict:
+        return {**self.state, "ago": int(time.time() - self.state["last"]) if self.state["last"] else None}

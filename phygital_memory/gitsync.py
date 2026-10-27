@@ -103,6 +103,8 @@ def _env() -> dict:
 
 
 def gh() -> str | None:
+    if os.environ.get("PHYGITAL_MEMORY_OFFLINE"):   # tests: never use the person's real GitHub sign-in
+        return None
     return shutil.which("gh", path=_env()["PATH"])
 
 

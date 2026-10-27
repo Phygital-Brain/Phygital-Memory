@@ -76,6 +76,8 @@ class Tree:
                 return Entry(clear, "file", path)
             raise VaultError(f"A shortened entry has no contents: {path.name}")
         if not name.endswith(C9R):
+            if ".c9r." in name and path.is_file():   # a sync clash copy like "ABC.c9r.conflict1": keep it findable
+                self.conflicts.append((path, dir_id))
             return None
         try:
             clear = self.names.decrypt(name, dir_id)
@@ -87,6 +89,9 @@ class Tree:
                 return Entry(clear, "dir", path, self._read_dir_id(path / "dir.c9r"))
             if (path / "symlink.c9r").is_file():
                 return Entry(clear, "link", path)
+            clash = sorted(p for p in path.glob("dir*.c9r*") if p.is_file())   # dir.c9r only as a sync clash copy
+            if clash:
+                return Entry(clear, "dir", path, self._read_dir_id(clash[0]))
             raise VaultError(f"An entry folder has neither dir.c9r nor symlink.c9r: {path.name}")
         return Entry(clear, "file", path)
 

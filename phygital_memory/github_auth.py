@@ -53,6 +53,8 @@ def api(path: str, token: str | None = None, method: str = "GET", body: dict | N
 # ---------- the key, in the Keychain ----------
 
 def saved_token() -> str | None:
+    if os.environ.get("PHYGITAL_MEMORY_OFFLINE"):   # tests: never use the person's real GitHub sign-in
+        return None
     r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN, "-w"], capture_output=True, text=True)
     return r.stdout.strip() or None if r.returncode == 0 else None
 

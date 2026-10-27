@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 tmp = Path(tempfile.mkdtemp(prefix="pm-tomac-"))
+os.environ["PHYGITAL_MEMORY_OFFLINE"] = "1"   # never touch the real GitHub account
 os.environ["PHYGITAL_MEMORY_STATE"] = str(tmp / "mac1")
 os.environ["PHYGITAL_MEMORY_TRASH"] = str(tmp / "Trash")
 os.environ["PHYGITAL_MEMORY_CLOUD_KEYCHAIN"] = "Phygital Memory cloud TEST"

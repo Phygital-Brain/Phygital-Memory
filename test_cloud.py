@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 tmp = Path(tempfile.mkdtemp(prefix="pm-cloud-"))
+os.environ["PHYGITAL_MEMORY_OFFLINE"] = "1"   # never touch the real GitHub account
 os.environ["PHYGITAL_MEMORY_STATE"] = str(tmp / "mac1")
 os.environ["PHYGITAL_MEMORY_CLOUD_KEYCHAIN"] = "Phygital Memory cloud TEST"
 from phygital_memory import cloud, folders as F   # noqa: E402
@@ -109,12 +110,16 @@ try:
     print(f"     (took {time.time() - end + 60:.0f} s)")
     g.lock()
 
-    for fn, what in ((lambda: fs.relocate(f.id, str(tmp)), "moving"), (lambda: fs.to_github(f.id), "GitHub")):
-        try:
-            fn()
-            check(False, f"{what} is refused for a cloud memory")
-        except ValueError:
-            check(True, f"{what} is refused for a cloud memory")
+    try:
+        fs.relocate(f.id, str(tmp))
+        check(False, "moving is refused for a cloud memory")
+    except ValueError:
+        check(True, "moving is refused for a cloud memory")
+    try:
+        fs.to_github(f.id)   # allowed for a cloud memory now; offline here, so it stops at the sign-in
+        check(False, "GitHub backup asks for a GitHub sign-in first")
+    except (ValueError, RuntimeError) as e:
+        check("Sign in" in str(e) or "Unlock" in str(e), "GitHub backup asks for a GitHub sign-in first", e)
 
     fs2 = mac("mac2")   # (both "Macs" share this Mac's Keychain, so Mac 2 leaves first)
     fs2.forget(g.id)
