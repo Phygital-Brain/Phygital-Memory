@@ -197,7 +197,7 @@ def status(ctx: Context) -> str:
     lines = []
     for f in mine:
         s = f.memory.status()
-        lines.append(f"{f.name}: " + (f"open, {s['notes']} notes" if s["open"] else "locked"))
+        lines.append(f'Memory "{f.name}" (folder="{f.name}"): ' + (f"unlocked, {s['notes']} notes" if s["open"] else "locked"))
     may = "read and edit" if _app()["write"] else "only read"
     return ("\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE}). "
             f"This app may {may}.")

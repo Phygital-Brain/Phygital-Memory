@@ -92,7 +92,7 @@ out = run(key, ("status", {}), ("search_notes", {"question": "lighthouse"}), ("l
           ("trash_note", {"path": "Ideas/Pocket-Library.md"}))
 check({"list_notes", "recent_changes", "read_file_text", "links_to", "move_note", "make_folder", "trash_note"} <= set(out["tools"]),
       "the new tools are there", out["tools"])
-check("open" in out["status"] and "only read" in out["status"], "status works, and says it may only read", out["status"])
+check("unlocked, " in out["status"] and "only read" in out["status"], "status works, and says it may only read", out["status"])
 check("Lighthouse" in out["search_notes"], "a read-only key can search")
 check("Projects/" in out["list_notes"] and ".phygital" not in out["list_notes"], "list_notes lists notes, never the hidden folder")
 check(out["recent_changes"].count("\n") >= 2, "recent_changes lists the newest", out["recent_changes"])
