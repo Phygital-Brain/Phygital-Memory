@@ -621,7 +621,14 @@ async function openStoragePanel() {
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
     toGithub: async () => {
-      const sure = await confirmDialog(`Keep "${info.name}" in a new private GitHub repo? Only scrambled files go up, and the app keeps them in step. The repo always stays private.`, "Use private GitHub", false);
+      const g = await api("githubaccount");   // the first time the app talks to GitHub
+      if (!g.account) {
+        await confirmDialog(g.tool
+          ? "This Mac isn't signed in to GitHub yet. Open Terminal, type: gh auth login, and follow the steps. Then press Connect GitHub again."
+          : "To connect GitHub, this test version needs the GitHub app for the Terminal (gh). A Sign in with GitHub button is coming.", "OK", false);
+        return false;
+      }
+      const sure = await confirmDialog(`Keep "${info.name}" in a new private repo on the GitHub account ${g.account}? Only scrambled files go up, and the app keeps them in step. The repo always stays private.`, "Use private GitHub", false);
       if (!sure) return false;
       toast("Making the private repo and sending the scrambled files…");
       await api("togithub");

@@ -459,8 +459,9 @@ async def api(request: Request) -> Response:
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
-                        "github": f.github, "githubStatus": f.sync.status() if f.sync else None,
-                        "githubAccount": None if f.github else await asyncio.to_thread(gitsync.signed_in)})
+                        "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
+        if action == "githubaccount":   # only when the person presses Connect GitHub: nothing talks to GitHub before
+            return _ok({"account": await asyncio.to_thread(gitsync.signed_in), "tool": bool(gitsync.gh())})
         if action == "togithub":   # keep it in a new private GitHub repo (scrambled files only)
             return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id)})
         if action == "download":   # fetch the files a cloud app left only in the cloud

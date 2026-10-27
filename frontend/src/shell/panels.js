@@ -33,13 +33,11 @@ export function openStorage(ctx) {
       ? el("div", { class: "st-gh" },
           el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · synced ${ago(gs && gs.ago)}`),
           gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null)
-      : s.githubAccount
-        ? el("div", {}, el("div", { class: "st-gh-note" }, `Signed in to GitHub as ${s.githubAccount}.`),
-            el("button", { class: "btn small", type: "button", onclick: async () => {
-              err.textContent = ""; busy(true);
-              try { if (await ctx.toGithub()) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
-            } }, "Keep it in a private GitHub repo"))
-        : el("div", { class: "st-gh-note" }, "Sign in to GitHub on this Mac first (for now with the GitHub app for the Terminal: gh auth login).");
+      : el("div", {}, el("div", { class: "st-gh-note" }, "Nothing talks to GitHub until you press Connect."),
+          el("button", { class: "btn small", type: "button", onclick: async () => {
+            err.textContent = ""; busy(true);
+            try { if (await ctx.toGithub()) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
+          } }, "Connect GitHub…"));
     const cloudCards = el("div", { class: "st-places" }, ...s.places.map((p) => {
       const here = s.cloud && s.path.startsWith(p.path + "/");
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
