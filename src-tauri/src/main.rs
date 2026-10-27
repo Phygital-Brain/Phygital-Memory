@@ -139,14 +139,29 @@ fn own_page(url: &tauri::Url) -> bool {
 }
 
 fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:8790/".parse().unwrap()))
-        .title("Phygital Memory").inner_size(1360.0, 880.0).min_inner_size(720.0, 480.0).center()
+    let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:8790/".parse().unwrap()))
+        .title("Phygital Memory").inner_size(1200.0, 800.0).min_inner_size(720.0, 480.0).center()
         // No title bar: the page fills the window and the close/minimise buttons float over the sidebar (as Baalda)
         .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
         .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0))
         .on_navigation(|url| own_page(url))
         .build().map_err(|e| e.to_string())?;
+    fit_to_screen(&win);
     Ok(())
+}
+
+// Open big on any screen, like Baalda: 80% of the usable width and 88% of the height, centred. Never below
+// 1200x800 (unless the screen is smaller) and never above 2000x1400, so a big monitor doesn't get a huge window.
+fn fit_to_screen(win: &tauri::WebviewWindow) {
+    let Some(screen) = win.current_monitor().ok().flatten().or_else(|| win.primary_monitor().ok().flatten()) else { return };
+    let scale = screen.scale_factor();
+    if scale <= 0.0 { return; }
+    let (free_w, free_h) = (screen.work_area().size.width as f64 / scale, screen.work_area().size.height as f64 / scale);
+    let fit = |free: f64, share: f64, least: f64, most: f64| (free * share).max(least.min(free)).min(most);
+    let (w, h) = (fit(free_w, 0.80, 1200.0, 2000.0), fit(free_h, 0.88, 800.0, 1400.0));
+    if win.set_size(tauri::LogicalSize::new(w, h)).is_ok() {
+        let _ = win.center();
+    }
 }
 
 fn main() {
