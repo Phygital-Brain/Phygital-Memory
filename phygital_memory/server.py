@@ -1421,6 +1421,11 @@ async def api(request: Request) -> Response:
                     approvals.add("Touch ID unlock on", f.name, "password")
                 except RuntimeError:
                     pass
+            elif r.status_code == 200 and await asyncio.to_thread(touchid.has, f.id):
+                try:   # renew the Touch ID copy, so an updated app reads it without macOS asking for the Keychain
+                    await asyncio.to_thread(touchid.save, f.id, str(body.get("password", "")))
+                except RuntimeError:
+                    pass
             return r
         if action == "keyunlock":   # a memory shared with you: open it with your own key (after Touch ID, if this Mac has it)
             await asyncio.to_thread(f.ready)
