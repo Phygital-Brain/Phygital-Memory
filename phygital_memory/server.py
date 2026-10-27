@@ -80,12 +80,10 @@ def _log(app: str, f, what: str, detail: str = "", path: str = "", undo_id: str 
     activity.add(app, f.id if f else "", what, detail, path, undo_id)
 
 
-def _ai_write(f, rel: str, before: str | None, write) -> str:
-    """Run an AI app's write and remember how to undo it: the text before (None for a new note) and a hash of the
-    text after, so Undo only goes ahead while the note is still exactly as the AI left it."""
-    write()
+def _ai_write(f, rel: str, before: str | None, after: str) -> str:
+    """Remember how to undo an AI app's write: the text before (None for a new note) and a hash of the text after,
+    so Undo only goes ahead while the note is still exactly as the AI left it."""
     uid = secrets.token_hex(6)
-    after = _guard(f.memory.read, rel)
     activity.undo[uid] = {"folder": f.id, "path": rel, "before": before,
                           "after": hashlib.sha256(after.encode()).hexdigest()}
     return uid
@@ -267,12 +265,13 @@ def replace_in_note(ctx: Context, id: ResultId,
     """Change part of a note: replaces old_text, which must appear exactly once."""
     _seen(ctx)
     f, rel = _note(id)
-    text = _guard(f.memory.read, rel)
-    count = text.count(old_text)
-    if count != 1:
-        raise ToolError("old_text must appear exactly once in the note "
-                        f"(found {count} times). Call read_note and copy it exactly.")
-    uid = _ai_write(f, rel, text, lambda: _guard(f.memory.save, rel, text.replace(old_text, new_text), keep_version=True))
+    def change(text):
+        count = text.count(old_text)
+        if count != 1:
+            raise ToolError("old_text must appear exactly once in the note "
+                            f"(found {count} times). Call read_note and copy it exactly.")
+        return text.replace(old_text, new_text)
+    uid = _ai_write(f, rel, *_guard(f.memory.update, rel, change))
     _log(_seen(ctx), f, "changed", f'"{old_text[:60]}" → "{new_text[:60]}"', rel, uid)
     return f"Saved {rel} (encrypted)."
 
@@ -282,9 +281,7 @@ def append_to_note(ctx: Context, id: ResultId, text: Annotated[str, Field(descri
     """Add text at the end of the note behind a result."""
     _seen(ctx)
     f, rel = _note(id)
-    old = _guard(f.memory.read, rel)
-    uid = _ai_write(f, rel, old, lambda: _guard(f.memory.save, rel, old.rstrip("\n") + "\n\n" + text.strip("\n") + "\n",
-                                                 keep_version=True))
+    uid = _ai_write(f, rel, *_guard(f.memory.update, rel, lambda old: old.rstrip("\n") + "\n\n" + text.strip("\n") + "\n"))
     _log(_seen(ctx), f, "added to", f'"{text.strip()[:80]}"', rel, uid)
     return f"Saved {rel} (encrypted)."
 
@@ -306,9 +303,8 @@ def create_note(ctx: Context, path: Annotated[str, Field(description="Where it g
         target = open_[0]
     else:
         raise ToolError("Several folders are open: say which one with folder=<name>.")
-    made = []
-    uid = _ai_write(target, _clean_path(path), None, lambda: made.append(_guard(target.memory.save, path, text, new=True)))
-    rel = made[0]
+    rel = _guard(target.memory.save, path, text, new=True)
+    uid = _ai_write(target, rel, None, text)
     _log(_seen(ctx), target, "created", f"{len(text)} characters", rel, uid)
     return f"Created {rel} in {target.name} (encrypted)."
 
@@ -453,16 +449,19 @@ async def api(request: Request) -> Response:
         if action == "forgetfolder":
             folders.forget(f.id)
             return _ok({"ok": True})
+        if action == "gen":   # polled every few seconds: has any note changed?
+            return _ok({"gen": m.gen()})
         if action == "notes":
             return _ok({"notes": m.list_notes()})
         if action == "read":
             return _ok({"path": body["path"], "text": m.read(body["path"])})
         if action == "save":   # with base: if the note changed meanwhile, the text goes to a conflict copy
             base = body.get("base")
-            path = m.save(body["path"], body["text"], new=bool(body.get("new")), base=base if isinstance(base, str) else None)
+            path, merged = m.save_merge(body["path"], body["text"], new=bool(body.get("new")),
+                                        base=base if isinstance(base, str) else None)
             if path != _clean_path(body["path"]):
                 return _ok({"path": body["path"], "conflict": path, "text": m.read(body["path"])})
-            return _ok({"path": path})
+            return _ok({"path": path, **({"merged": merged} if merged is not None else {})})
         if action == "search":   # the app's search: up to 40 results, optionally only inside one subfolder
             within = str(body.get("within") or "").strip("/")
             rows = m.search(body.get("q", ""), 40 if within else int(body.get("n") or 30))
@@ -514,17 +513,18 @@ async def api(request: Request) -> Response:
             u = activity.undo.get(str(body.get("id", "")))
             if not u or u["folder"] != f.id:
                 return _ok({"error": "That change can't be undone any more."}, 400)
-            try:
-                now = m.read(u["path"])
-            except Exception:
-                return _ok({"error": "That note isn't there any more."}, 400)
-            if hashlib.sha256(now.encode()).hexdigest() != u["after"]:
-                return _ok({"error": "The note changed after the AI's edit, so Undo would lose that work. "
-                                     "Use the note's version history to pick what to keep."}, 409)
-            if u["before"] is None:
-                m.trash(u["path"])   # a note the AI made: to the trash, so it can still be restored
-            else:
-                m.save(u["path"], u["before"], keep_version=True)
+            with m._lock:   # check and put back in one go, so no save slips in between
+                try:
+                    now = m.read(u["path"])
+                except Exception:
+                    return _ok({"error": "That note isn't there any more."}, 400)
+                if hashlib.sha256(now.encode()).hexdigest() != u["after"]:
+                    return _ok({"error": "The note changed after the AI's edit, so Undo would lose that work. "
+                                         "Use the note's version history to pick what to keep."}, 409)
+                if u["before"] is None:
+                    m.trash(u["path"])   # a note the AI made: to the trash, so it can still be restored
+                else:
+                    m.save(u["path"], u["before"], keep_version=True)
             activity.undo.pop(str(body["id"]), None)
             return _ok({"path": u["path"], "trashed": u["before"] is None})
         if action == "trashlist":

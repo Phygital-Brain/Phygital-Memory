@@ -557,8 +557,22 @@ function statusBar() {
   barEls.lock.setAttribute("aria-label", "Lock this folder");
   clearInterval(barTimer);
   barTimer = setInterval(refreshBar, 15000);
+  clearInterval(genTimer);
+  lastGen = null;
+  genTimer = setInterval(watchChanges, 3000);
   setTimeout(refreshBar, 300);
   return el("span", { class: "sb-stats" }, barEls.lock, barEls.cloud, barEls.ai);
+}
+
+// An AI app or another device changed a note: reload the open notes that have no unsaved edits.
+let genTimer = null, lastGen = null;
+async function watchChanges() {
+  if (!barEls || !barEls.lock.isConnected) return;
+  let g;
+  try { g = (await api("gen")).gen; } catch { return; }
+  if (g == null) return;
+  if (lastGen != null && g !== lastGen) await syncFromDisk();
+  lastGen = g;
 }
 
 async function refreshBar() {
@@ -1371,6 +1385,11 @@ function saveNow(tab) {
         applyText(tab, j.text || "");
         tab.dirty = false;
         loadFiles();
+      } else if (j.merged != null) {
+        // Changed somewhere else meanwhile, in other lines: both edits are in the note now. Show it, unless
+        // the person typed on during the save (the next save puts that together the same way).
+        if (tab.ver === v) { applyText(tab, j.merged); tab.dirty = false; flashStatus("Merged"); }
+        else tab.base = text;
       } else {
         tab.base = text;
         if (tab.ver === v) tab.dirty = false;

@@ -210,11 +210,18 @@ class Memory:
             return rel, self.read(rel)
 
     def save(self, rel: str, text: str, new: bool = False, base: str | None = None, keep_version: bool = False) -> str:
-        """Write a note (encrypted) and update the index. new=True refuses to replace an existing note.
+        """Write a note (encrypted) and update the index. new=True refuses to replace an existing note. Returns where
+        the text went: the note itself, or a clash copy (see save_merge)."""
+        return self.save_merge(rel, text, new, base, keep_version)[0]
+
+    def save_merge(self, rel: str, text: str, new: bool = False, base: str | None = None,
+                   keep_version: bool = False) -> tuple[str, str | None]:
+        """Like save, and also says when two edits were put together: (path, merged text or None).
 
         base is the note's text as the editor last saw it. If the note changed since (a cloud drive brought another
-        device's edit, or an AI app changed it), nothing is written over that change: this text goes into a clash
-        copy next to it instead, and the clash copy's path is returned."""
+        device's edit, or an AI app changed it), nothing is written over that change. Like Baalda: when the two
+        edits touch different lines both go into the note; when they touch the same lines, this text goes into a
+        clash copy next to it instead, and the clash copy's path is returned."""
         rel = _clean_path(rel)
         data = text.encode("utf-8")
         if len(data) > MAX_NOTE_BYTES:
@@ -225,17 +232,40 @@ class Memory:
             existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
             if existing and new:
                 raise Exists(f"'{rel}' already exists. Open it from a search result to change it.")
+            merged = None
             if existing and base is not None:
                 now = self._tree.read_file(existing)
                 if now != base.encode("utf-8") and now != data:
-                    return self._clash_copy(parent, rel, data)
-            if existing:
-                self._keep_version(rel, existing, data, force=keep_version)
-            entry = self._writer.write_file(parent, name, data, replace=existing)
-            remove_file(self._con, rel)
-            self._index_one(rel, entry)
-            self._con.commit()
-            return rel
+                    merged = merge3(base, now.decode("utf-8", "replace"), text)
+                    if merged is None:
+                        return self._clash_copy(parent, rel, data), None
+                    data, keep_version = merged.encode("utf-8"), True
+            self._write_note(rel, parent, name, existing, data, keep_version)
+            return rel, merged
+
+    def update(self, rel: str, change, keep_version: bool = True) -> tuple[str, str]:
+        """Read a note, change it with change(text) -> new text, and write it, with nothing else getting in between.
+        For AI apps: two of them adding to a note at the same moment both land. Returns (before, after)."""
+        rel = _clean_path(rel)
+        with self._lock:
+            self._need_open()
+            before = self.read(rel)
+            after = change(before)
+            if len(after.encode("utf-8")) > MAX_NOTE_BYTES:
+                raise ValueError("That note is too big.")
+            if after != before:
+                parent, name = parent_and_name(self._tree, rel)
+                existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+                self._write_note(rel, parent, name, existing, after.encode("utf-8"), keep_version)
+            return before, after
+
+    def _write_note(self, rel, parent, name, existing, data: bytes, keep_version: bool) -> None:
+        if existing:
+            self._keep_version(rel, existing, data, force=keep_version)
+        entry = self._writer.write_file(parent, name, data, replace=existing)
+        remove_file(self._con, rel)
+        self._index_one(rel, entry)
+        self._con.commit()
 
     def _make_parents(self, rel: str):
         parts = rel.split("/")
@@ -254,7 +284,11 @@ class Memory:
 
     def _clash_copy(self, parent, rel: str, data: bytes) -> str:
         stem, dot, ext = Path(rel).name.rpartition(".") if "." in Path(rel).name else (Path(rel).name, "", "")
-        taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
+        here = self._tree.list_dir(parent.dir_id)
+        for e in here:   # the same text already kept from an earlier try: reuse it, never a second copy
+            if e.kind == "file" and e.name.startswith(f"{stem} (conflict ") and self._tree.read_file(e) == data:
+                return "/".join(rel.split("/")[:-1] + [e.name])
+        taken = {e.name for e in here}
         name, n = f"{stem} (conflict {time.strftime('%Y-%m-%d')}){dot}{ext}", 1
         while name in taken:
             n += 1
@@ -341,6 +375,15 @@ class Memory:
             self._con.commit()
 
     # ---------- what only the person's own app shows ----------
+
+    def gen(self) -> int | None:
+        """A number that goes up whenever a note changes here or on disk (a cloud drive, another device). The app
+        polls it to reload open notes; it doesn't count as use, so polling never keeps the folder unlocked."""
+        with self._lock:
+            if self._con is None:
+                return None
+            self._sync()
+            return self._gen
 
     def list_notes(self) -> list[str]:
         with self._lock:
@@ -578,8 +621,8 @@ class Memory:
         name = f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}.md"
         same = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
         self._writer.write_file(parent, name, old, replace=same)
-        kept = sorted(e for e in self._tree.list_dir(parent.dir_id) if e.kind == "file")
-        for e in sorted(kept, key=lambda e: e.name)[:-VERSION_KEEP]:
+        kept = sorted((e for e in self._tree.list_dir(parent.dir_id) if e.kind == "file"), key=lambda e: e.name)
+        for e in kept[:-VERSION_KEEP]:
             self._writer.remove(e)
 
     def versions(self, rel: str) -> list[dict]:
@@ -756,6 +799,26 @@ VERSION_EVERY = 5 * 60
 VERSION_KEEP = 50
 SYNC_EVERY = 5
 MAX_FILE_BYTES = 25_000_000
+
+
+def merge3(base: str, mine: str, theirs: str) -> str | None:
+    """Put two edits of the same note together, line by line. None when they change the same lines, or both add
+    lines at the same spot, so nothing is guessed: the caller keeps both versions apart instead."""
+    from difflib import SequenceMatcher
+    b, m, t = (x.splitlines(keepends=True) for x in (base, mine, theirs))
+
+    def changes(x):
+        return [(i1, i2, x[j1:j2]) for op, i1, i2, j1, j2 in SequenceMatcher(None, b, x, autojunk=False).get_opcodes()
+                if op != "equal"]
+    out, at, end, last = [], 0, -1, None
+    for i1, i2, lines in sorted(changes(m) + changes(t), key=lambda c: (c[0], c[1])):
+        if (i1, i2, lines) == last:
+            continue   # the same change on both sides
+        if i1 < end or (last and i1 == i2 == last[0] == last[1]):
+            return None
+        out += b[at:i1] + lines
+        at, end, last = i2, i2, (i1, i2, lines)
+    return "".join(out + b[at:])
 
 
 def _clean_path(rel: str, md: bool = True) -> str:
