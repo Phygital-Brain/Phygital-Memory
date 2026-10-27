@@ -714,7 +714,7 @@ export function createEditor(parent, opts) {
     highlightActiveLine(),
     highlightSelectionMatches(),
     EditorView.lineWrapping,
-    placeholder("Start writing…"),
+    placeholder("Start writing"),
     markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [ObsidianSyntax], addKeymap: true }),
     syntaxHighlighting(syntaxColours),
     focusedField,

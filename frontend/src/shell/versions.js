@@ -71,7 +71,7 @@ export async function openVersions(ctx) {
   const alive = () => panel === mine;
 
   const showList = async () => {
-    body.replaceChildren(el("div", { class: "vh-empty" }, "Loading…"));
+    body.replaceChildren(el("div", { class: "vh-empty" }, "Loading"));
     let list = [];
     try { list = (await api("versions", { path: ctx.path })).versions || []; } catch (e) { toast(e.message, "error"); }
     if (!alive()) return;
@@ -84,7 +84,7 @@ export async function openVersions(ctx) {
   };
 
   const showOne = async (v) => {
-    body.replaceChildren(el("div", { class: "vh-empty" }, "Loading…"));
+    body.replaceChildren(el("div", { class: "vh-empty" }, "Loading"));
     let text;
     try { text = (await api("version", { path: ctx.path, id: v.id })).text || ""; } catch (e) { toast(e.message, "error"); showList(); return; }
     if (!alive()) return;
@@ -105,14 +105,14 @@ export async function openVersions(ctx) {
           const keepHead = first ? 0 : 2, keepTail = last ? 0 : 2;
           if (run.length > keepHead + keepTail + 1) {
             run.slice(0, keepHead).forEach((r) => frag.push(r));
-            frag.push({ t: "…", s: `${run.length - keepHead - keepTail} unchanged lines` });
+            frag.push({ t: "", s: `${run.length - keepHead - keepTail} unchanged lines` });
             run.slice(run.length - keepTail).forEach((r) => frag.push(r));
           } else run.forEach((r) => frag.push(r));
           i = j;
         } else frag.push(rows[i++]);
       }
       view.replaceChildren(el("div", { class: "vh-diff" }, ...frag.map((r) =>
-        el("div", { class: "dl " + (r.t === "+" ? "add" : r.t === "-" ? "del" : r.t === "…" ? "gap" : "") }, el("span", { class: "dl-m" }, r.t === " " || r.t === "…" ? "" : r.t), el("span", { class: "dl-t" }, r.s || " ")))));
+        el("div", { class: "dl " + (r.t === "+" ? "add" : r.t === "-" ? "del" : r.t === "" ? "gap" : "") }, el("span", { class: "dl-m" }, r.t === " " || r.t === "" ? "" : r.t), el("span", { class: "dl-t" }, r.s || " ")))));
     };
     draw();
     const restore = el("button", { class: "btn primary small", onclick: async () => {

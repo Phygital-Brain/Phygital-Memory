@@ -40,7 +40,7 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
   const host = el("div", { class: "graph-canvas", tabindex: "0", "aria-label": "Graph of linked notes" });
   const info = el("span", { class: "graph-info" });
   const localBox = el("input", { type: "checkbox", "aria-label": "Local graph" });
-  const find = el("input", { type: "search", class: "graph-find", placeholder: "Find a note…", "aria-label": "Find a note in the graph" });
+  const find = el("input", { type: "search", class: "graph-find", placeholder: "Find a note", "aria-label": "Find a note in the graph" });
   const panelBtn = el("button", { class: "btn small", onclick: () => panel.classList.toggle("hidden") }, "Settings");
   const bar = el("div", { class: "graph-bar" },
     find,

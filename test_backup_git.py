@@ -111,7 +111,14 @@ while time.time() < end and len(remote_files(full)) <= before:
 check(len(remote_files(full)) > before, "and keeps sending changes from there")
 f.lock()
 
-# a second Mac restores from the backup
+# the same Mac already has it: retrieving it again is refused, so two copies never fight over one backup
+try:
+    fs.from_github(full, tmp / "Mac2")
+    check(False, "retrieving a memory that's already here is refused")
+except ValueError as e:
+    check("already here" in str(e) and not (tmp / "Mac2" / "Work").exists(), "retrieving a memory that's already here is refused", e)
+# a second Mac (this one, without the memory) restores from the backup
+del fs.items[f.id]
 restored = fs.from_github(full, tmp / "Mac2")
 r = fs.get(restored["id"])
 check(not (r.path / ".git").exists() and (r.gitdir / "HEAD").exists(), "a restore keeps git's files outside too")
@@ -119,6 +126,16 @@ r.memory.unlock("password-1")
 check(r.memory.read("Third.md").startswith("# Third"), "and has every note")
 r.memory.lock()
 r.sync.stop()
+fs.items.pop(r.id)
+fs.items[f.id] = f
+f2 = fs.get(f.id)
+fs.items[f.id].github = None   # a copy with no backup of its own: still the same memory
+try:
+    fs.from_github(full, tmp / "Mac4")
+    check(False, "the same memory under no backup is caught too")
+except ValueError as e:
+    check("same memory" in str(e) and not (tmp / "Mac4" / "Work").exists(), "the same memory under no backup is caught too", e)
+fs.items[f.id].github = full
 
 # up into a cloud-only memory: it backs up while unlocked
 store = tmp / "webdav"

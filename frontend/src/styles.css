@@ -293,7 +293,7 @@ input:focus-visible { outline: none; }
 .set-btns { display: flex; gap: 6px; flex: none; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .set-text { min-width: 0; }
-.set-title { font-size: 13px; }
+.set-title { font-size: 13px; display: flex; align-items: center; }
 .set-hint { font-size: 11.5px; color: var(--text-3); }
 .set-range { display: flex; align-items: center; gap: 10px; }
 .set-range input[type=range] { width: 120px; accent-color: var(--accent); }
@@ -631,3 +631,6 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .st-sub-head .st-opt-now { margin-left: auto; }
 .storage .set-section { margin: 14px 0 6px; }
 .st-opt-head:last-child { margin-bottom: 0; align-items: center; }
+.st-e2e { display: flex; gap: 8px; align-items: center; margin-top: 10px; padding: 8px 10px; border-radius: var(--r-s); background: var(--accent-soft); color: var(--text-2); font-size: 12px; }
+.st-e2e svg { color: var(--accent); flex: none; }
+.info-pop { position: fixed; z-index: 200; max-width: 260px; padding: 8px 10px; border-radius: var(--r-s); background: var(--bg-surface); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--text); font-size: 12px; line-height: 1.45; }

@@ -29,7 +29,7 @@ function accessForm(folders, cur = { folders: "all", write: false }) {
     ...boxes.map((x) => x.row),
     el("div", { class: "set-row ai-write" },
       el("div", { class: "set-text" }, el("div", { class: "set-title" }, "Allow edits"),
-        el("div", { class: "set-hint" }, "Change, add, move and put notes in the trash. Changes can be undone, and trashed notes put back.")),
+        el("div", { class: "set-hint" }, "Change, add, move and trash notes. You can undo every change.")),
       el("label", { class: "switch" }, write, el("span", { class: "switch-t" }))));
   return { node, value: () => ({ folders: all.checked ? "all" : boxes.filter((x) => x.b.checked).map((x) => x.f.id), write: write.checked }) };
 }
@@ -71,7 +71,7 @@ export function openAIApps(ctx) {
       title.textContent = "AI apps"; err.textContent = "";
       try { data = await ctx.load(); } catch (e) { err.textContent = e.message; return; }
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, "Each AI app needs its own key to reach your notes, and only while a memory is unlocked. Remove one to cut it off at once."),
+        el("div", { class: "mf-hint" }, "Each AI app has its own key and only reaches unlocked memories. Remove an app to cut it off."),
         el("div", { class: "act-list" }, ...(data.apps.length ? data.apps.map((a) =>
           el("div", { class: "todo-row repo-row ai-row" },
             el("span", { class: "trash-ic" }, icon("sparkle", 16)),
@@ -81,9 +81,9 @@ export function openAIApps(ctx) {
             el("div", { class: "set-btns" }, btn("Change", () => change(a), "small"),
               btn("Remove", async () => { busy(true); try { await ctx.remove(a.id); } catch (e) { err.textContent = e.message; } busy(false); list(); }, "small danger"))))
           : [el("div", { class: "act-empty" }, "No AI app is connected yet.")])),
-        el("div", { class: "st-gh-note" }, "AI apps that support sign-in (like Claude Code) can also connect by themselves: add the address below, and press Allow here when they ask."),
+        el("div", { class: "st-gh-note" }, "Apps that support sign-in can connect with this address. You approve them here."),
         el("div", { class: "ai-door" }, el("code", {}, data.door), btn("Copy", () => navigator.clipboard.writeText(data.door), "small")));
-      actions.replaceChildren(btn("Close", () => done(null)), btn("Connect an AI app…", pick, "primary"));
+      actions.replaceChildren(btn("Close", () => done(null)), btn("Connect an AI app", pick, "primary"));
     };
 
     const pick = () => {
@@ -119,7 +119,7 @@ export function openAIApps(ctx) {
         busy(false);
       }, "small primary") : null;
       body.replaceChildren(
-        el("div", { class: "st-warn" }, el("span", {}, "This key is shown only now. Paste it into the AI app before you close this. If you lose it, remove the app and connect it again.")),
+        el("div", { class: "st-warn" }, el("span", {}, "This key shows only once. Paste it into the AI app now.")),
         el("div", { class: "set-title" }, s.where),
         el("pre", { class: "ai-setup" }, s.text),
         el("div", { class: "set-btns" }, copy, auto));
@@ -153,7 +153,7 @@ export function allowDialog(name, folders) {
     setTimeout(() => { deny.disabled = allow.disabled = false; }, 1000);
     const card = el("div", { class: "dlg storage ai-apps", role: "dialog" },
       el("div", { class: "dlg-title" }, `“${name}” wants to use your notes`),
-      el("div", { class: "mf-hint" }, "That's the name the app gives itself. It can only reach memories that are unlocked. You can change this or remove it later in Settings › AI apps."),
+      el("div", { class: "mf-hint" }, "The app picked this name. It only reaches unlocked memories. Change or remove it in Settings › AI apps."),
       access.node,
       el("div", { class: "dlg-actions" }, deny, allow));
     return { card };

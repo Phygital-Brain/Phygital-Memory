@@ -65,6 +65,7 @@ export function openStorage(ctx) {
       s.offline ? el("div", { class: "st-warn" },
         el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud and can't open yet.`),
         btn("Download now", () => ctx.download())) : null,
+      el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, "Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password.")),
       el("div", { class: "set-section" }, "Stored in"),
       option("laptop", "This Mac only",
         "A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup.",
@@ -87,9 +88,29 @@ export function openStorage(ctx) {
   });
 }
 
-// A small ⓘ: hover (or focus) shows what the thing does.
+// A small ⓘ: hover shows what the thing does; a click (or Enter) keeps it open until the next click.
+let infoPop = null;
+function hideInfo() { if (infoPop) { infoPop.el.remove(); infoPop = null; } }
+document.addEventListener("mousedown", (e) => { if (infoPop && !e.target.closest(".info-i")) hideInfo(); }, true);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && infoPop) { hideInfo(); e.stopPropagation(); } }, true);
 export function info(text) {
-  return el("span", { class: "info-i", tabindex: "0", title: text, "aria-label": text }, "i");
+  const i = el("span", { class: "info-i", tabindex: "0", role: "button", "aria-label": text }, "i");
+  const show = (pinned) => {
+    if (infoPop && infoPop.for === i) { infoPop.pinned ||= pinned; return; }
+    hideInfo();
+    const pop = el("div", { class: "info-pop", role: "tooltip" }, text);
+    document.body.append(pop);
+    const r = i.getBoundingClientRect(), w = pop.offsetWidth;
+    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + "px";
+    const below = r.bottom + 6 + pop.offsetHeight < innerHeight;
+    pop.style.top = (below ? r.bottom + 6 : r.top - 6 - pop.offsetHeight) + "px";
+    infoPop = { el: pop, for: i, pinned };
+  };
+  i.addEventListener("mouseenter", () => show(false));
+  i.addEventListener("mouseleave", () => { if (infoPop && infoPop.for === i && !infoPop.pinned) hideInfo(); });
+  i.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); infoPop && infoPop.for === i && infoPop.pinned ? hideInfo() : show(true); });
+  i.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); show(true); } });
+  return i;
 }
 
 // One AI panel with two tabs: Tasks (notes given to the AI, each with what to do) and Activity (what AI apps did).
@@ -214,7 +235,7 @@ function tasksView(ctx, done) {
       el("div", { class: "dlg-actions" }, el("button", { class: "btn primary", type: "button", onclick: add }, "Add task")));
   }
   return { focus: ask, body: [give,
-    el("div", { class: "mf-hint" }, "Your AI works through these tasks when you ask it to, for example: \u201cDo my Phygital Memory tasks.\u201d Its changes can be undone from Activity."),
+    el("div", { class: "mf-hint" }, "Ask your AI: \u201cDo my Phygital Memory tasks.\u201d You can undo its changes in Activity."),
     list, err].filter(Boolean) };
 }
 
@@ -252,15 +273,15 @@ export function openGithubSignIn(ctx) {
   return modal((done) => {
     let alive = true, timer = null;
     const finish = (v) => { alive = false; clearTimeout(timer); done(v); };
-    const code = el("div", { class: "gh-code" }, "…");
-    const line = el("div", { class: "dlg-sub" }, "Asking GitHub for a sign-in code…");
+    const code = el("div", { class: "gh-code" }, "");
+    const line = el("div", { class: "dlg-sub" }, "Asking GitHub for a sign-in code");
     const err = el("div", { class: "dlg-err" });
     const copy = el("button", { class: "btn small", type: "button", disabled: true,
       onclick: () => navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; }) }, "Copy code");
     const card = el("div", { class: "dlg gh-signin", role: "dialog" },
       el("div", { class: "dlg-title" }, "Sign in with GitHub"),
       line, code, el("div", { class: "gh-row" }, copy),
-      el("div", { class: "mf-hint" }, "The app gets its own GitHub key and keeps it in this Mac's Keychain. You can remove it on GitHub any time: Settings › Applications."),
+      el("div", { class: "mf-hint" }, "The app's GitHub key stays in this Mac's Keychain. Remove it on GitHub any time: Settings › Applications."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => finish(null) }, "Cancel")));
     (async () => {
@@ -300,7 +321,7 @@ function githubMark() {
   return svg;
 }
 
-// Open from GitHub: the person's memory repos to pick from. Resolves with "owner/name", "" for "Another repo…"
+// Open from GitHub: the person's memory repos to pick from. Resolves with "owner/name", "" for "Another repo"
 // (typed by hand), or null if cancelled.
 export function pickRepo(repos) {
   return modal((done) => {
@@ -312,10 +333,10 @@ export function pickRepo(repos) {
       : [el("div", { class: "act-empty" }, "No Phygital Memory repos found on this GitHub account.")]));
     const card = el("div", { class: "dlg activity", role: "dialog" },
       el("div", { class: "dlg-title" }, "Open from GitHub"),
-      el("div", { class: "mf-hint" }, "Your private Phygital Memory repos. Pick one to bring it to this Mac, then unlock it with its password."),
+      el("div", { class: "mf-hint" }, "Your private Phygital Memory repos. Pick one, then unlock it with its password."),
       list,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", type: "button", onclick: () => done("") }, "Another repo…"),
+        el("button", { class: "btn", type: "button", onclick: () => done("") }, "Another repo"),
         el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel")));
     return { card };
   });
@@ -395,11 +416,11 @@ export function openCloud(ctx) {
     const list = (conn, memories) => {
       title.textContent = "Memories in your cloud"; err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, "Pick one to add it here, then unlock it with its password. Nothing is downloaded: it opens from the cloud."),
+        el("div", { class: "mf-hint" }, "Pick one, then unlock it with its password. It opens from the server, nothing is downloaded."),
         el("div", { class: "act-list" }, ...(memories.length
           ? memories.map((m) => row("lock", m.name, m.path, () => done({ conn, path: m.path })))
           : [el("div", { class: "act-empty" }, "No memories found in this cloud yet.")])));
-      actions.replaceChildren(btn("Back", pick), btn("New memory here…", () => create(conn, memories), "primary"));
+      actions.replaceChildren(btn("Back", pick), btn("New memory here", () => create(conn, memories), "primary"));
     };
 
     const moveTo = (conn) => {
@@ -428,7 +449,7 @@ export function openCloud(ctx) {
         done(out);
       };
       body.replaceChildren(name, parent, pw, pw2,
-        el("div", { class: "st-gh-note" }, "This password unlocks the memory. It never leaves this Mac, and nobody can reset it, so keep it safe."));
+        el("div", { class: "st-gh-note" }, "This password unlocks the memory. Nobody can reset it, so keep it somewhere safe."));
       actions.replaceChildren(btn("Back", () => { pw.value = pw2.value = ""; list(conn, memories); }), btn("Create", submit, "primary"));
       name.focus();
     };

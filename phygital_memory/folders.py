@@ -380,7 +380,7 @@ class Folders:
         encrypted files go up, are checked, then the two-way sync starts."""
         f = self.get(fid)
         if f.cloud_at:
-            raise ValueError("This memory is in the cloud only.")
+            raise ValueError("This memory is on WebDAV only.")
         if f.mirror_at:
             raise ValueError("This memory is already kept in step with WebDAV.")
         conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
@@ -441,7 +441,7 @@ class Folders:
         nothing is erased; the notes themselves don't change. Returns the repo, "owner/name"."""
         f = self.get(fid)
         if not f.github:
-            raise ValueError("This folder isn't kept in GitHub.")
+            raise ValueError("This memory isn't backed up to GitHub.")
         repo = f.github
         if f.sync:
             f.sync.stop()
@@ -456,7 +456,7 @@ class Folders:
             if not p.exists() or (name in (".github", "README.md") and
                                   (not readme.is_file() or "Phygital Memory" not in readme.read_text(errors="replace")[:200])):
                 continue
-            dest = trash / f"{f.name} {name} (GitHub sync, {stamp})"
+            dest = trash / f"{f.name} {name} (GitHub backup, {stamp})"
             shutil.move(str(p), str(dest))
         f.github = None
         with self._lock:
@@ -469,6 +469,9 @@ class Folders:
         if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repo):
             raise ValueError('Write it like "your-name/Notes-Phygital-Memory".')
         name = (repo.split("/")[1].removesuffix("-Phygital-Memory") or repo.split("/")[1]).replace("-", " ")
+        for x in self.items.values():   # the same memory twice would make two copies fight over one backup
+            if x.github and x.github.lower() == repo.lower():
+                raise ValueError(f'"{x.name}" is already here and backs up to that repo.')
         dest = Path(parent).expanduser() / name
         if dest.exists():
             raise ValueError(f'There is already a "{name}" in that place.')
@@ -476,6 +479,12 @@ class Folders:
         GitSync.clone(repo, dest, git_dir=GITDIRS / fid)
         if not is_vault(dest):
             raise ValueError("That repo isn't a Phygital Memory folder.")
+        same = next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
+                     and (x.path / "vault.cryptomator").read_bytes() == (dest / "vault.cryptomator").read_bytes()), None)
+        if same:   # a copy of a memory that's already here (under another backup, or none): don't keep a second one
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.rmtree(GITDIRS / fid, ignore_errors=True)
+            raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
         with self._lock:
             f = Folder(fid, name, dest, repo)
             self.items[f.id] = f

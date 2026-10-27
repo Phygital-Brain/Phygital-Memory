@@ -188,7 +188,7 @@ async function switchTo(id) {
 }
 
 async function pickFolder(prompt, start) {
-  toast("Choose a folder in the window that opens…");
+  toast("Choose a folder in the window that opens");
   return (await api("pickfolder", { prompt, ...(start ? { start } : {}) })).path || null;
 }
 
@@ -202,12 +202,12 @@ async function openFromGithub() {
   try { repos = (await api("githubrepos")).repos || []; } catch (e) { toastErr(e.message); }
   const known = new Set(folderList.map((f) => f.github).filter(Boolean));
   let repo = await pickRepo(repos.filter((r) => !known.has(r.repo)));
-  if (repo === "") {   // "Another repo…": type it
+  if (repo === "") {   // "Another repo": type it
     repo = await askText("Open from GitHub", "", "Open", (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
   }
   if (!repo) return;
   try {
-    toast("Choose where to keep it on this Mac, in the window that opens…");
+    toast("Choose where to keep it on this Mac, in the window that opens");
     const j = await api("fromgithub", { repo });
     if (j.cancelled) return;
     await refreshFolders();
@@ -224,7 +224,7 @@ async function openFromCloud() {
   if (!v) return;
   try {
     if (v.create) {
-      toast("Making the memory in your cloud…");
+      toast("Making the memory in your cloud");
       const j = await api("createincloud", { conn: v.conn, ...v.create });
       await refreshFolders();
       await switchTo(j.folder.id);
@@ -254,7 +254,7 @@ async function createNewFolder() {
   const v = await createFolderForm(() => pickFolder("Choose where to put the new folder"));
   if (!v) return;
   try {
-    toast("Making the folder…");
+    toast("Making the folder");
     const j = await api("createfolder", v);
     await refreshFolders();
     await switchTo(j.folder.id);
@@ -279,7 +279,7 @@ async function renameFolder(id) {
 async function forgetFolder(id) {
   const info = (id && folderList.find((f) => f.id === id)) || curInfo();
   if (!info) return;
-  const ok = await confirmDialog(`Remove "${info.name}" from the list? Nothing is deleted: the folder and its notes stay where they are. It locks, and you can add it again later.`, "Remove from list", true);
+  const ok = await confirmDialog(`Remove "${info.name}" from the list? Nothing is deleted. You can add it again later.`, "Remove from list", true);
   if (!ok) return;
   const fid = info.id;
   try {
@@ -323,7 +323,7 @@ function drawUnlock() {
   const links = [];
   if (info) {
     const pw = el("input", { type: "password", placeholder: "Password", autocomplete: "off", "aria-label": "Password" });
-    const err = el("div", { class: "unlock-err" }, info.exists ? "" : "This folder can't be found. It may have moved, or its drive isn't connected.");
+    const err = el("div", { class: "unlock-err" }, info.exists ? "" : "Can't find this memory. It may have moved, or its drive isn't connected.");
     const btn = el("button", { class: "btn primary", type: "submit" }, "Unlock");
     if (folderList.length > 1) {
       const sel = el("select", { class: "unlock-pick", "aria-label": "Folder" },
@@ -358,7 +358,7 @@ function drawUnlock() {
     };
     unlockEl._focus = () => pw.focus();
   } else {
-    kids.push(el("div", { class: "unlock-sub" }, "No locked notes folder yet. Open one you already have, or make a new one."));
+    kids.push(el("div", { class: "unlock-sub" }, "No memory yet. Open one or make a new one."));
     unlockEl._submit = (e) => e.preventDefault();
     unlockEl._focus = null;
   }
@@ -366,9 +366,9 @@ function drawUnlock() {
     const b = folderList.find((f) => f.id === backId);
     if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, `Back to ${b.name}`));
   }
-  links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open folder…"),
-    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New folder…"),
-    el("button", { class: "link-btn", type: "button", onclick: openFromCloud }, "Open from cloud…"));
+  links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open memory"),
+    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New memory"),
+    el("button", { class: "link-btn", type: "button", onclick: openFromCloud }, "Open from WebDAV"));
   kids.push(el("div", { class: "unlock-links" }, ...links));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(unlockDrag, form);
@@ -708,7 +708,8 @@ async function refreshBar() {
   try { b = await api("bar"); } catch { return; }
   barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 16, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
-  barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}. The cloud only sees encrypted files.` : "Only on this Mac.";
+  barEls.cloud.title = (b.cloudOnly ? `Stored in ${b.cloud} only` : b.cloud ? `Stored on this Mac and in ${b.cloud}` : "Stored on this Mac only")
+    + (b.backup ? `. Backed up to ${b.backup}` : "") + ". Encrypted: only you can read it, with your password.";
   const h = b.cloudHealth;   // a cloud memory whose cloud refuses saves (full): say so once, keep the icon amber
   barEls.cloud.classList.toggle("warn", !!(h && h.problem));
   if (h && h.problem) {
@@ -742,7 +743,7 @@ async function moveToCloud(info) {
   const v = await openCloud({ clouds, move: { name: info.name }, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
   if (!v) return false;
   if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-  toast(`Locking "${info.name}" and uploading its encrypted files…`);
+  toast(`Locking "${info.name}" and uploading its encrypted files`);
   await api("tocloud", { folder: info.id, conn: v.conn, parent: v.move.parent });
   toastOk(`"${info.name}" now lives in your cloud. Unlock it again to keep working.`);
   return true;
@@ -879,11 +880,11 @@ async function revealInFinder(path) {
 async function toggleFinder() {
   if (finder.shown) { hideFinder(); return; }
   if (!finder.confirmed) {
-    const ok = await confirmDialog("While the folder is open in Finder, any app on this Mac can read your notes, AI tools too. It closes when you lock.", "Show in Finder", false);
+    const ok = await confirmDialog("While it's open in Finder, any app on this Mac can read your notes, AI apps too. It closes when you lock.", "Show in Finder", false);
     if (!ok) return;
     finder.confirmed = true;
   }
-  toast("Opening Finder…");
+  toast("Opening Finder");
   finderBtn.disabled = true;
   const fid = loadedFolder;
   try {
@@ -1137,8 +1138,8 @@ function rowMenu(n, x, y) {
       { label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) },
       { label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : "Private for AI", fn: () => toggleAiPrivate(n.path) },
       { sep: true },
-      { label: "Import files…", fn: () => importInto(n.path, false) },
-      { label: "Import folder…", fn: () => importInto(n.path, true) });
+      { label: "Import files", fn: () => importInto(n.path, false) },
+      { label: "Import folder", fn: () => importInto(n.path, true) });
   } else {
     items.push({ label: "Open in new tab", fn: () => openPath(n.path) });
     items.push({ label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) });
@@ -1147,7 +1148,7 @@ function rowMenu(n, x, y) {
     items.push({ sep: true });
   }
   items.push(
-    { label: "Export…", fn: () => exportPath(n.path) },
+    { label: "Export", fn: () => exportPath(n.path) },
     { label: "Show in Finder", fn: () => revealInFinder(n.path) },
     { label: "Rename", fn: () => renameDialog(n) });
   if (folder) {
@@ -1396,10 +1397,10 @@ function makeFileTab(path) {
   const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, `Can't open this file: ${e.message}`)); };
   const tab = { path, kind: "image", make: "file", pane, dirty: false, folder: currentFolder() };
   if (tooBigToOpen(path)) {   // never pulled into the app whole: it opens from Finder, or as an exported copy
-    body.replaceChildren(el("p", { class: "file-note" }, "This file is over 25 MB, too big to open here. It stays encrypted and safe. Open it from Finder, or export a copy."),
+    body.replaceChildren(el("p", { class: "file-note" }, "Over 25 MB, too big to open here. Open it from Finder or export a copy."),
       el("div", { class: "sel-btns" },
         el("button", { class: "btn", type: "button", onclick: () => revealInFinder(path) }, "Show in Finder"),
-        el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, "Export…")));
+        el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, "Export")));
     return tab;
   }
   if (CSV.test(path) || TEXT_EXT.test(path) || /^\.[^.]/.test(baseName(path)) && !/\.(png|jpe?g|gif|webp|pdf|docx)$/i.test(path)) {
@@ -1723,7 +1724,7 @@ function renderStatus() {
   if (t && (t.kind === "note" || t.editable)) {
     if (t.err) { s = "Save failed"; cls = "bad"; }
     else if (statusFlash && statusFlash.tab === t && Date.now() < statusFlash.until) { s = statusFlash.text; cls = statusFlash.tone; }
-    else if (t.saving) s = "Saving…";
+    else if (t.saving) s = "Saving";
     else if (t.dirty) s = "Unsaved";
     else {   // "Saved" shows for a moment in green after a save, then fades away
       s = "Saved";
@@ -1972,7 +1973,7 @@ async function openAI(start, path) {
       give: async (ask) => {
         const j = await api("handtoai", { path, ask });
         navigator.clipboard.writeText("Do my Phygital Memory tasks.").catch(() => {});
-        toastOk("Added to AI tasks. Copied \u201cDo my Phygital Memory tasks.\u201d Paste it in your AI chat.");
+        toastOk("Added to AI tasks. Copied \u201cDo my Phygital Memory tasks.\u201d for your AI chat.");
         return j.todo || [];
       },
       set: async (id, done) => (await api("aitodoset", { id, done })).todo || [],
@@ -1986,7 +1987,7 @@ async function openAI(start, path) {
       undo: async (r) => {
         const j = await api("undoai", { id: r.undo, folder: r.folder });
         await syncFromDisk();
-        toastOk(j.trashed ? `Moved "${label(j.path)}" to the trash. Restore it from there if you change your mind.`
+        toastOk(j.trashed ? `Moved "${label(j.path)}" to the trash. You can restore it from there.`
                           : `"${label(j.path)}" is back as it was. The AI's version is kept in version history.`);
       },
       fail: (m) => toastErr(m),
@@ -2164,7 +2165,7 @@ function closeSearch() { if (searchEl) { searchEl.remove(); searchEl = null; } }
 function openSearch() {
   if (searchEl) { searchEl.querySelector("input").focus(); return; }
   let items = [], sel = 0, token = 0, timer = null;
-  const input = el("input", { class: "s-input", placeholder: "Search notes or jump to one…", spellcheck: "false", "aria-label": "Search" });
+  const input = el("input", { class: "s-input", placeholder: "Search notes or jump to one", spellcheck: "false", "aria-label": "Search" });
   const list = el("div", { class: "s-list" });
   const box = el("div", { class: "s-box", role: "dialog" }, el("div", { class: "s-bar" }, icon("search", 16), input), list);
   searchEl = el("div", { class: "overlay", onmousedown: (e) => { if (e.target === searchEl) closeSearch(); } }, box);

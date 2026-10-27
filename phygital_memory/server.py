@@ -545,7 +545,7 @@ async function tick() {
     const r = await fetch(location.pathname + "/state", { cache: "no-store" });
     const j = await r.json();
     if (j.next) {
-      m.textContent = "Done. Going back to the AI app… If nothing happens, ";
+      m.textContent = "Done. Going back to the AI app. If nothing happens, ";
       const a = document.createElement("a"); a.href = j.next; a.textContent = "click here"; m.append(a, ".");
       location.replace(j.next); return;
     }
@@ -738,7 +738,8 @@ async def api(request: Request) -> Response:
             st = f.memory.status() if _has_pass(request, f) else {"open": False}
             now = time.time()
             return _ok({"open": bool(st.get("open")),
-                        "cloud": "GitHub" if f.github else f.info()["cloudOnly"] or cloud_place(f.path),
+                        "cloud": f.info()["cloudOnly"] or ("WebDAV" if f.mirror_at else None) or (None if f.cloud_at else cloud_place(f.path)),
+                        "cloudOnly": bool(f.cloud_at), "backup": "GitHub" if f.github else None,
                         "cloudHealth": await asyncio.to_thread(f.drive.health) if f.drive and st.get("open") else None,
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})

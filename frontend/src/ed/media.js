@@ -154,7 +154,7 @@ export class MermaidWidget extends WidgetType {
   eq(o) { return o.code === this.code; }
   toDOM(view) {
     const wrap = document.createElement("div"); wrap.className = "md-mermaid";
-    wrap.textContent = "Drawing diagram…";
+    wrap.textContent = "Drawing diagram";
     if (this.code.length > 20000) return missing(wrap, "This diagram is too big to draw.");
     loadMermaid().then((m) => m.render(`pm-diagram-${++diagramCount}`, this.code)).then(({ svg }) => {
       const img = document.createElement("img"); img.alt = "Diagram";

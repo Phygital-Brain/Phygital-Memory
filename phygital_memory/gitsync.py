@@ -33,7 +33,7 @@ IGNORE = ".DS_Store\n._*\n.encryptor-*\n*.tmp\n"
 # Every file is scrambled: git must never merge inside one (a small one can look like text to it and get spliced).
 ATTRIBUTES = "* binary\n"
 LOST = "phygital-lost-folders.json"   # in .git: folder IDs that lost a clash, for the app to fold back in
-README_MARK = "<!-- phygital-memory-readme 4 -->"   # the app updates its own README when this goes up
+README_MARK = "<!-- phygital-memory-readme 5 -->"   # the app updates its own README when this goes up
 README = README_MARK + """
 # {name} · Phygital Memory
 
@@ -70,13 +70,13 @@ the folders nest, and when things change. Keep the repo private for that reason.
 ## Open your notes on another Mac
 
 1. Install Phygital Memory on that Mac.
-2. Open the folder menu at the top of the sidebar and choose **Open from GitHub…**.
+2. Open the folder menu at the top of the sidebar and choose **Open from GitHub**.
 3. Sign in with GitHub if the app asks, type `{repo}` and choose where to keep it.
 4. Unlock it with the folder's password.
 
-## Stop syncing, or delete this repo
+## Stop the backup, or delete this repo
 
-In the app, open **Where it's stored** and press **Stop GitHub sync…**. Your notes stay on your Mac and nothing more
+In the app, open **Where it's stored** and press **Stop backup**. Your notes stay on your Mac and nothing more
 is sent here. The app never deletes this repo. To delete it, open **Settings** on this repo's GitHub page and press
 **Delete this repository** at the bottom.
 
@@ -88,7 +88,7 @@ is sent here. The app never deletes this repo. To delete it, open **Settings** o
 - **The same note was changed on two Macs:** both versions are kept. The other one appears next to the note as
   "name (conflict date)", and your AI apps get a task to merge them.
 - **A file is over 95 MB:** GitHub doesn't take files that big, so it stays on your Mac only. The app lists it.
-- **Syncing stopped:** open **Where it's stored** in the app. It says why, for example when the repo became public.
+- **The backup stopped:** open **Where it's stored** in the app. It says why, for example when the repo became public.
 
 > [!CAUTION]
 > If the password is lost, nobody can open these notes, including you, GitHub and the app's makers. There is no

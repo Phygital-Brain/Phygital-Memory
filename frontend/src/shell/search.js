@@ -38,7 +38,7 @@ const when = (ts) => {
 
 // opts: {api(action, body), openAt(path, heading), folders() -> ["Projects", ...], recent(n) -> [paths]}
 export function createSearchView(opts) {
-  const input = el("input", { class: "sv-input", type: "search", placeholder: "Search your notes…", spellcheck: "false",
+  const input = el("input", { class: "sv-input", type: "search", placeholder: "Search your notes", spellcheck: "false",
                               "aria-label": "Search notes" });
   const within = el("select", { class: "sv-within", "aria-label": "Search inside" });
   const order = el("select", { class: "sv-order", "aria-label": "Order" },
@@ -111,7 +111,7 @@ export function createSearchView(opts) {
     const r = rows[sel];
     if (!r) { preview.replaceChildren(); return; }
     const mine = seq;
-    preview.replaceChildren(el("div", { class: "sv-loading" }, "…"));
+    preview.replaceChildren(el("div", { class: "sv-loading" }, ""));
     let full = null;
     try { full = await opts.api("result", { id: r.id }); } catch {}
     if (mine !== seq || rows[sel] !== r) return;

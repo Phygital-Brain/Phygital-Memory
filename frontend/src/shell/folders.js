@@ -49,11 +49,11 @@ export function switcherItems(ctx) {
   const cur = ctx.list.find((f) => f.id === ctx.currentId);
   const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id));
   const items = [...rows, { sep: true },
-    actionRow("plus", "New folder", ctx.createNew),
-    actionRow("folder", "Open folder", ctx.openOther),
-    ...(ctx.fromGithub ? [actionRow("cloud", "Open from GitHub…", ctx.fromGithub)] : []),
-    ...(ctx.fromCloud ? [actionRow("cloud", "Open from cloud…", ctx.fromCloud)] : []),
-    actionRow("grid", "Manage folders", ctx.manage)];
+    actionRow("plus", "New memory", ctx.createNew),
+    actionRow("folder", "Open memory", ctx.openOther),
+    ...(ctx.fromGithub ? [actionRow("cloud", "Open from GitHub", ctx.fromGithub)] : []),
+    ...(ctx.fromCloud ? [actionRow("cloud", "Open from WebDAV", ctx.fromCloud)] : []),
+    actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
       actionRow("gear", "Rename folder", ctx.rename),
@@ -89,11 +89,11 @@ export function manageFolders(list, actions) {
     if (!list.length) body.append(el("div", { class: "mf-empty" }, "No folders yet."));
     const card = el("div", { class: "dlg mf", role: "dialog" },
       el("div", { class: "dlg-title" }, "Folders"),
-      el("div", { class: "mf-hint" }, "Every folder is encrypted and has its own password. Remove only takes it off this list; nothing is deleted."),
+      el("div", { class: "mf-hint" }, "Each memory is encrypted with its own password. Remove only takes it off this list. Nothing is deleted."),
       body,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, "Open folder…"),
-        el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, "New folder…")));
+        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, "Open memory"),
+        el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, "New memory")));
     return { card };
   });
 }
@@ -113,7 +113,7 @@ export function createFolderForm(pick) {
       try { const p = await pick(); if (p) { parent = p; where.textContent = p; where.title = p; } }
       catch (e) { err.textContent = e.message; }
       choose.disabled = false;
-    } }, icon("folder", 13), "Choose…");
+    } }, icon("folder", 13), "Choose");
     const submit = () => {
       const n = name.value.trim();
       if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = "Pick a simple name (no / \\ : * ? \" < > |)."; return; }
