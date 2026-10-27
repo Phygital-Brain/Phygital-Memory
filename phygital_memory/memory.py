@@ -25,7 +25,7 @@ from .vault.tree import Entry, NotFound, Tree
 from .vault.writer import Exists, Writer, parent_and_name
 
 HERE = Path(__file__).resolve().parent
-IDLE_LOCK_SECONDS = 30 * 60
+IDLE_LOCK_SECONDS = None   # no auto-lock: a folder stays open until the person locks it or closes the app
 MAX_NOTE_BYTES = 2_000_000
 
 
@@ -45,7 +45,7 @@ def _engram_config() -> dict:
 
 
 class Memory:
-    def __init__(self, folder: Path, idle_lock: int = IDLE_LOCK_SECONDS):
+    def __init__(self, folder: Path, idle_lock: int | None = IDLE_LOCK_SECONDS):
         self.folder = Path(folder).expanduser()
         self.idle_lock = idle_lock
         self.cfg = _engram_config()
@@ -125,11 +125,10 @@ class Memory:
             if self._con is None:
                 return {"open": False, "folder": str(self.folder)}
             notes = self._con.execute("SELECT COUNT(*) FROM files").fetchone()[0]
-            left = int(self.idle_lock - (time.time() - self._last_use))
-            return {"open": True, "folder": str(self.folder), "notes": notes, "locks_in_minutes": max(0, left // 60)}
+            return {"open": True, "folder": str(self.folder), "notes": notes}
 
     def _sweep(self) -> None:
-        if self._con is not None and time.time() - self._last_use > self.idle_lock:
+        if self.idle_lock and self._con is not None and time.time() - self._last_use > self.idle_lock:
             self.lock()
 
     def _touch(self) -> None:

@@ -158,8 +158,7 @@ def status(ctx: Context) -> str:
     lines = []
     for f in folders.items.values():
         s = f.memory.status()
-        lines.append(f"{f.name}: " + (f"open, {s['notes']} notes, locks by itself in about {s['locks_in_minutes']} "
-                                      "minutes without use" if s["open"] else "locked"))
+        lines.append(f"{f.name}: " + (f"open, {s['notes']} notes" if s["open"] else "locked"))
     return "\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE})."
 
 
@@ -413,7 +412,7 @@ async def api(request: Request) -> Response:
         if action == "closeanswer":
             if not closing["asked"] or not _any_pass(request) and folders.open():
                 return _ok({"error": "Not allowed."}, 403)
-            _answer_close(int(body.get("keep") or 0))
+            _answer_close(bool(body.get("keep")))
             return _ok({"ok": True})
 
         f = folders.get(body.get("folder"))
@@ -422,7 +421,7 @@ async def api(request: Request) -> Response:
         if action == "bar":   # the small status icons at the bottom of the sidebar
             st = f.memory.status() if _has_pass(request, f) else {"open": False}
             now = time.time()
-            return _ok({"lockMinutes": st.get("locks_in_minutes") if st.get("open") else None,
+            return _ok({"open": bool(st.get("open")),
                         "cloud": cloud_place(f.path),
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})
@@ -617,7 +616,7 @@ def cloud_place(path: Path) -> str | None:
 # When the window closes while a folder is open in Finder, the page asks whether to keep it open for a while.
 # Keeping it: the window hides, and when the time is up every folder locks (Finder views close) and the app quits.
 
-closing = {"asked": False, "answer": None, "exit": False, "timer": None}
+closing = {"asked": False, "answer": None, "exit": False}
 
 
 def _finish() -> None:
@@ -625,17 +624,12 @@ def _finish() -> None:
     closing["exit"] = True
 
 
-def _answer_close(keep_minutes: int) -> None:
+def _answer_close(keep: bool) -> None:
+    """Keep open: the window hides and the app stays in the Dock with the folders open, until the person locks
+    them or quits. Otherwise everything locks and the app quits."""
     closing["asked"] = False
-    if closing["timer"]:
-        closing["timer"].cancel()
-    keep = max(0, min(keep_minutes, 12 * 60))
-    closing["answer"] = {"keep": keep}
-    if keep:
-        closing["timer"] = threading.Timer(keep * 60, _finish)
-        closing["timer"].daemon = True
-        closing["timer"].start()
-    else:
+    closing["answer"] = {"keep": 1 if keep else 0}
+    if not keep:
         _finish()
 
 
@@ -645,8 +639,8 @@ async def shell(request: Request) -> Response:
             request.headers.get("x-shell-token", ""), SHELL_TOKEN):
         return JSONResponse({"error": "Not allowed."}, status_code=403)
     action = request.path_params["action"]
-    if action == "close":
-        if any(f.finder.where() for f in folders.items.values()):
+    if action == "close":   # ask whenever something is open: lock it all, or keep it open
+        if folders.open() or any(f.finder.where() for f in folders.items.values()):
             closing.update(asked=True, answer=None, exit=False)
             return JSONResponse({"ask": True})
         _finish()
@@ -669,10 +663,8 @@ async def shell(request: Request) -> Response:
         fid = folders.add_existing(str(opener.parent))["id"]
         wanted["id"] = fid
         return JSONResponse({"id": fid})
-    if action == "reopen":   # the person came back: cancel the pending quit
-        if closing["timer"]:
-            closing["timer"].cancel()
-        closing.update(asked=False, answer=None, exit=False, timer=None)
+    if action == "reopen":   # the person came back from the Dock
+        closing.update(asked=False, answer=None, exit=False)
         return JSONResponse({"ok": True})
     return JSONResponse({"error": "Unknown."}, status_code=404)
 

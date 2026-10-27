@@ -37,7 +37,7 @@ P = j["pass"]
 c = lambda a, b=None: call(a, b, P, fid)
 
 code, j = c("status"); check("status", j.get("open") is True, j)
-code, j = c("bar"); check("status bar data", code == 200 and j.get("lockMinutes") is not None and "ai" in j, j)
+code, j = c("bar"); check("status bar data", code == 200 and j.get("open") is True and "ai" in j, j)
 code, j = c("notes"); check("notes", len(j.get("notes", [])) >= 10, j)
 code, j = c("files"); check("files with dates", any(f.get("mtime") for f in j.get("files", [])), j)
 code, j = c("read", {"path": "People/Tom-Becker.md"}); check("read", "Berlin" in j.get("text", ""), j)

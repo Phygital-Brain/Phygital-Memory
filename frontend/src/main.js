@@ -353,7 +353,7 @@ function buildApp() {
     resize.addEventListener("pointerup", up);
   });
 
-  const ib = (name, title, fn) => el("button", { class: "icon-btn", title, "aria-label": title, onclick: fn }, icon(name, 15));
+  const ib = (name, title, fn) => el("button", { class: "icon-btn", title, "aria-label": title, onclick: fn }, icon(name, 17));
   const sortBtn = ib("sort", "Sort", (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const cur = getPref("sortMode", "recent");
@@ -377,13 +377,13 @@ function buildApp() {
   treeEl.addEventListener("contextmenu", (e) => { if (e.target === treeEl) e.preventDefault(); });
 
   homeRowEl = el("div", { class: "row home-row", role: "button", tabindex: "0", title: "Home (⇧⌘H)", onclick: () => goHome() },
-    el("span", { class: "chev none" }, icon("chevron", 12, 2)), icon("home", 16), el("span", { class: "row-name" }, "Home"));
+    el("span", { class: "chev none" }, icon("chevron", 12, 2)), icon("home", 18), el("span", { class: "row-name" }, "Home"));
   homeRowEl.addEventListener("keydown", (e) => { if (e.key === "Enter") goHome(); });
   graphRowEl = el("div", { class: "row nav-graph", role: "button", tabindex: "0", title: "Graph view (⌘G)", onclick: () => openGraph() },
-    icon("graph", 16), el("span", { class: "row-name" }, "Graph"));
+    icon("graph", 18), el("span", { class: "row-name" }, "Graph"));
   graphRowEl.addEventListener("keydown", (e) => { if (e.key === "Enter") openGraph(); });
   selBarEl = el("div", { class: "sel-bar hidden" });
-  finderBtn = el("button", { class: "icon-btn hidden", title: "Show in Finder", "aria-label": "Show in Finder", onclick: toggleFinder }, icon("folder", 15));
+  finderBtn = el("button", { class: "icon-btn hidden", title: "Show in Finder", "aria-label": "Show in Finder", onclick: toggleFinder }, icon("folder", 17));
 
   sidebarEl.append(
     el("div", { class: "win-drag", "data-tauri-drag-region": "" }),   // the window buttons sit here; drag the window by it
@@ -419,10 +419,10 @@ function buildApp() {
   paneHost._empty = empty;
 
   noteTools = el("div", { class: "note-tools hidden" },
-    el("button", { class: "icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", onclick: () => editAct("undo") }, icon("undo", 16)),
-    el("button", { class: "icon-btn", title: "Redo (⇧⌘Z)", "aria-label": "Redo", onclick: () => editAct("redo") }, icon("redo", 16)),
-    el("button", { class: "icon-btn", title: "Give AI a task with this note", "aria-label": "Give AI a task", onclick: giveToAI }, icon("sparkle", 16)),
-    el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 16)));
+    el("button", { class: "icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", onclick: () => editAct("undo") }, icon("undo", 18)),
+    el("button", { class: "icon-btn", title: "Redo (⇧⌘Z)", "aria-label": "Redo", onclick: () => editAct("redo") }, icon("redo", 18)),
+    el("button", { class: "icon-btn", title: "Give AI a task with this note", "aria-label": "Give AI a task", onclick: giveToAI }, icon("sparkle", 18)),
+    el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 18)));
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
   paneHost.append(statusEl, noteTools, blPill);
 
@@ -440,7 +440,7 @@ function buildApp() {
   const searchBtn = el("label", { class: "top-search", title: "Search every note (⇧⌘F)" },
     icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
   appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl,
-    el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 15)),
+    el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 17)),
     el("span", { class: "tabbar-gap", "data-tauri-drag-region": "" }), searchBtn), paneHost));
 }
 
@@ -541,33 +541,30 @@ function openSettingsHere() {
 }
 
 // ---------- the small status icons at the bottom of the sidebar ----------
-// Lock timer (click to lock), where the folder lives (a cloud, or only this Mac), and a light for AI apps.
+// Where the folder lives (a cloud, or only this Mac), and a light for AI apps.
 let barEls = null, barTimer = null;
 function statusBar() {
   const pill = (cls, title) => el("button", { class: "sb-stat " + cls, type: "button", title });
   barEls = {
-    lock: pill("st-lock", "Lock this folder now"),
     cloud: pill("st-cloud", ""),
     ai: pill("st-ai", ""),
   };
-  barEls.lock.addEventListener("click", () => lockFolder());
   barEls.cloud.style.cursor = barEls.ai.style.cursor = "pointer";
   barEls.cloud.addEventListener("click", openStoragePanel);
   barEls.ai.addEventListener("click", () => openAI(openTasks ? "tasks" : "activity"));
-  barEls.lock.setAttribute("aria-label", "Lock this folder");
   clearInterval(barTimer);
   barTimer = setInterval(refreshBar, 15000);
   clearInterval(genTimer);
   lastGen = null;
   genTimer = setInterval(watchChanges, 3000);
   setTimeout(refreshBar, 300);
-  return el("span", { class: "sb-stats" }, barEls.lock, barEls.cloud, barEls.ai);
+  return el("span", { class: "sb-stats" }, barEls.cloud, barEls.ai);
 }
 
 // An AI app or another device changed a note: reload the open notes that have no unsaved edits.
 let genTimer = null, lastGen = null;
 async function watchChanges() {
-  if (!barEls || !barEls.lock.isConnected) return;
+  if (!barEls || !barEls.cloud.isConnected) return;
   let g;
   try { g = (await api("gen")).gen; } catch { return; }
   if (g == null) return;
@@ -577,13 +574,10 @@ async function watchChanges() {
 
 async function refreshBar() {
   watchTodo();
-  if (!barEls || !barEls.lock.isConnected) return;
+  if (!barEls || !barEls.cloud.isConnected) return;
   let b = null;
   try { b = await api("bar"); } catch { return; }
-  const mins = b.lockMinutes;
-  barEls.lock.replaceChildren(icon("lock", 13, 1.9), el("span", {}, mins == null ? "Locked" : mins < 1 ? "<1 min" : `${mins} min`));
-  barEls.lock.title = mins == null ? "Locked" : `Locks by itself in about ${mins} min without use. Click to lock now.`;
-  barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 14, 1.8));
+  barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 16, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
   barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}, encrypted. The cloud only sees scrambled files.` : "Only on this Mac.";
   aiApps = b.ai || [];
@@ -595,7 +589,7 @@ let aiApps = [], openTasks = 0;
 function drawAI() {
   if (!barEls) return;
   const recent = aiApps.filter((a) => a.ago < 120);
-  barEls.ai.replaceChildren(icon("pulse", 14, 1.8), ...(openTasks ? [el("span", { class: "ai-count" }, String(openTasks))] : []));
+  barEls.ai.replaceChildren(icon("pulse", 16, 1.8), ...(openTasks ? [el("span", { class: "ai-count" }, String(openTasks))] : []));
   barEls.ai.classList.toggle("on", recent.length > 0);
   const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
   barEls.ai.title = "AI: tasks and activity\n"
@@ -826,7 +820,7 @@ function rowFor(n, depth) {
   const folder = n.kind === "folder";
   const cur = state.active && state.active.path === n.path;
   const open = state.open.has(n.path);
-  const ic = folder ? icon("folder", 16) : icon(isImg(n.name) ? "image" : "file", 16);
+  const ic = folder ? icon("folder", 18) : icon(isImg(n.name) ? "image" : "file", 18);
   if (folder) ic.style.color = folderColor(n.path);
   const pinned = getPref("pins", []).includes(n.path);
   const more = el("button", { class: "row-more", title: "More", "aria-label": "More", onclick: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); rowMenu(n, r.left, r.bottom + 4); } }, icon("more", 15));
@@ -2018,7 +2012,7 @@ async function answerClose() {
     for (const id of [...folderList.map((f) => f.id), ...views.keys()]) lockedLocally(id);
     showUnlock();
   } else {
-    toastOk(`Notes stay open in Finder for ${keep >= 60 ? (keep / 60) + (keep === 60 ? " hour" : " hours") : keep + " min"}. Then everything locks and the app quits.`);
+    toastOk("Your notes stay open. The app keeps running in the Dock until you lock or quit it.");
   }
 }
 
