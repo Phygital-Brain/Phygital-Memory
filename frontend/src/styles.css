@@ -680,16 +680,16 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 /* Phygital Key: the short "sealed" moment after a signed yes */
 .pk-seal { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; pointer-events: none; }
 .pk-card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 28px 18px; border-radius: var(--r-l);
-  background: var(--bg-surface); border: 1px solid var(--border); box-shadow: var(--shadow); animation: pk-card 1.5s var(--ease) both; }
+  background: var(--bg-surface); border: 1px solid var(--border); box-shadow: var(--shadow); animation: pk-card 6s var(--ease) both; }
 .pk-lock { width: 176px; height: 64px; overflow: visible; }
 .pk-lock * { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .pk-body { fill: var(--accent-soft); }
-.pk-wire { stroke-width: 2; stroke-dasharray: 60; stroke-dashoffset: 60; animation: pk-wire 1.6s var(--ease) both; }
-.pk-node { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; animation: pk-node 1.6s var(--ease) both; }
-.pk-dot { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; animation: pk-dot 1.6s var(--ease) both; }
-.pk-shackle { animation: pk-shackle 1.6s var(--ease) both; }
+.pk-wire { stroke-width: 2; stroke-dasharray: 60; stroke-dashoffset: 60; animation: pk-wire 6.4s var(--ease) both; }
+.pk-node { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; animation: pk-node 6.4s var(--ease) both; }
+.pk-dot { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; animation: pk-dot 6.4s var(--ease) both; }
+.pk-shackle { animation: pk-shackle 6.4s var(--ease) both; }
 .pk-ring { stroke-width: 2; stroke-dasharray: 183; stroke-dashoffset: 183; transform: rotate(-90deg); transform-box: fill-box; transform-origin: center;
-  animation: pk-ring 1.6s var(--ease) both; }
+  animation: pk-ring 6.4s var(--ease) both; }
 .pk-text { font: 500 12.5px/1 var(--font-mono); color: var(--text-2); letter-spacing: .02em; white-space: pre; }
 @keyframes pk-card { 0% { opacity: 0; transform: scale(.94); } 10% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 0; transform: scale(.98); } }
 @keyframes pk-node { 0% { transform: scale(0); } 8% { transform: scale(1.3); } 14%, 34% { transform: scale(1); } 40% { transform: scale(1.4); } 48%, 100% { transform: scale(1); } }

@@ -470,6 +470,7 @@ async function unlockCurrent(password, touchid = false) {
   setPass(j.pass, fid);
   touchTried.add(fid);   // locked by hand later: don't ask by itself again
   await enterApp();
+  sealAnimation();   // opened (a new memory opens here too)
 }
 const TOUCH = {};             // unlockCurrent(TOUCH): open with Touch ID instead of a password
 const touchTried = new Set(); // memories whose Touch ID ask already came up by itself since the app opened
@@ -510,6 +511,7 @@ function drawUnlock() {
             setPass(j.pass, info.id);
             touchTried.add(info.id);
             await enterApp();
+            sealAnimation();   // a shared memory opened with your own key (also the first time, right after you're let in)
             if (j.role === "view") toast("View only: you can read it, not change it.");
           }
         } catch (x) { err.textContent = x.message; }
@@ -895,6 +897,7 @@ async function watchAllow() {
     const v = await allowDialog(req.name, folders);
     try {
       await api("allowanswer", { id: req.id, ...v });
+      if (v.allow) sealAnimation();
       if (v.allow) toastOk(`“${req.name}” can use your notes now. Change it any time in Settings › AI apps.`);
       document.dispatchEvent(new Event("ai-apps-changed"));
     } catch (e) { toastErr(e.message); }
@@ -1398,8 +1401,9 @@ async function setUpApprover(chip) {
   } catch (e) { toastErr(e.message); return false; }
 }
 
-// A short "sealed" moment after a signed yes: wires run in from you and from them, the lock between closes, a ring
-// draws round it and scrambled characters settle into the app's name. Under two seconds; a plain fade with motion turned down.
+// The "sealed" moment: wires run in from both sides, the lock between closes, a ring draws round it and scrambled
+// characters settle into the app's name, slowly (about six seconds; it never blocks a click). Plays after a signed
+// sharing yes, an unlock, being let in, allowing an AI app and making a new memory. A plain fade with motion turned down.
 function sealAnimation() {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -1420,13 +1424,13 @@ function sealAnimation() {
   const start = performance.now();
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tick = (now) => {
-    const k = still ? 1 : Math.min(1, (now - start - 500) / 450);   // letters settle left to right, once wired
+    const k = still ? 1 : Math.min(1, (now - start - 2000) / 1800);   // letters settle left to right, once wired
     text.textContent = [...words].map((c, i) => c === " " || i / words.length < k ? c
       : glyphs[(Math.random() * glyphs.length) | 0]).join("");
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
-  setTimeout(() => box.remove(), still ? 900 : 1600);
+  setTimeout(() => box.remove(), still ? 900 : 6400);
 }
 
 const SIGNED_ACTIONS = new Set(["shareanswer", "shareadd", "shareremove", "sharerole", "sharestop", "shareforget"]);
