@@ -81,11 +81,11 @@ export function openStorage(ctx) {
       el("div", { class: "set-section" }, "Backup"),
       option("lock", "GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB.",
         !!s.github, el("div", { class: "st-gh-note" }, "Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup."), github),
-      option("cloud", "S3 or R2", "An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size.",
+      option("cloud", "Amazon S3 or Cloudflare R2", "An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size.",
         !!s.s3, s.s3
           ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
               el("div", {}, btn("Stop backup", () => run(ctx.stopS3, "changed"), "st-stop")))
-          : el("div", {}, btn("Back up to S3 or R2", () => run(ctx.toS3, "changed")))),
+          : el("div", {}, btn("Back up to Amazon S3 or Cloudflare R2", () => run(ctx.toS3, "changed")))),
       option("file", "Backup file", "One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file.",
         false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null)))),
       el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
@@ -482,7 +482,7 @@ export function openS3(ctx) {
     let kind = "s3";
     const err = el("div", { class: "dlg-err" });
     const body = el("div", { class: "cl-body" });
-    const title = el("div", { class: "dlg-title" }, ctx.restore ? "Open from S3 or R2" : "Back up to S3 or R2");
+    const title = el("div", { class: "dlg-title" }, ctx.restore ? "Open from Amazon S3 or Cloudflare R2" : "Back up to Amazon S3 or Cloudflare R2");
     const actions = el("div", { class: "dlg-actions" });
     const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
     const busy = (b) => card.classList.toggle("busy", b);

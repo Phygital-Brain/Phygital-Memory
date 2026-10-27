@@ -886,7 +886,7 @@ async function openStoragePanel() {
       return true;
     },
     stopS3: async () => {
-      if (!await confirmDialog("Stop the S3 / R2 backup?", "Stop backup", true, "Your notes don't change. What's in the bucket stays until you delete it there.")) return false;
+      if (!await confirmDialog("Stop the Amazon S3 or Cloudflare R2 backup?", "Stop backup", true, "Your notes don't change. What's in the bucket stays until you delete it there.")) return false;
       await api("stops3");
       return true;
     },

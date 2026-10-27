@@ -54,7 +54,7 @@ export function switcherItems(ctx) {
       { label: "From this Mac", fn: ctx.openOther },
       ...(ctx.fromGithub ? [{ label: "From GitHub", fn: ctx.fromGithub }] : []),
       ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : []),
-      ...(ctx.fromS3 ? [{ label: "From S3 or R2", fn: ctx.fromS3 }] : []),
+      ...(ctx.fromS3 ? [{ label: "From Amazon S3 or Cloudflare R2", fn: ctx.fromS3 }] : []),
       ...(ctx.fromBackup ? [{ label: "From a backup file", fn: ctx.fromBackup }] : [])] },
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
