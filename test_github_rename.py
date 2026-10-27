@@ -34,7 +34,7 @@ check(repo_name("Work Phygital Memory") == "Work-Phygital-Memory", "nor one endi
 check(repo_name("My Notes") == "My-Notes-Phygital-Memory", "other names get -Phygital-Memory")
 
 
-def use_test_repo(self):
+def use_test_repo(self, reuse=None):
     self.repo = self.state["repo"] = f"{ME}/{TEST}"
     self.prepare(self.folder.name)
     self.git("init", "-b", self.branch)

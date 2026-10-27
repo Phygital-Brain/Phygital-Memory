@@ -29,7 +29,7 @@ def check(cond, what, info=""):
     print(("PASS " if cond else "FAIL ") + what + (f"  ({info})" if info and not cond else ""))
 
 
-def use_test_repo(self):   # instead of making a new repo: the test repo, on a fresh branch
+def use_test_repo(self, reuse=None):   # instead of making a new repo: the test repo, on a fresh branch
     self.repo = self.state["repo"] = REPO
     self.prepare(self.folder.name)
     self.git("init", "-b", self.branch)
