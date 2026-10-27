@@ -23,7 +23,8 @@
       "icons/icon.icns"
     ],
     "externalBin": [
-      "binaries/phygital-memory-server"
+      "binaries/phygital-memory-server",
+      "binaries/rclone"
     ]
   }
 }
