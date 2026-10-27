@@ -24,6 +24,8 @@ check(api("status").get("open") is True, "Keep open: the folder stays unlocked")
 state = os.environ["ST"]
 check(os.path.exists(state + "/close.json"), "Keep open is saved")
 sh("reopen"); r = sh("close"); check(r.get("ask") is False and r.get("keep") is True, "closing again within 72 h doesn't ask")
+sh("reopen"); r = post("/shell/close", {"quit": True}, {"x-shell-token": T}); check(r.get("ask") is True, "quitting asks even while Keep open is remembered")
+post("/api/closeanswer", {"keep": True})
 os.remove(state + "/close.json"); sh("reopen")
 r = sh("close"); check(r.get("ask") is True, "after 72 h (file gone) it asks again")
 post("/api/closeanswer", {"keep": False}); check(sh("should-exit").get("exit") is True, "Lock all: the app may quit")

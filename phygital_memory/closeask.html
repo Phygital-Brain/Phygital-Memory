@@ -27,7 +27,7 @@
 </head>
 <body>
 <main data-tauri-drag-region>
-  <h1>Lock your notes before closing?</h1>
+  <h1 id="title">Lock your notes before closing?</h1>
   <p><b>Lock all</b>: everything locks and the app quits. <b>Keep open</b>: your AI apps can still reach your notes,
      and the app stays in the Dock. Keep open is remembered for 3 days.</p>
   <div class="buttons">
@@ -47,7 +47,10 @@
       await fetch("/api/closeanswer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep }) });
     } catch {}
   }
-  window.startAsk = () => {
+  window.startAsk = (mode) => {   // mode "quit": Keep open cancels the quit
+    const quit = mode === "quit";
+    document.getElementById("title").textContent = quit ? "Quit Phygital Memory?" : "Lock your notes before closing?";
+    document.getElementById("lock").textContent = quit ? "Lock all and quit" : "Lock all and close";
     left = WAIT; draw(); clearInterval(timer);
     timer = setInterval(() => { left -= 1; if (left <= 0) answer(false); else draw(); }, 1000);
     document.getElementById("lock").focus();

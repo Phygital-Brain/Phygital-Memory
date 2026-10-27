@@ -657,8 +657,12 @@ async def shell(request: Request) -> Response:
         return JSONResponse({"error": "Not allowed."}, status_code=403)
     action = request.path_params["action"]
     if action == "close":   # ask whenever something is open: lock it all, or keep it open
+        try:
+            quitting = bool((await request.json()).get("quit"))
+        except Exception:
+            quitting = False
         if folders.open() or any(f.finder.where() for f in folders.items.values()):
-            if _keep_remembered():   # "Keep open" chosen in the last 72 hours: don't ask again
+            if not quitting and _keep_remembered():   # closing, with "Keep open" chosen in the last 72 hours
                 closing.update(answer={"keep": 1}, exit=False)
                 return JSONResponse({"ask": False, "keep": True})
             closing.update(asked=True, answer=None, exit=False)
