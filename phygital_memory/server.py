@@ -39,7 +39,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, keychain, pka, shares, sharing, touchid
+from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, keychain, linking, pka, shares, sharing, touchid
 from .syncthing import Syncthing, proof as st_proof
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
@@ -644,11 +644,13 @@ def _ok(data, status=200):
     return JSONResponse(data, status_code=status, headers=HEADERS)
 
 
-async def _approved(body: dict, request: dict, words: str):
+async def _approved(body: dict, request: dict, words: str, out: dict | None = None):
     """None once the person signed this exact request with their own key (Phygital Key format); otherwise what the
-    page must do next: set up a key, ask for the approval password, or say it wasn't approved."""
+    page must do next: set up a key, ask for the approval password, or say it wasn't approved. out gets the signed yes."""
     try:
-        await asyncio.to_thread(pka.approve, request, words, body.get("approverPassword"))
+        approval = await asyncio.to_thread(pka.approve, request, words, body.get("approverPassword"))
+        if out is not None:
+            out["approval"] = approval
         return None
     except pka.NotSetUp:
         return _ok({"error": "Choose how you approve sharing first.", "needApprover": True,
@@ -772,6 +774,10 @@ def _st_watch() -> None:
                             st.share_folder(qid, dev)
                             inv[code]["devs"] = sorted(set(inv[code].get("devs", [])) | {dev})
                             _st_save_invites({**_st_invites(), code: inv[code]})
+                try:
+                    _st_links()
+                except Exception:
+                    pass   # linking trouble never holds up sharing
                 _st_drop_removed()   # first, so a share replaced by a fresh one doesn't come in as "name 2"
                 _st_take_offers()
                 _st_finish_unshares()
@@ -955,6 +961,121 @@ def _st_drop_removed() -> None:
         approvals.add("Removed by the owner: copy deleted", x.name, "owner")
 
 
+LINK_IN = STATE / "link-incoming.json"   # memories coming from your other Mac: listed once their files are here
+LINK_DONE = STATE / "link-done.json"     # link folders to delete once the other Mac has the answer
+
+
+_link_lock = threading.Lock()   # LINK_IN and LINK_DONE are changed by the watch loop and by requests
+
+
+def _json_list(p: Path) -> list:
+    try:
+        d = json.loads(p.read_text())
+        return d if isinstance(d, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _json_add(p: Path, items: list) -> None:
+    with _link_lock:
+        STATE.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(_json_list(p) + items))
+
+
+def _st_links() -> None:
+    """Linking your other Mac (linking.py). First Mac: a computer whose name proves it has the link code is let in,
+    with only the link's own small folder. Other Mac: memories from the first Mac join the list once they're here."""
+    code = linking.offered()
+    if code:
+        fid = linking.folder_id(code)
+        if not st.has_folder(fid):   # only the first computer with the code gets in: nobody can slip in after it
+            for dev, info in (st.pending_devices() or {}).items():
+                name = str(info.get("name", ""))
+                if name.startswith("pm-link ") and hmac_eq(st_proof(code, dev), name.split(" ", 1)[1]):
+                    st.add_device(dev, "Linking", "dynamic")
+                    st.add_folder(fid, linking.LINKS / fid, "Link", [dev])
+                    break
+            else:
+                for pfid, info in (st.pending_folders() or {}).items():   # a Mac this one already knows
+                    if pfid == fid and (by := list(info.get("offeredBy") or {})):
+                        st.add_folder(fid, linking.LINKS / fid, "Link", by[:1])
+                        break
+    left, was = [], _json_list(LINK_DONE)
+    for d in was:   # the other Mac has the answer (or never came back): the link folder goes
+        try:
+            c = st.rest("GET", f"/rest/db/completion?folder={d['folder']}&device={d['device']}")
+            done = c.get("remoteState") == "notSharing" or c.get("completion") == 100 and d["device"] in st.connected()
+        except Exception:
+            done = False
+        if done and time.time() - d["since"] > 10 or time.time() - d["since"] > 86400:
+            st.remove_folder(d["folder"])
+            shutil.rmtree(linking.LINKS / d["folder"], ignore_errors=True)
+        else:
+            left.append(d)
+    if left != was:
+        with _link_lock:   # entries added meanwhile stay
+            LINK_DONE.write_text(json.dumps(left + [d for d in _json_list(LINK_DONE) if d not in was]))
+    todo = _json_list(LINK_IN)
+    if not todo:
+        return
+    still = []
+    for m in todo:
+        p = Path(m["path"])
+        if not is_vault(p):
+            still.append(m)
+            continue
+        with folders._lock:
+            if not any(x.path == p for x in folders.items.values()):
+                j = folders._add(p, m["name"])
+                j.syncthing = m["folder"]
+                folders._save()
+    with _link_lock:
+        LINK_IN.write_text(json.dumps(still + [m for m in _json_list(LINK_IN) if m not in todo]))
+
+
+_link_wait = asyncio.Lock()   # one linkwait at a time: a slow one never runs twice
+
+
+async def _link_wait_step(body: dict):
+    w = linking.waiting()
+    if not w:
+        return _ok({"state": "none"})
+    a = await asyncio.to_thread(linking.answer_in)
+    if not a:
+        return _ok({"state": "waiting", "words": w["words"]})
+    if shares._all() or _st_invites() or any(x.joined for x in folders.items.values()):   # started sharing meanwhile
+        return _ok({"error": "This Mac started sharing with its own key while waiting. Link it before sharing anything on it."}, 400)
+    await asyncio.to_thread(linking.take_identity, a)
+    parent = Path(body.get("parent") or Path.home())
+    have = {sharing._vault_id(x.path) for x in folders.items.values() if is_vault(x.path)}
+    todo = []
+    for m in a["memories"]:
+        fid = "pm-" + m["vault"]
+        if m["vault"] in have or st.has_folder(fid):
+            continue
+        name = re.sub(r'[/\\:*?"<>|]', "-", str(m["name"])).strip().lstrip(".").strip()[:60] or "Memory"
+        target, n = parent / name, 1
+        while target.exists():
+            n += 1
+            target = parent / f"{name} {n}"
+        await asyncio.to_thread(st.add_folder, fid, target, name, [w["owner"]])
+        todo.append({"folder": fid, "path": str(target), "name": name})
+    _json_add(LINK_IN, todo)
+    fid = linking.folder_id(linking._wait["code"])
+    await asyncio.to_thread(st.remove_folder, fid)
+    shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
+    await asyncio.to_thread(st.set_name, linking.computer_name())
+    await asyncio.to_thread(st.rest, "PATCH", f"/rest/config/devices/{w['owner']}", {"name": a["from"]["name"][:40]})
+    linking.done_waiting()
+    approvals.add("Linked to your other Mac", a["from"]["name"][:40], "the other Mac's yes")
+    return _ok({"state": "done", "from": a["from"]["name"][:40], "memories": [m["name"] for m in a["memories"]]})
+
+
+def _linkable() -> list:
+    """Memories that can go to your other Mac: your own, with their files on this Mac."""
+    return [x for x in folders.items.values() if not x.joined and not x.cloud_at and is_vault(x.path)]
+
+
 PEOPLE = STATE / "people.json"   # everyone ever let in (names, public keys, computers; nothing secret)
 
 
@@ -1124,7 +1245,7 @@ def hmac_eq(a: str, b: str) -> bool:
 
 def _st_resume() -> None:
     """Memories shared before keep syncing after a restart (the person chose it; nothing starts otherwise)."""
-    if any(x.syncthing for x in folders.items.values()) or shares._all():
+    if any(x.syncthing for x in folders.items.values()) or shares._all() or _json_list(LINK_IN):
         try:
             st.start()
             _st_watch()
@@ -1316,6 +1437,103 @@ async def api(request: Request) -> Response:
             start = start if any(p["path"] == start for p in cloud_places()) else str(Path.home())
             path = await asyncio.to_thread(pick_folder, body.get("prompt") or "Choose a folder", start)
             return _ok({"path": path})
+        # ---- linking your other Mac (linking.py) ----
+        if action == "linkstart":   # this Mac: a one-time link to paste on the other Mac
+            await asyncio.to_thread(st.start)
+            link = linking.start(await asyncio.to_thread(st.device_id), st.address())
+            _st_watch()
+            return _ok({"link": link, "minutes": linking.LIFE // 60})
+        if action == "linkcancel":   # nothing of an unfinished link stays behind, on either Mac
+            code, w = linking.offered(), linking.waiting()
+            linking.cancel()
+            if code and st.running():
+                fid = linking.folder_id(code)
+                try:
+                    devs = [d["deviceID"] for d in (await asyncio.to_thread(st.rest, "GET", f"/rest/config/folders/{fid}"))["devices"]]
+                except Exception:
+                    devs = []
+                await asyncio.to_thread(st.remove_folder, fid)
+                shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
+                for d in devs:
+                    if d != await asyncio.to_thread(st.device_id) and d not in linking.macs():
+                        await asyncio.to_thread(st.remove_device, d)
+            if w and st.running():
+                fid = linking.folder_id(linking._wait["code"])
+                await asyncio.to_thread(st.remove_folder, fid)
+                shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
+                await asyncio.to_thread(st.set_name, linking.computer_name())
+                if w["owner"] not in linking.macs():
+                    await asyncio.to_thread(st.remove_device, w["owner"])
+            linking.done_waiting()
+            return _ok({"ok": True})
+        if action == "linkstatus":   # polled while the link window is open
+            if not linking.offered():
+                return _ok({"state": "expired"})
+            r = await asyncio.to_thread(linking.request_in)
+            if r and (code := linking.offered()):
+                fid = linking.folder_id(code)
+                try:
+                    devs = {d["deviceID"] for d in (await asyncio.to_thread(st.rest, "GET", f"/rest/config/folders/{fid}"))["devices"]}
+                except Exception:
+                    devs = set()
+                if r["device"] not in devs:   # it must be the computer that brought the request
+                    r = None
+            if not r:
+                return _ok({"state": "waiting"})
+            return _ok({"state": "asking", "name": r["name"], "words": r["words"], "seen": r["seen"],
+                        "memories": [{"id": x.id, "name": x.name} for x in _linkable()]})
+        if action == "linkanswer":   # Link pressed: signed, then the personal key goes, locked to the other Mac
+            r = await asyncio.to_thread(linking.request_in)
+            if not r:
+                return _ok({"error": "The other Mac's request isn't here (or the link ran out). Start again."}, 400)
+            if not hmac_eq(str(body.get("seen", "")), r["seen"]):   # it changed after the words were shown: refused
+                return _ok({"error": "The request changed after the safety words were shown. Close this and start again."}, 409)
+            picked = [x for x in _linkable() if x.id in set(body.get("memories") or [])]
+            mems = [{"vault": sharing._vault_id(x.path), "name": x.name} for x in picked]
+            out: dict = {}
+            if (need := await _approved(body, linking.approval_request(r, mems),
+                                        f"link {_plain(r['name'])} as your own Mac (safety words: {r['words']})", out)):
+                return need
+            if not (code := linking.offered()):
+                return _ok({"error": "This link ran out. Start again."}, 400)
+            fid = linking.folder_id(code)
+            for x in picked:   # the memory's own encrypted files, straight to the other Mac
+                await asyncio.to_thread(st.share_folder, await asyncio.to_thread(_st_ensure, x), r["device"])
+            await asyncio.to_thread(st.rest, "PATCH", f"/rest/config/devices/{r['device']}", {"name": r["name"]})
+            await asyncio.to_thread(linking.answer, r, mems, out["approval"], await asyncio.to_thread(st.device_id),
+                                    linking.computer_name())
+            _json_add(LINK_DONE, [{"folder": fid, "device": r["device"], "since": time.time()}])
+            approvals.add("Linked your Mac", r["name"], "your approval key")
+            return _ok({"ok": True, "name": r["name"], "memories": len(mems)})
+        if action == "linkjoin":   # the other Mac: paste the link, then wait for the first Mac's yes
+            try:
+                lk = linking.parse(str(body.get("link", "")))
+            except ValueError as e:
+                return _ok({"error": str(e)}, 400)
+            if shares._all() or any(x.joined for x in folders.items.values()):
+                return _ok({"error": "This Mac already shares with its own key. Link it before sharing anything on it."}, 400)
+            if not pka.card():   # its own approval key first: the first Mac's yes names it
+                return _ok({"error": "Choose how this Mac approves sharing first.", "needApprover": True,
+                            "chip": await asyncio.to_thread(pka.chip_available)}, 400)
+            me = await asyncio.to_thread(st.device_id)
+            if lk["device"] == me:
+                return _ok({"error": "That link is from this Mac. Paste it on your other Mac."}, 400)
+            r = linking.make_request(lk, me, pka.public(pka.card()))
+            fid = linking.folder_id(lk["code"])
+            await asyncio.to_thread(st.set_name, "pm-link " + st_proof(lk["code"], me))
+            await asyncio.to_thread(st.add_device, lk["device"], "Your other Mac", lk["address"])
+            await asyncio.to_thread(st.add_folder, fid, linking.LINKS / fid, "Link", [lk["device"]])
+            tmp = linking.LINKS / fid / ".request.tmp"
+            tmp.write_text(json.dumps(r))
+            os.replace(tmp, linking.LINKS / fid / "request.json")
+            _st_watch()
+            return _ok({"words": linking.waiting()["words"]})
+        if action == "linkwait":   # polled by the other Mac until the answer is here
+            async with _link_wait:
+                return await _link_wait_step(body)
+        if action == "mymacs":
+            return _ok({"macs": [{"device": d, "name": i.get("name", "Mac"), "linked": i.get("linked")}
+                                 for d, i in linking.macs().items()], "here": linking.computer_name()})
         if action == "joinshared":   # an invite: find the shared files (a folder here, or a memory already added from
             link = str(body.get("link", ""))   # WebDAV), then leave a request there for the owner to say yes to
             if not sharing.saved_name():

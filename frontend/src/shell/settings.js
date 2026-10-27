@@ -77,6 +77,8 @@ export function openSettings(folderOpts, me) {
     const name = el("input", { class: "dlg-input set-name", value: me.name || "", maxlength: "60", spellcheck: "false", "aria-label": "Your name" });
     name.addEventListener("change", async () => { name.value = await me.set(name.value.trim()); });
     rows.push(section("Sharing"), row("Your name", null, name, "What others see when you share a memory with them or join one."));
+    if (me.macs) rows.push(row("Your Macs", me.macs.list.length ? "Linked: " + me.macs.list.map((m) => m.name).join(", ") : "Only this Mac.",
+      btn("Link a Mac", me.macs.link), "Your other Mac becomes you too: the memories you pick sync between your Macs, still locked with the same password."));
     if (me.approver) {
       const a = me.approver;
       rows.push(row("Approve sharing with", a.label, a.setUp ? btn("Set up", a.setUp) : null,

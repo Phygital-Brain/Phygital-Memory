@@ -1,5 +1,6 @@
 import { openAddFiles } from "./shell/addfiles.js";
 import { openShare, joinDialog } from "./shell/share.js";
+import { linkMacDialog, joinMacDialog } from "./shell/link.js";
 import { api, uploadStream, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
 import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
 import { docxEditor } from "./shell/docxedit.js";
@@ -226,7 +227,8 @@ async function pickFolder(prompt, start) {
 function openMenuItems() {
   return [{ label: "From this Mac", fn: openOtherFolder }, { label: "From GitHub", fn: openFromGithub },
     { label: "From WebDAV", fn: openFromCloud }, { label: "From Amazon S3 or Cloudflare R2", fn: openFromS3 },
-    { label: "From a backup file", fn: openFromBackup }, { label: "From an invite", fn: joinFromInvite }];
+    { label: "From a backup file", fn: openFromBackup }, { label: "From an invite", fn: joinFromInvite },
+    { label: "From my other Mac", fn: joinOtherMac }];
 }
 
 // A backup back in: a zip the app saved, or a memory's masterkey.cryptomator file. The Mac's chooser picks it.
@@ -351,6 +353,27 @@ async function openShareHere(path = null) {
 }
 
 // An invite: find the shared files on this side, then ask the owner to let you in.
+// Linking your other Mac: this Mac shows the link (Settings), the other one pastes it (Open memory › From my other Mac).
+async function linkOtherMac() {
+  const r = await linkMacDialog({
+    start: () => api("linkstart"), status: () => api("linkstatus"), cancel: () => api("linkcancel").catch(() => {}),
+    answer: (memories, seen) => shareApi("linkanswer", { memories, seen }),
+  });
+  if (r) toastOk(`"${r.name}" is linked.` + (r.memories ? " Your memories go to it while both Macs are on." : ""));
+}
+
+async function joinOtherMac() {
+  const r = await joinMacDialog({ join: (link) => shareApi("linkjoin", { link }), wait: () => api("linkwait") });
+  if (!r) { api("linkcancel").catch(() => {}); return; }
+  toastOk(`Linked to "${r.from}".` + (r.memories.length ? ` ${r.memories.join(", ")} will show up once the files are here. Open with the same password.` : ""));
+  const before = new Set(folderList.map((f) => f.id));
+  const t = setInterval(async () => {   // the first memory to arrive opens at its unlock page
+    const f = (await refreshFolders()).find((x) => !before.has(x.id) && !x.joined);
+    if (f) { clearInterval(t); await switchTo(f.id); }
+  }, 5000);
+  setTimeout(() => clearInterval(t), 10 * 60000);
+}
+
 async function joinFromInvite() {
   if (!(await ensureName())) return;
   const v = await joinDialog();
@@ -593,7 +616,7 @@ async function openSwitcher() {
   await refreshFolders();
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
-  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite,
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite, fromMac: joinOtherMac,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
     ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
@@ -826,6 +849,7 @@ async function openSettingsHere() {
     const ap = await api("approverinfo");
     me.approver = { label: !ap.set ? "Not set up yet" : ap.kind === "chip" ? "Touch ID (security chip)" : "Approval password",
       signed: ap.signed, setUp: ap.set ? null : () => setUpApprover(ap.chip) };
+    me.macs = { list: (await api("mymacs")).macs, link: linkOtherMac };
   } catch {}
   openSettings(info && unlocked(info.id) ? {
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {

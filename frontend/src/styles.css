@@ -647,6 +647,9 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .rk-input { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
 .unlock-recover { font-size: 12px; }
 .dlg-err.ok { color: var(--success); }
+.dlg .link-box { width: 100%; box-sizing: border-box; margin: 6px 0; }
+.link-words { margin: 8px 0 10px; font-size: 18px; font-weight: 600; letter-spacing: .01em; }
+.link-mem { display: flex; gap: 6px; align-items: center; font-size: 13px; margin: 3px 0; }
 .row-check { width: 14px; height: 14px; flex: none; display: grid; place-items: center; border: 1.5px solid var(--text-faint); border-radius: 4px; margin-right: 2px; }
 .row-check.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .sel-bar .btn:disabled { opacity: .4; }

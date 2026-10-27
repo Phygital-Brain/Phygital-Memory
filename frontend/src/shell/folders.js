@@ -57,7 +57,8 @@ export function switcherItems(ctx) {
       ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : []),
       ...(ctx.fromS3 ? [{ label: "From Amazon S3 or Cloudflare R2", fn: ctx.fromS3 }] : []),
       ...(ctx.fromBackup ? [{ label: "From a backup file", fn: ctx.fromBackup }] : []),
-      ...(ctx.fromInvite ? [{ label: "From an invite", fn: ctx.fromInvite }] : [])] },
+      ...(ctx.fromInvite ? [{ label: "From an invite", fn: ctx.fromInvite }] : []),
+      ...(ctx.fromMac ? [{ label: "From my other Mac", fn: ctx.fromMac }] : [])] },
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
