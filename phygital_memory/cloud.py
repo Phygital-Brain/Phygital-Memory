@@ -182,6 +182,16 @@ def upload(conn: dict, src: Path, path: str) -> None:
         raise CloudError("Not every file arrived in the cloud, so nothing was moved. Try again.")
 
 
+def download(conn: dict, path: str, dest: Path) -> None:
+    """Copy a memory (encrypted files only) down from the cloud into dest, then check every file arrived."""
+    skip = ["--exclude", ".DS_Store", "--exclude", "._*"]
+    _run(conn, "copy", _remote(path), str(dest), *skip, "--transfers", "8", timeout=24 * 3600)
+    try:
+        _run(conn, "check", _remote(path), str(dest), "--one-way", "--size-only", *skip, timeout=3600)
+    except CloudError:
+        raise CloudError("Not every file came down from the cloud, so nothing was moved. Try again.")
+
+
 def remove_folder(conn: dict, path: str) -> None:
     try:
         _run(conn, "purge", _remote(path), timeout=3600)

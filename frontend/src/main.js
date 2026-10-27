@@ -769,6 +769,15 @@ async function openStoragePanel() {
       refreshBar();
       return true;
     },
+    toMac: async (parent, label) => {
+      const sure = await confirmDialog(`Move "${info.name}" from ${info.cloudOnly} to ${label}? It locks first, so only encrypted files come down. The copy in ${info.cloudOnly} stays there until you delete it.`, `Move to ${label}`, false);
+      if (!sure) return false;
+      if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+      toast("Bringing the encrypted files down…");
+      await api("tomac", { parent });
+      toastOk(`Moved to ${label}. Unlock it again to keep working.`);
+      return true;
+    },
     download: async () => { const j = await api("download"); toastOk(`Asked your cloud app for ${j.asked} file${j.asked === 1 ? "" : "s"}. They download in the background.`); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     move: async (parent, label) => {

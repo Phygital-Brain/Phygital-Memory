@@ -283,6 +283,36 @@ class Folders:
             self._save()
         return moved.info()
 
+    def to_mac(self, fid: str, parent: str) -> dict:
+        """Bring a cloud-only memory onto this Mac (a plain place, or a folder a cloud app syncs): it locks, its
+        encrypted files come down and are checked, and it opens from the Mac from now on. The cloud copy stays where
+        it was, for the person to delete there."""
+        f = self.get(fid)
+        if not f.cloud_at:
+            raise ValueError("This memory is already on this Mac.")
+        f.lock()
+        if f.drive and f.drive.left:
+            raise ValueError(f"Some saves haven't reached {cloud.label(f.cloud_at)} yet. Unlock it when there's room "
+                             "so they go up, then try again.")
+        name = Path(f.cloud_at["path"]).name or f.name
+        dest = Path(parent).expanduser() / name
+        if dest.exists():
+            raise ValueError(f"There's already a \"{name}\" there. Choose another place.")
+        dest.mkdir(parents=True)
+        try:
+            cloud.download({k: f.cloud_at[k] for k in ("kind", "url", "user")}, f.cloud_at["path"], dest)
+            if not is_vault(dest):
+                raise ValueError("What came down isn't a whole memory, so nothing was moved.")
+        except Exception:
+            shutil.rmtree(dest, ignore_errors=True)   # only the half-copied folder this move just made
+            raise
+        with self._lock:
+            moved = Folder(f.id, f.name, dest)
+            moved.ai_hidden = f.ai_hidden
+            self.items[fid] = moved
+            self._save()
+        return {**moved.info(), "cloudCopy": cloud.where(f.cloud_at, f.cloud_at["path"])}
+
     # ---------- a private GitHub repo ----------
 
     def to_github(self, fid: str, reuse: str | None = None) -> dict:

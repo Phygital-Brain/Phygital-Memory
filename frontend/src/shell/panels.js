@@ -27,6 +27,15 @@ export function openStorage(ctx) {
       body || null);
 
     const local = !s.cloud && !s.github && !s.cloudOnly;
+    // Every place can be reached from every other: GitHub sync stops first when leaving GitHub, and a cloud-only
+    // memory comes down to the chosen place on this Mac.
+    const leaveGithub = async () => !s.github || await ctx.stopGithub(s.github);
+    const toPlace = async (where, label) => {
+      if (s.cloudOnly) {
+        err.textContent = ""; busy(true);
+        try { if (await ctx.toMac(where, label)) done("moved"); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
+      } else if (await leaveGithub()) moveTo(where, label);
+    };
     const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : `${Math.round(sec / 3600)} h ago`;
     const gs = s.githubStatus;
     const githubBody = s.github
@@ -47,7 +56,7 @@ export function openStorage(ctx) {
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
                             onclick: async () => {   // the person picks where inside that cloud
                               const where = await ctx.pick(`Choose where in ${p.name} to keep "${ctx.name}"`, p.path);
-                              if (where) moveTo(where, p.name);
+                              if (where) toPlace(where, p.name);
                             } },
         icon("cloud", 15), el("span", {}, p.name), here ? el("span", { class: "st-here" }, "here") : null);
     }));
@@ -61,24 +70,25 @@ export function openStorage(ctx) {
         el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud, not on this Mac, so they can't open. `
           + `In Finder, right-click the folder and choose "Keep Downloaded" (iCloud) or "Make available offline".`),
         el("button", { class: "btn small", type: "button", onclick: () => ctx.download() }, "Download now")) : null,
-      ...(s.cloudOnly ? [] : [option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
-        local || s.github ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
-          const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) moveTo(p, "this Mac");
-        } }, "Move to a place on this Mac…")),
+      option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
+        local ? null : s.github
+          ? el("button", { class: "btn small", type: "button", onclick: async () => { if (await leaveGithub()) done("github"); } }, "Keep only on this Mac…")
+          : el("button", { class: "btn small", type: "button", onclick: async () => {
+              const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) toPlace(p, "this Mac");
+            } }, "Move to a place on this Mac…")),
       option("cloud", "This Mac + cloud", "On this Mac, and synced by your cloud app. The cloud only sees encrypted files.", !!s.cloud && !s.github,
-        s.github ? null : el("div", {}, cloudCards,
+        s.cloud && !s.github ? el("div", {}, cloudCards) : el("div", {}, cloudCards,
           el("button", { class: "btn small st-other", type: "button", onclick: async () => {
-            const p = await ctx.pick("Choose any synced folder"); if (p) moveTo(p, "that folder");
+            const p = await ctx.pick("Choose any synced folder"); if (p) toPlace(p, "that folder");
           } }, "Other synced folder…"))),
-      option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github, githubBody)]),
+      option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github,
+        s.cloudOnly || (s.cloud && !s.github) ? el("div", { class: "st-gh-note" }, "Move it to a place on this Mac first, then come back here.") : githubBody),
       option("sparkle", "Cloud only", s.cloudOnly
         ? `Nothing on this Mac: the app opens it straight from ${s.cloudOnly}, which only gets encrypted files.`
         : "Nothing on this Mac: the app opens the memory straight from your cloud (Nextcloud or WebDAV). The cloud only gets encrypted files.", !!s.cloudOnly,
-        s.cloudOnly || s.github ? null : el("button", { class: "btn small", type: "button", onclick: () => done("tocloud") },
+        s.cloudOnly ? null : el("button", { class: "btn small", type: "button", onclick: async () => { if (await leaveGithub()) done("tocloud"); } },
           "Move to cloud…")),
-      el("div", { class: "st-note" }, s.cloudOnly ? "A cloud memory stays in the cloud. Moving it to this Mac comes later."
-        : s.github ? "To move it somewhere else, stop GitHub sync first."
-        : "Moving locks the folder first, so only encrypted files move. Unlock it again after."),
+      el("div", { class: "st-note" }, "Moving locks the memory first, so only encrypted files move. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };
