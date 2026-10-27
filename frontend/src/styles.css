@@ -187,7 +187,10 @@ input:focus-visible { outline: none; }
 .no-props .props { display: none; }
 
 /* sidebar extras */
-.sb-home { padding: 2px 8px 0; }
+.sb-home { padding: 2px 8px 0; display: flex; gap: 4px; }
+.sb-home > .row { flex: 1; min-width: 0; }
+.nav-graph { cursor: pointer; padding-left: 8px; }
+.nav-graph > svg { color: var(--text-3); }
 .home-row { cursor: pointer; }
 .home-row > svg { color: var(--text-3); }
 .sb-foot-btns { display: flex; align-items: center; gap: 4px; flex: none; }
@@ -552,7 +555,6 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .todo-x { opacity: .5; }
 .todo-x:hover { opacity: 1; }
 .act-tools { display: flex; align-items: center; gap: 8px; }
-.tab-graph.graph-on { color: var(--accent); background: var(--accent-soft); }
 /* editable files: CSV table and plain text */
 .csv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
 .csv-cap { margin-left: auto; font-size: 12px; color: var(--text-3); }
@@ -575,3 +577,10 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .docx-li::before { content: "•"; position: absolute; left: 12px; color: var(--text-3); }
 .docx-cell { margin-left: 14px; border-left: 2px solid var(--border); font-size: .95em; }
 .file-open { margin-top: 10px; }
+.trash-row { grid-template-columns: 20px 1fr auto; align-items: center; }
+.trash-ic { color: var(--text-3); display: flex; }
+.act-undo { margin-left: 8px; padding: 1px 8px; }
+.act-undone { margin-left: 8px; font-size: 12px; color: var(--text-3); }
+/* no system title bar (like Baalda): the window buttons float over the sidebar's top strip; these strips move the window */
+.win-drag { height: 40px; flex: none; border-bottom: 1px solid var(--border); }
+.win-drag-top { position: absolute; top: 0; left: 0; right: 0; height: 40px; }

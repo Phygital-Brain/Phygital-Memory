@@ -92,6 +92,10 @@ class Memory:
             self._key, self._tree, self._writer, self._con = key, tree, Writer(tree), con
             self._touch()
             self._fix_clash_copies()
+            try:
+                self._empty_old_trash()
+            except Exception:
+                pass   # never let trash upkeep stop an unlock
             self._index_all()
             self._synced = time.time()
             return self.status()
@@ -205,7 +209,7 @@ class Memory:
             rel = self.path_of(chunk_id)
             return rel, self.read(rel)
 
-    def save(self, rel: str, text: str, new: bool = False, base: str | None = None) -> str:
+    def save(self, rel: str, text: str, new: bool = False, base: str | None = None, keep_version: bool = False) -> str:
         """Write a note (encrypted) and update the index. new=True refuses to replace an existing note.
 
         base is the note's text as the editor last saw it. If the note changed since (a cloud drive brought another
@@ -226,7 +230,7 @@ class Memory:
                 if now != base.encode("utf-8") and now != data:
                     return self._clash_copy(parent, rel, data)
             if existing:
-                self._keep_version(rel, existing, data)
+                self._keep_version(rel, existing, data, force=keep_version)
             entry = self._writer.write_file(parent, name, data, replace=existing)
             remove_file(self._con, rel)
             self._index_one(rel, entry)
@@ -262,6 +266,7 @@ class Memory:
             self._index_one(copy, entry)
             self._con.commit()
         self.clashes.append({"path": rel, "copy": copy, "t": time.time()})
+        del self.clashes[:-50]
         return copy
 
     def _fix_clash_copies(self) -> int:
@@ -472,16 +477,97 @@ class Memory:
             except NotFound:
                 root = self._tree.resolve("")
                 bin_ = self._writer.make_dir(root, TRASH)
-            self._writer.move(entry, bin_, f"{time.strftime('%Y%m%d-%H%M%S')} {Path(rel).name}")
+            taken = {e.name for e in self._tree.list_dir(bin_.dir_id)}
+            name, n = f"{time.strftime('%Y%m%d-%H%M%S')} {Path(rel).name}", 1
+            while name in taken:
+                n += 1
+                name = f"{time.strftime('%Y%m%d-%H%M%S')}-{n} {Path(rel).name}"
+            self._writer.move(entry, bin_, name)
+            where = self._json(TRASH_INDEX, {})
+            where[name] = rel   # so Restore can put it back where it was
+            self._put_json(TRASH_INDEX, where)
             self._reindex()
+
+    def _empty_old_trash(self) -> None:
+        """Things in the trash longer than TRASH_DAYS are removed for good (checked on unlock)."""
+        try:
+            bin_ = self._tree.resolve(TRASH)
+        except NotFound:
+            return
+        cutoff = time.time() - TRASH_DAYS * 86400
+        where, gone = self._json(TRASH_INDEX, {}), False
+        for e in self._tree.list_dir(bin_.dir_id):
+            try:
+                t = time.mktime(time.strptime(e.name.partition(" ")[0][:15], "%Y%m%d-%H%M%S"))
+            except ValueError:
+                continue
+            if t < cutoff:
+                self._writer.remove_tree(e)
+                where.pop(e.name, None)
+                gone = True
+        if gone:
+            self._put_json(TRASH_INDEX, where)
+
+    def trash_list(self) -> list[dict]:
+        """What is in the trash, newest first: {id, name, path (where it was), kind, t}."""
+        with self._lock:
+            self._need_open()
+            try:
+                bin_ = self._tree.resolve(TRASH)
+            except NotFound:
+                return []
+            where = self._json(TRASH_INDEX, {})
+            out = []
+            for e in self._tree.list_dir(bin_.dir_id):
+                stamp, _, name = e.name.partition(" ")
+                try:
+                    t = time.mktime(time.strptime(stamp[:15], "%Y%m%d-%H%M%S"))
+                except ValueError:
+                    t, name = 0, e.name
+                out.append({"id": e.name, "name": name, "path": where.get(e.name, name),
+                            "kind": "folder" if e.kind == "dir" else "file", "t": t})
+            return sorted(out, key=lambda i: -i["t"])
+
+    def trash_restore(self, tid: str) -> str:
+        """Put a trashed note, file or folder back where it was. Never over something already there."""
+        with self._lock:
+            self._need_open()
+            item = next((i for i in self.trash_list() if i["id"] == tid), None)
+            if not item:
+                raise LookupError("That item isn't in the trash any more.")
+            target = _clean_path(item["path"], md=False)
+            try:
+                self._tree.resolve(target)
+                raise Exists(f"'{target}' already exists. Rename or move that one first, then restore.")
+            except NotFound:
+                pass
+            entry = self._tree.resolve(f"{TRASH}/{tid}")
+            parent, name = self._make_parents(target)
+            self._writer.move(entry, parent, name)
+            where = self._json(TRASH_INDEX, {})
+            where.pop(tid, None)
+            self._put_json(TRASH_INDEX, where)
+            self._reindex()
+            return target
+
+    def _json(self, rel: str, default):
+        try:
+            return json.loads(self._tree.read_file(self._tree.resolve(rel)))
+        except (NotFound, ValueError):
+            return default
+
+    def _put_json(self, rel: str, value) -> None:
+        parent, name = self._make_parents(rel)
+        existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+        self._writer.write_file(parent, name, json.dumps(value, ensure_ascii=False).encode(), replace=existing)
 
     # ---------- version history (kept inside the lock, in a hidden folder) ----------
 
-    def _keep_version(self, rel: str, entry, new_data: bytes) -> None:
+    def _keep_version(self, rel: str, entry, new_data: bytes, force: bool = False) -> None:
         """Before a note changes, keep its old text as a version: at most one every VERSION_EVERY seconds per note
         (autosave runs often), the newest VERSION_KEEP per note. AI changes are kept the same way, so they can be undone."""
         now = time.time()
-        if now - self._last_version.get(rel, 0) < VERSION_EVERY:
+        if not force and now - self._last_version.get(rel, 0) < VERSION_EVERY:
             return
         old = self._tree.read_file(entry)
         if old == new_data:
@@ -661,6 +747,8 @@ TRASH = ".trash"
 VERSIONS = ".versions"
 PREFS = ".phygital/prefs.json"
 TODO = ".phygital/ai-todo.json"
+TRASH_INDEX = ".phygital/trash.json"
+TRASH_DAYS = 90
 TODO_KEEP = 100
 TODO_ASK_MAX = 2000
 HIDDEN = (TRASH, VERSIONS, ".phygital")

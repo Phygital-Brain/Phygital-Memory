@@ -94,6 +94,24 @@ async def main():
     good &= check("ticked off, with what it did", todo[-1]["done"] and todo[-1]["result"] == "Added kumquat at the end.")
     good &= check("finished notes leave the AI's list", "No AI tasks waiting" in (await ai([("handed_notes", {})]))["handed_notes{}"])
     api("trash", {"path": "Ideas/Tiny.md"}, app_pass=app_pass)
+    # 4c. Undo an AI change: works while the note is as the AI left it, refuses once the person changed it
+    rel = "Projects/Lighthouse-App.md"
+    before = api("read", {"path": rel}, app_pass=app_pass)[1]["text"]
+    await ai([("search_notes", {"question": "tide data supplier"})])
+    await ai([("append_to_note", {"id": rid, "text": "AI line one"})])
+    acts = api("aiactivity", app_pass=app_pass)[1]["activity"]
+    row = next(a for a in acts if a["what"] == "added to")
+    good &= check("AI change can be undone", row["canUndo"])
+    code, j = api("undoai", {"id": row["undo"]}, app_pass=app_pass)
+    good &= check("undo puts the note back", code == 200 and api("read", {"path": rel}, app_pass=app_pass)[1]["text"] == before)
+    found = (await ai([("search_notes", {"question": "tide data supplier"})]))['search_notes{"question": "tide data supplier"}']
+    rid2 = found.split("[", 1)[1].split("]", 1)[0]   # ids change when a note changes: search again
+    await ai([("append_to_note", {"id": rid2, "text": "AI line two"})])
+    row = next(a for a in api("aiactivity", app_pass=app_pass)[1]["activity"] if a["what"] == "added to" and a["path"] == rel and a["canUndo"])
+    now = api("read", {"path": rel}, app_pass=app_pass)[1]["text"]
+    api("save", {"path": rel, "text": now + "\nmy own words\n"}, app_pass=app_pass)
+    code, j = api("undoai", {"id": row["undo"]}, app_pass=app_pass)
+    good &= check("undo refuses after the person changed the note", code == 409 and "my own words" in api("read", {"path": rel}, app_pass=app_pass)[1]["text"])
     # 5. Nothing readable on disk
     blob = b"".join(p.read_bytes() for p in VAULT.rglob("*") if p.is_file())
     good &= check("no plain text on disk", not any(w in blob for w in (b"paprika", b"Mira", b"Lighthouse", b"26 October", b"kumquat")))

@@ -56,7 +56,7 @@ export function openStorage(ctx) {
   });
 }
 
-// ctx: {rows:[{t, ago, app, folderName, what, detail, path}], open(path), todo()}
+// ctx: {rows:[{t, ago, app, folderName, what, detail, path, undo, canUndo}], open(path), todo(), undo(row), fail(msg)}
 export function openActivity(ctx) {
   return modal((done) => {
     const apps = [...new Set(ctx.rows.map((r) => r.app))];
@@ -71,7 +71,13 @@ export function openActivity(ctx) {
         return el("div", { class: "act-row" + (/changed|added|created/.test(r.what) ? " write" : "") },
           el("div", { class: "act-time", title: new Date(r.t * 1000).toLocaleString() }, clock(r.t), el("span", {}, ago(r.ago))),
           el("div", { class: "act-main" },
-            el("div", { class: "act-line" }, el("b", {}, r.app), ` ${r.what} `, pathBtn),
+            el("div", { class: "act-line" }, el("b", {}, r.app), ` ${r.what} `, pathBtn,
+              r.canUndo ? el("button", { class: "btn small act-undo", type: "button", title: "Put the note back as it was before this change",
+                onclick: async (e) => {
+                  const b = e.currentTarget; b.disabled = true;
+                  try { await ctx.undo(r); r.canUndo = false; b.replaceWith(el("span", { class: "act-undone" }, "Undone")); }
+                  catch (err) { b.disabled = false; b.title = err.message; ctx.fail(err.message); }
+                } }, "Undo") : null),
             r.detail ? el("div", { class: "act-detail" }, r.detail) : null,
             el("div", { class: "act-folder" }, r.folderName)));
       }) : [el("div", { class: "act-empty" }, "No AI app has used your notes since they were unlocked.")]));
@@ -145,5 +151,32 @@ export function openAITodo(ctx) {
       list, err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card, focus: ask };
+  });
+}
+
+// The trash: everything moved there stays (encrypted, inside the folder) until restored.
+// ctx: {items:[{id, name, path, kind, t}], restore(id) -> {path, items}, open(path)}
+export function openTrash(ctx) {
+  return modal((done) => {
+    let items = ctx.items;
+    const err = el("div", { class: "dlg-err" });
+    const list = el("div", { class: "act-list" });
+    const draw = () => list.replaceChildren(...(items.length ? items.map((i) => el("div", { class: "todo-row trash-row" },
+      el("span", { class: "trash-ic" }, icon(i.kind === "folder" ? "folder" : "file", 14)),
+      el("div", { class: "act-main" },
+        el("div", { class: "act-line" }, i.name.replace(/\.md$/i, "")),
+        el("div", { class: "act-folder" }, `Was at ${i.path}${i.t ? " · " + new Date(i.t * 1000).toLocaleString() : ""}`)),
+      el("button", { class: "btn small", type: "button", onclick: async () => {
+        err.textContent = "";
+        try { const j = await ctx.restore(i.id); items = j.items; draw(); if (i.kind !== "folder") { done(null); ctx.open(j.path); } }
+        catch (e) { err.textContent = e.message; }
+      } }, "Restore"))) : [el("div", { class: "act-empty" }, "The trash is empty.")]));
+    draw();
+    const card = el("div", { class: "dlg activity", role: "dialog" },
+      el("div", { class: "dlg-title" }, "Trash"),
+      el("div", { class: "mf-hint" }, "Restore puts it back where it was. Nothing in here is ever overwritten."),
+      list, err,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
+    return { card };
   });
 }

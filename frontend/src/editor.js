@@ -12,7 +12,7 @@
 import { EditorState, StateField, StateEffect, RangeSetBuilder, Prec } from "@codemirror/state";
 import { EditorView, Decoration, WidgetType, keymap, drawSelection, highlightActiveLine, dropCursor,
          rectangularSelection, placeholder } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, undo, redo } from "@codemirror/commands";
 import { syntaxTree, ensureSyntaxTree, syntaxHighlighting, HighlightStyle, indentOnInput,
          bracketMatching } from "@codemirror/language";
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
@@ -704,7 +704,7 @@ export function createEditor(parent, opts) {
   const features = FEATURES.map((f) => f(opts));
   const extensions = [
     ...features.flatMap((f) => f.extensions || []),
-    history(),
+    history({ minDepth: 200 }),   // undo keeps the last 200 steps per open note
     drawSelection(),
     dropCursor(),
     rectangularSelection(),
@@ -762,6 +762,8 @@ export function createEditor(parent, opts) {
     },
     refresh() { view.dispatch({}); },   // re-draw links after the note list changed
     focus: () => view.focus(),
+    undo: () => undo(view),
+    redo: () => redo(view),
     destroy: () => view.destroy(),
   };
 }

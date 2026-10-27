@@ -13,7 +13,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openActivity, openAITodo } from "./shell/panels.js";
+import { openStorage, openActivity, openAITodo, openTrash } from "./shell/panels.js";
 import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
@@ -60,6 +60,7 @@ function uniqueName(dir, base, ext) {
 // ---------- page skeleton ----------
 const root = document.getElementById("app");
 const unlockEl = el("div", { class: "unlock hidden" });
+const unlockDrag = el("div", { class: "win-drag-top", "data-tauri-drag-region": "" });   // no title bar: drag the window here
 const appEl = el("div", { class: "app hidden" });
 root.append(unlockEl, appEl);
 
@@ -299,7 +300,7 @@ function drawUnlock() {
     el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New folder…"));
   kids.push(el("div", { class: "unlock-links" }, ...links));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
-  unlockEl.replaceChildren(form);
+  unlockEl.replaceChildren(unlockDrag, form);
 }
 
 function showUnlock() {
@@ -310,7 +311,7 @@ function showUnlock() {
 }
 
 // ---------- app shell ----------
-let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill, sbName, sbBadge, sbPath, sbTile;
+let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill, sbName, sbBadge, sbPath, sbTile, graphRowEl = null;
 
 function drawSwitcher() {
   if (!sbName) return;
@@ -378,12 +379,16 @@ function buildApp() {
   homeRowEl = el("div", { class: "row home-row", role: "button", tabindex: "0", title: "Home (⇧⌘H)", onclick: () => goHome() },
     el("span", { class: "chev none" }, icon("chevron", 12, 2)), icon("home", 16), el("span", { class: "row-name" }, "Home"));
   homeRowEl.addEventListener("keydown", (e) => { if (e.key === "Enter") goHome(); });
+  graphRowEl = el("div", { class: "row nav-graph", role: "button", tabindex: "0", title: "Graph view (⌘G)", onclick: () => openGraph() },
+    icon("graph", 16), el("span", { class: "row-name" }, "Graph"));
+  graphRowEl.addEventListener("keydown", (e) => { if (e.key === "Enter") openGraph(); });
   selBarEl = el("div", { class: "sel-bar hidden" });
   finderBtn = el("button", { class: "icon-btn hidden", title: "Show in Finder", "aria-label": "Show in Finder", onclick: toggleFinder }, icon("folder", 15));
 
   sidebarEl.append(
+    el("div", { class: "win-drag", "data-tauri-drag-region": "" }),   // the window buttons sit here; drag the window by it
     sbHead,
-    el("div", { class: "sb-home" }, homeRowEl),
+    el("div", { class: "sb-home" }, homeRowEl, graphRowEl),
     el("div", { class: "sb-section" },
       el("span", {}, "NOTES"),
       el("span", { class: "sb-actions" },
@@ -395,7 +400,7 @@ function buildApp() {
     treeEl,
     el("div", { class: "sb-foot" },
       statusBar(),
-      el("span", { class: "sb-foot-btns" }, finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere))),
+      el("span", { class: "sb-foot-btns" }, ib("trash", "Trash", openTrashPanel), finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -414,13 +419,14 @@ function buildApp() {
   paneHost._empty = empty;
 
   noteTools = el("div", { class: "note-tools hidden" },
+    el("button", { class: "icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", onclick: () => editAct("undo") }, icon("undo", 16)),
+    el("button", { class: "icon-btn", title: "Redo (⇧⌘Z)", "aria-label": "Redo", onclick: () => editAct("redo") }, icon("redo", 16)),
     el("button", { class: "icon-btn", title: "Give AI a task with this note", "aria-label": "Give AI a task", onclick: giveToAI }, icon("sparkle", 16)),
     el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 16)));
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
   paneHost.append(noteTools, blPill);
 
   bannerHost = el("div", { class: "banner-host" });
-  const graphBtn = el("button", { class: "icon-btn tab-graph", title: "Graph view (⌘G)", "aria-label": "Graph view", onclick: openGraph }, icon("graph", 16));
   // A small search bar beside the graph button: typing here opens the search page with what you typed.
   const topSearchInput = el("input", { class: "top-search-input", type: "search", placeholder: "Search", spellcheck: "false", "aria-label": "Search notes" });
   topSearchInput.addEventListener("keydown", (e) => {
@@ -435,7 +441,7 @@ function buildApp() {
     icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
   appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl,
     el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 15)),
-    el("span", { class: "tabbar-gap" }), searchBtn, graphBtn, statusEl), paneHost));
+    el("span", { class: "tabbar-gap", "data-tauri-drag-region": "" }), searchBtn, statusEl), paneHost));
 }
 
 async function enterApp() {
@@ -595,10 +601,32 @@ async function openStoragePanel() {
   if (moved) { lockedLocally(info.id); await refreshFolders(); showUnlock(); }
 }
 
+async function openTrashPanel() {
+  let items;
+  try { items = (await api("trashlist")).items || []; } catch (e) { toastErr(e.message); return; }
+  await openTrash({
+    items,
+    restore: async (id) => {
+      const j = await api("trashrestore", { id });
+      await loadFiles(); loadLinks();
+      toastOk(`Restored "${label(j.path)}".`);
+      return { path: j.path, items: (await api("trashlist")).items || [] };
+    },
+    open: (p) => openPath(p),
+  });
+}
+
 async function openActivityPanel() {
   let rows = [];
   try { rows = (await api("aiactivity")).activity || []; } catch (e) { toastErr(e.message); return; }
-  openActivity({ rows, open: (p) => openPath(p), todo: () => openTodoList() });
+  openActivity({ rows, open: (p) => openPath(p), todo: () => openTodoList(),
+    undo: async (r) => {
+      const j = await api("undoai", { id: r.undo, folder: r.folder });
+      await syncFromDisk();
+      toastOk(j.trashed ? `Moved "${label(j.path)}" to the trash. Restore it from there if you change your mind.`
+                        : `"${label(j.path)}" is back as it was. The AI's version is kept in version history.`);
+    },
+    fail: (m) => toastErr(m) });
 }
 
 // Click a note's path: copy it in the form you need.
@@ -1442,11 +1470,10 @@ function cycleTab(dir) {
 
 function renderTabs() {
   if (!tabsEl) return;
-  const gb = document.querySelector(".tab-graph");
-  if (gb) {
+  if (graphRowEl) {
     const on = !!(state.active && state.active.kind === "graph" && state.tabs.includes(state.active));
-    gb.classList.toggle("graph-on", on);
-    gb.title = on ? "Close the graph (⌘G)" : "Graph view (⌘G)";
+    graphRowEl.classList.toggle("active", on);
+    graphRowEl.title = on ? "Close the graph (⌘G)" : "Graph view (⌘G)";
   }
   const fname = (curInfo() || {}).name || "";
   for (const t of state.tabs) if (t.crumbText) t.crumbText.textContent = [fname, ...t.path.split("/")].filter(Boolean).join("  /  ");
@@ -1566,6 +1593,11 @@ async function openAt(path, heading) {
       return;
     }
   }
+}
+
+function editAct(what) {
+  const t = state.active;
+  if (t && t.editor && t.editor[what]) { t.editor[what](); t.editor.focus(); }
 }
 
 // ---------- give AI a task with a note (the AI tasks list) ----------
@@ -1879,10 +1911,20 @@ async function answerClose() {
 }
 
 // ---------- start ----------
+// Double-clicking the opener file inside a locked folder: the Mac app asks the server to add that folder, then
+// calls this (or, on a cold start, the page finds it through "wanted").
+window.phygitalOpenFolder = async (id) => {
+  if (!/^[0-9a-f]{1,32}$/.test(String(id))) return;
+  await refreshFolders();
+  await switchTo(id);
+};
+
 (async function start() {
   await refreshFolders();
   if (folderList.length) {
-    setFolder(folderList[0].id);
+    let first = folderList[0].id;
+    try { const w = await api("wanted"); if (w.id && folderList.some((f) => f.id === w.id)) first = w.id; } catch {}
+    setFolder(first);
     try {
       const j = await api("devunlock");
       if (j && j.pass) { setPass(j.pass); await enterApp(); return; }
