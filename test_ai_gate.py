@@ -106,9 +106,9 @@ aid = [a for a in api("aiapps", {}, P, fid)[1]["apps"] if a["name"] == "Reader"]
 api("aiappupdate", {"id": aid, "write": True}, P, fid)
 out = run(key, ("make_folder", {"path": "AI Made"}), ("move_note", {"path": "Ideas/Pocket-Library.md", "new_path": "AI Made/Pocket.md"}),
           ("links_to", {"path": "Projects/Lighthouse-App.md"}), ("read_file_text", {"path": "AI Made/Pocket.md"}),
-          ("trash_note", {"path": "AI Made/Pocket.md"}))
+          ("trash_note", {"path": "AI Made/Pocket.md"}), ("read_file_text", {"path": "attachments/Garden-plan.docx"}))
 check(not out["make_folder"].startswith("ERROR") and not out["move_note"].startswith("ERROR"), "after allowing edits: folder and move work", out)
-check("Pocket" in out["read_file_text"], "read_file_text reads a note", out["read_file_text"][:200])
+check("tomatoes" in out["read_file_text"], "read_file_text reads a Word file", out["read_file_text"][:200])
 check(not out["links_to"].startswith("ERROR"), "links_to works", out["links_to"][:200])
 code, j = api("trashlist", {}, P, fid)
 check(not out["trash_note"].startswith("ERROR") and any("Pocket" in (t.get("path") or t.get("name") or "") for t in j.get("items", [])),

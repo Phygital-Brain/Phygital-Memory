@@ -418,6 +418,7 @@ def read_file_text(ctx: Context, path: NotePath, folder: FolderName = "") -> str
             raise ToolError("That PDF can't be read (it may be a scan, or locked with its own password).") from None
     else:
         raise ToolError("Only notes, text, CSV, Word and PDF files can be read as text.")
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(line.rstrip() for line in text.splitlines())).strip()   # PDFs pad with blank lines
     _log(app, f, "read a file", f"{len(text)} characters", rel)
     cut = f"\n\n[Cut at {TEXT_LIMIT} characters of {len(text)}.]" if len(text) > TEXT_LIMIT else ""
     return LABEL + f"{rel}\n---8<---\n{text[:TEXT_LIMIT]}{cut}"
