@@ -30,7 +30,10 @@ export function openStorage(ctx) {
     const cloudCards = el("div", { class: "st-places" }, ...s.places.map((p) => {
       const here = s.cloud && s.path.startsWith(p.path + "/");
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
-                            onclick: () => moveTo(p.path, p.name) },
+                            onclick: async () => {   // the person picks where inside that cloud
+                              const where = await ctx.pick(`Choose where in ${p.name} to keep "${ctx.name}"`, p.path);
+                              if (where) moveTo(where, p.name);
+                            } },
         icon("cloud", 15), el("span", {}, p.name), here ? el("span", { class: "st-here" }, "here") : null);
     }));
     if (!s.places.length) cloudCards.append(el("div", { class: "st-none" }, "No cloud apps found on this Mac (iCloud Drive, Dropbox, Google Drive, OneDrive, Nextcloud…)."));
@@ -39,6 +42,10 @@ export function openStorage(ctx) {
       el("div", { class: "dlg-title" }, `Where "${ctx.name}" is stored`),
       el("div", { class: "st-where" }, icon(s.cloud ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
         el("button", { class: "btn small", type: "button", onclick: () => ctx.reveal() }, "Show encrypted files")),
+      s.offline ? el("div", { class: "st-warn" },
+        el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud, not on this Mac, so they can't open. `
+          + `In Finder, right-click the folder and choose "Keep Downloaded" (iCloud) or "Make available offline".`),
+        el("button", { class: "btn small", type: "button", onclick: () => ctx.download() }, "Download now")) : null,
       option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
         local ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
           const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) moveTo(p, "this Mac");

@@ -186,9 +186,9 @@ async function switchTo(id) {
   refreshFolders();
 }
 
-async function pickFolder(prompt) {
+async function pickFolder(prompt, start) {
   toast("Choose a folder in the window that opens…");
-  return (await api("pickfolder", { prompt })).path || null;
+  return (await api("pickfolder", { prompt, ...(start ? { start } : {}) })).path || null;
 }
 
 async function openOtherFolder() {
@@ -602,7 +602,8 @@ async function openStoragePanel() {
   try { storage = await api("storage"); } catch (e) { toastErr(e.message); return; }
   const moved = await openStorage({
     name: info.name, storage,
-    pick: (prompt) => pickFolder(prompt),
+    pick: (prompt, start) => pickFolder(prompt, start),
+    download: async () => { const j = await api("download"); toastOk(`Asked your cloud app for ${j.asked} file${j.asked === 1 ? "" : "s"}. They download in the background.`); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     move: async (parent, label) => {
       const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then only the scrambled files move. You unlock it again after.`, `Move to ${label}`, false);

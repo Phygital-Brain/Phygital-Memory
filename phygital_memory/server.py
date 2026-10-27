@@ -35,7 +35,8 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from . import activity
 from . import finder as finder_links
-from .folders import STATE, Folders, cloud_places, is_vault, pick_files, pick_folder, pick_save, write_guides
+from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
+                      pick_save, write_guides)
 from .memory import Locked, Memory, _clean_path
 from .vault.keys import WrongPassword
 
@@ -396,7 +397,9 @@ async def api(request: Request) -> Response:
         if action == "folders":
             return _ok({"folders": folders.list()})
         if action == "pickfolder":   # the Mac's own folder chooser
-            path = await asyncio.to_thread(pick_folder, body.get("prompt") or "Choose a folder")
+            start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
+            start = start if any(p["path"] == start for p in cloud_places()) else None
+            path = await asyncio.to_thread(pick_folder, body.get("prompt") or "Choose a folder", start)
             return _ok({"path": path})
         if action == "addfolder":
             return _ok({"folder": folders.add_existing(body["path"])})
@@ -443,7 +446,9 @@ async def api(request: Request) -> Response:
             return _ok({"open": False})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
-                        "home": str(Path.home())})
+                        "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path)})
+        if action == "download":   # fetch the files a cloud app left only in the cloud
+            return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
         if action == "movefolder":   # move it (locked) to another place; the page then asks for the password again
             return _ok({"folder": await asyncio.to_thread(folders.relocate, f.id, body["parent"])})
         if action == "renamefolder":

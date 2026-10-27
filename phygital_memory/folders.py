@@ -192,7 +192,13 @@ class Folders:
 
 
 CLOUD_HOME_FOLDERS = (("Nextcloud", "Nextcloud"), ("Dropbox", "Dropbox"), ("ownCloud", "ownCloud"),
-                      ("Filen", "Filen"), ("pCloud Drive", "pCloud"), ("Sync", "Sync.com"), ("MEGA", "MEGA"))
+                      ("Filen", "Filen"), ("pCloud Drive", "pCloud"), ("Sync", "Sync.com"), ("MEGA", "MEGA"),
+                      ("Seafile", "Seafile"), ("Tresorit", "Tresorit"), ("Proton Drive", "Proton Drive"),
+                      ("Google Drive", "Google Drive"), ("OneDrive", "OneDrive"))
+# Folder names under ~/Library/CloudStorage (the macOS place for cloud apps), before the "-account" part
+CLOUD_STORAGE_NAMES = {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "Dropbox": "Dropbox", "Box": "Box",
+                       "ProtonDrive": "Proton Drive", "pCloudDrive": "pCloud", "pCloud": "pCloud", "MEGA": "MEGA",
+                       "SynologyDrive": "Synology Drive", "Nextcloud": "Nextcloud", "Filen": "Filen", "Egnyte": "Egnyte"}
 
 
 def cloud_places() -> list[dict]:
@@ -206,14 +212,52 @@ def cloud_places() -> list[dict]:
     if storage.is_dir():
         for d in sorted(storage.iterdir()):
             if d.is_dir() and not d.name.startswith("."):
-                base = d.name.split("-")[0]
-                label = {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "Dropbox": "Dropbox", "Box": "Box"}.get(base, base)
-                out.append({"name": label + (f" ({d.name.split('-', 1)[1]})" if "-" in d.name else ""), "path": str(d)})
+                base, _, account = d.name.partition("-")
+                label = CLOUD_STORAGE_NAMES.get(base, base)
+                if account and account != base and sum(1 for x in storage.iterdir() if x.name.startswith(base)) > 1:
+                    label += f" ({account})"   # two accounts of the same cloud: say which
+                out.append({"name": label, "path": str(d)})
     for folder, label in CLOUD_HOME_FOLDERS:
         d = home / folder
-        if d.is_dir() and not any(p["path"] == str(d) for p in out):
+        real = d.resolve() if d.exists() else d
+        if d.is_dir() and not any(p["name"] == label or Path(p["path"]).resolve() == real for p in out):
             out.append({"name": label, "path": str(d)})
     return out
+
+
+SF_DATALESS = 0x40000000   # macOS: a file whose contents are only in the cloud, not on this Mac
+
+
+def not_downloaded(folder: Path, limit: int = 100_000) -> int:
+    """How many of the folder's files are only in the cloud right now (the cloud app made room on the Mac). The app
+    can't open those until they come back, so the storage panel warns and can fetch them."""
+    count = 0
+    for i, (root, _dirs, files) in enumerate(os.walk(folder)):
+        for name in files:
+            try:
+                if os.lstat(os.path.join(root, name)).st_flags & SF_DATALESS:
+                    count += 1
+            except OSError:
+                pass
+        if i > limit:
+            break
+    return count
+
+
+def download_all(folder: Path) -> int:
+    """Ask the cloud app for every file that is only in the cloud, by reading a byte of each. Returns how many."""
+    asked = 0
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            p = os.path.join(root, name)
+            try:
+                if os.lstat(p).st_flags & SF_DATALESS:
+                    with open(p, "rb") as f:
+                        f.read(1)
+                    asked += 1
+            except OSError:
+                pass
+    return asked
 
 
 def move_folder_on_disk(src: Path, parent: Path) -> Path:
@@ -260,8 +304,9 @@ def pick_save(prompt: str, name: str) -> str | None:
     return out.stdout.strip() or None if out.returncode == 0 else None
 
 
-def pick_folder(prompt: str) -> str | None:
-    """The Mac's own folder picker (the person chooses; nothing is read from the page)."""
-    script = f'POSIX path of (choose folder with prompt "{prompt.replace(chr(34), "")}")'
+def pick_folder(prompt: str, start: str | None = None) -> str | None:
+    """The Mac's own folder picker (the person chooses; nothing is read from the page). start: where it opens."""
+    where = f' default location (POSIX file "{start.replace(chr(34), "")}")' if start and Path(start).is_dir() else ""
+    script = f'POSIX path of (choose folder with prompt "{prompt.replace(chr(34), "")}"{where})'
     out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
     return out.stdout.strip() or None if out.returncode == 0 else None
