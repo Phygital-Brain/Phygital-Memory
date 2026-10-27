@@ -22,9 +22,8 @@
       "icons/icon.png",
       "icons/icon.icns"
     ],
-    "externalBin": [
-      "binaries/phygital-memory-server",
-      "binaries/rclone"
-    ]
+    "resources": {
+      "server/": "server/"
+    }
   }
 }

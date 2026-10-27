@@ -29,7 +29,10 @@ fn random_token() -> String {
 
 fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     let token = app.state::<ShellToken>().0.clone();
-    let cmd = app.shell().sidecar("phygital-memory-server").map_err(|e| e.to_string())?
+    // The server is a folder in Resources (starts about twice as fast as one packed file, which unpacks itself
+    // on every start). rclone, the cloud helper, sits in the same folder.
+    let exe = app.path().resource_dir().map_err(|e| e.to_string())?.join("server/phygital-memory-server");
+    let cmd = app.shell().command(exe)
         .env("PHYGITAL_MEMORY_FOLDER", folder()).env("PHYGITAL_MEMORY_PORT", "8790")
         .env("PHYGITAL_MEMORY_SHELL_TOKEN", token)
         .env("PHYGITAL_MEMORY_APP_PID", std::process::id().to_string());
@@ -38,10 +41,9 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     *app.state::<Server>().0.lock().unwrap() = Some(child);
     for _ in 0..150 {
         if TcpStream::connect_timeout(&"127.0.0.1:8790".parse().unwrap(), Duration::from_millis(200)).is_ok() {
-            std::thread::sleep(Duration::from_millis(200));
             return Ok(());
         }
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(50));
     }
     Err("The server did not start.".into())
 }
@@ -160,14 +162,18 @@ fn ask_window(app: &tauri::AppHandle) {
 fn own_page(url: &tauri::Url) -> bool {
     url.scheme() == "http" && url.host_str() == Some("127.0.0.1") && url.port() == Some(8790)
 }
+// ...or the app's own "Starting…" page, built into the app, shown until the server is up.
+fn starting_page(url: &tauri::Url) -> bool {
+    url.scheme() == "tauri" && url.host_str() == Some("localhost") && url.path() == "/starting.html"
+}
 
 fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
-    let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:8790/".parse().unwrap()))
+    let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("starting.html".into()))
         .title("Phygital Memory").inner_size(1200.0, 800.0).min_inner_size(720.0, 480.0).center()
         // No title bar: the page fills the window and the close/minimise buttons float over the sidebar (as Baalda)
         .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
         .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0))
-        .on_navigation(|url| own_page(url))
+        .on_navigation(|url| own_page(url) || starting_page(url))
         .build().map_err(|e| e.to_string())?;
     fit_to_screen(&win);
     Ok(())
@@ -208,12 +214,27 @@ fn main() {
             }
         })
         .setup(|app| {
+            // The window opens at once with "Starting…", and goes to the real page as soon as the server answers.
             // No first-run window any more: the page itself offers to create or open a locked folder.
+            let _ = main_window(app.handle());
             let h = app.handle().clone();
             std::thread::spawn(move || {
-                if start_server(&h).is_ok() {
+                if let Err(e) = start_server(&h) {
+                    let msg = format!("Phygital Memory couldn't start: {e} Quit and open it again.").replace('\'', "’");
                     let h2 = h.clone();
-                    let _ = h.run_on_main_thread(move || { let _ = main_window(&h2); ask_window(&h2); });
+                    let _ = h.run_on_main_thread(move || {
+                        if let Some(w) = h2.get_webview_window("main") {
+                            let _ = w.eval(&format!("document.querySelector('p').textContent = '{msg}'"));
+                        }
+                    });
+                } else {
+                    let h2 = h.clone();
+                    let _ = h.run_on_main_thread(move || {
+                        if let Some(w) = h2.get_webview_window("main") {
+                            let _ = w.navigate("http://127.0.0.1:8790/".parse().unwrap());
+                        }
+                        ask_window(&h2);
+                    });
                 }
             });
             Ok(())
