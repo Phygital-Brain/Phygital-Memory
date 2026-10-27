@@ -29,7 +29,7 @@ function accessForm(folders, cur = { folders: "all", write: false }) {
     ...boxes.map((x) => x.row),
     el("div", { class: "set-row ai-write" },
       el("div", { class: "set-text" }, el("div", { class: "set-title" }, "Allow edits"),
-        el("div", { class: "set-hint" }, "Change, add, move and put notes in the trash. Everything can be undone in the app.")),
+        el("div", { class: "set-hint" }, "Change, add, move and put notes in the trash. Changes can be undone, and trashed notes put back.")),
       el("label", { class: "switch" }, write, el("span", { class: "switch-t" }))));
   return { node, value: () => ({ folders: all.checked ? "all" : boxes.filter((x) => x.b.checked).map((x) => x.f.id), write: write.checked }) };
 }
@@ -119,7 +119,7 @@ export function openAIApps(ctx) {
         busy(false);
       }, "small primary") : null;
       body.replaceChildren(
-        el("div", { class: "st-warn" }, el("span", {}, "This key is shown only now. Paste it into the AI app before you close this. Lost it? Remove the app and connect it again.")),
+        el("div", { class: "st-warn" }, el("span", {}, "This key is shown only now. Paste it into the AI app before you close this. If you lose it, remove the app and connect it again.")),
         el("div", { class: "set-title" }, s.where),
         el("pre", { class: "ai-setup" }, s.text),
         el("div", { class: "set-btns" }, copy, auto));
@@ -150,8 +150,8 @@ export function allowDialog(name, folders) {
     const allow = el("button", { class: "btn primary", type: "button", disabled: true, onclick: () => done({ allow: true, ...access.value() }) }, "Allow");
     setTimeout(() => { deny.disabled = allow.disabled = false; }, 1000);
     const card = el("div", { class: "dlg storage ai-apps", role: "dialog" },
-      el("div", { class: "dlg-title" }, `${name} wants to use your notes`),
-      el("div", { class: "mf-hint" }, "It can only reach memories that are unlocked. You can change this or remove it later in Settings › AI apps."),
+      el("div", { class: "dlg-title" }, `“${name}” wants to use your notes`),
+      el("div", { class: "mf-hint" }, "That's the name the app gives itself. It can only reach memories that are unlocked. You can change this or remove it later in Settings › AI apps."),
       access.node,
       el("div", { class: "dlg-actions" }, deny, allow));
     return { card };

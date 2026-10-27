@@ -641,7 +641,7 @@ async function watchAllow() {
     const v = await allowDialog(req.name, folders);
     try {
       await api("allowanswer", { id: req.id, ...v });
-      if (v.allow) toastOk(`${req.name} can use your notes now. Change it any time in Settings › AI apps.`);
+      if (v.allow) toastOk(`“${req.name}” can use your notes now. Change it any time in Settings › AI apps.`);
     } catch (e) { toastErr(e.message); }
   }
 }

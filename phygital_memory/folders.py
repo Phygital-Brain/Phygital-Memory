@@ -42,9 +42,8 @@ key, locked with the owner's password. Nothing here can be read by opening the f
 
 1. The owner opens this folder in the Phygital Memory app (double-click `Open in Phygital Memory.phygitalmemory`)
    and unlocks it with their password.
-2. Connect to the app's MCP server: `http://127.0.0.1:8790/mcp`
-   - Claude Code: `claude mcp add --transport http phygital-memory http://127.0.0.1:8790/mcp`
-   - Other apps: add it as a streamable HTTP MCP server at the same address.
+2. The owner connects your app in Phygital Memory: Settings › AI apps gives the exact setup with a key. Apps that
+   support sign-in can add `http://127.0.0.1:8790/mcp` and the owner presses Allow.
 3. Use the tools: `search_notes` first, then `open_result` or `read_note`. Change notes with `replace_in_note` or
    `append_to_note`. Tasks the owner gave you are in `handed_notes`.
 
@@ -65,7 +64,9 @@ def write_guides(path: Path) -> None:
     for name, text in files.items():
         f = path / name
         try:
-            if not f.exists() or (name == "AGENTS.md" and "are scrambled" in f.read_text(errors="replace")):
+            old = name == "AGENTS.md" and f.exists() and any(
+                x in f.read_text(errors="replace") for x in ("are scrambled", "claude mcp add --transport http"))
+            if not f.exists() or old:
                 f.write_text(text)   # missing, or the app's older guide: write the current one
         except OSError:
             pass   # a read-only place: the folder still works without them
