@@ -80,7 +80,7 @@ def read(service: str, account: str) -> str | None:
 
 def _read(service: str, account: str) -> str | None:
     if touchid.bundled():
-        r = _helper("read", service + APP_ONLY, account, timeout=600)   # time for the person to answer macOS
+        r = _helper("read", service + APP_ONLY, account, timeout=20)   # never hold the app up for long
         if r and r.returncode == 0 and r.stdout:
             return r.stdout.decode()
         missing = r is not None and r.returncode == 4 and b"-25300" in r.stderr   # simply not kept there
