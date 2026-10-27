@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import queue
+from urllib.parse import quote
 import re
 import secrets
 import subprocess
@@ -36,7 +37,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, touchid
+from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, sharing, touchid
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -662,6 +663,32 @@ def _unlock(f, password: str, how: str = "password"):
     return _ok({**s, "pass": p, "folder": f.id})
 
 
+def _place(f) -> str | None:
+    """Where a memory's files are, in words, for an invite (None: only on this Mac, so nobody else can reach them)."""
+    if f.cloud_at:
+        return cloud.where(f.cloud_at, f.cloud_at["path"])
+    if f.mirror_at:
+        return cloud.where(f.mirror_at, f.mirror_at["path"])
+    if f.github:
+        return f"GitHub · {f.github}"
+    place = cloud_place(f.path)
+    return f"{place} · {f.path.name}" if place else f"This Mac · {f.path.name}"   # never the full path on this Mac
+
+
+def _unlock_shared(f, raw: bytes):
+    """A memory shared with this person, opened with their own key: as an editor or view only, as the owner set."""
+    role = sharing.my_role(f.path, raw)
+    if role is None:
+        return _ok({"error": "You're no longer on this memory's list. Ask its owner for a new invite."}, 403)
+    if not f.memory.is_open:
+        f.passes.clear()
+    s = f.memory.unlock_with_key(sharing.masterkey(raw), read_only=role == "view")
+    approvals.add("Unlocked", f.name, "your own key")
+    p = secrets.token_urlsafe(32)
+    f.passes.add(p)
+    return _ok({**s, "pass": p, "folder": f.id, "role": role})
+
+
 class _Incoming:
     """read(n) for the vault writer, fed by the upload as it arrives (the writer runs in its own thread)."""
 
@@ -743,6 +770,21 @@ async def api(request: Request) -> Response:
             start = start if any(p["path"] == start for p in cloud_places()) else str(Path.home())
             path = await asyncio.to_thread(pick_folder, body.get("prompt") or "Choose a folder", start)
             return _ok({"path": path})
+        if action == "joinshared":   # an invite: find the shared files (a folder here, or a memory already added from
+            link = str(body.get("link", ""))   # WebDAV), then leave a request there for the owner to say yes to
+            sharing.parse_link(link)
+            if body.get("folder"):
+                j = folders.get(str(body["folder"]))
+            else:
+                where = await asyncio.to_thread(pick_folder, "Choose the shared memory's folder", str(Path.home()))
+                if not where:
+                    return _ok({"cancelled": True})
+                j = folders.get(folders.add_existing(where)["id"])
+            await asyncio.to_thread(j.ready)
+            await asyncio.to_thread(sharing.ask_to_join, j.path, link)
+            j.joined = True
+            folders._save()
+            return _ok({"folder": j.info()})
         if action == "openbackup":   # a backup back in: a zip, or a memory's .cryptomator file; the Mac's chooser picks
             chosen = await asyncio.to_thread(pick_files, "Choose a backup .zip, or a memory's masterkey.cryptomator file")
             if not chosen:
@@ -889,6 +931,14 @@ async def api(request: Request) -> Response:
                 except RuntimeError:
                     pass
             return r
+        if action == "keyunlock":   # a memory shared with you: open it with your own key (after Touch ID, if this Mac has it)
+            await asyncio.to_thread(f.ready)
+            raw = await asyncio.to_thread(sharing.my_key, f.path)
+            if raw is None:
+                return _ok({"waiting": True})
+            if await asyncio.to_thread(touchid.available) and not await asyncio.to_thread(touchid.ask, "unlock"):
+                return _ok({"error": "Touch ID didn't confirm."}, 403)
+            return _unlock_shared(f, raw)
         if action == "touchidinfo":   # the unlock screen: can this memory open with Touch ID?
             can = await asyncio.to_thread(touchid.available)
             return _ok({"available": can, "on": can and await asyncio.to_thread(touchid.has, f.id)})
@@ -1009,6 +1059,37 @@ async def api(request: Request) -> Response:
             await asyncio.to_thread(touchid.save, f.id, str(body.get("password", "")))
             approvals.add("Touch ID unlock on", f.name, "password")
             return _ok({"on": True})
+        # ---- working together (the owner's side; the memory is open, so its key is at hand) ----
+        if action == "shareinfo":
+            place = _place(f)
+            shared = sharing.is_shared(f.path)
+            role = sharing.my_role(f.path, m.key_raw) if shared else "owner"
+            return _ok({"place": place, "shared": shared, "role": role, "me": sharing.my_id(),
+                        "members": sharing.members(f.path, m.key_raw) if shared else [],
+                        "requests": sharing.requests(f.path, m.key_raw) if shared and role == "owner" else []})
+        if action == "sharerequests":   # polled while open: people asking to join (owner only)
+            if not sharing.is_shared(f.path) or sharing.my_role(f.path, m.key_raw) != "owner":
+                return _ok({"requests": []})
+            return _ok({"requests": sharing.requests(f.path, m.key_raw)})
+        if action in ("shareinvite", "shareanswer", "sharerole", "shareremove"):
+            if sharing.is_shared(f.path) and sharing.my_role(f.path, m.key_raw) != "owner":
+                return _ok({"error": "Only the memory's owner can do that."}, 403)
+            if action == "shareinvite":
+                link = sharing.invite(f.path, m.key_raw, str(body.get("role", "edit")), f.name)
+                approvals.add(f"Invite made ({body.get('role', 'edit')})", f.name, "click")
+                return _ok({"link": link + "&w=" + quote(_place(f)), "place": _place(f)})
+            if action == "shareanswer":
+                who = next((r["name"] for r in sharing.requests(f.path, m.key_raw) if r["id"] == body.get("id")), "someone")
+                sharing.answer(f.path, m.key_raw, str(body.get("id")), bool(body.get("allow")), body.get("role"))
+                approvals.add((f"Let {who} in" if body.get("allow") else f"Said no to {who}"), f.name, "click")
+                return _ok({"members": sharing.members(f.path, m.key_raw)})
+            if action == "sharerole":
+                sharing.set_role(f.path, m.key_raw, str(body.get("id")), str(body.get("role")))
+                return _ok({"members": sharing.members(f.path, m.key_raw)})
+            gone = next((x["name"] for x in sharing.members(f.path, m.key_raw) if x["id"] == body.get("id")), "someone")
+            sharing.remove(f.path, m.key_raw, str(body.get("id")))
+            approvals.add(f"Removed {gone}", f.name, "click")
+            return _ok({"members": sharing.members(f.path, m.key_raw)})
         if action == "recoverykey":   # the 44 words, after the password again
             try:
                 return _ok({"words": await asyncio.to_thread(m.recovery_words, str(body.get("password", "")))})

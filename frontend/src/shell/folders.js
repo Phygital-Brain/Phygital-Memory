@@ -55,11 +55,13 @@ export function switcherItems(ctx) {
       ...(ctx.fromGithub ? [{ label: "From GitHub", fn: ctx.fromGithub }] : []),
       ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : []),
       ...(ctx.fromS3 ? [{ label: "From Amazon S3 or Cloudflare R2", fn: ctx.fromS3 }] : []),
-      ...(ctx.fromBackup ? [{ label: "From a backup file", fn: ctx.fromBackup }] : [])] },
+      ...(ctx.fromBackup ? [{ label: "From a backup file", fn: ctx.fromBackup }] : []),
+      ...(ctx.fromInvite ? [{ label: "From an invite", fn: ctx.fromInvite }] : [])] },
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
       ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", "Storage and backup", ctx.storage)] : []),
+      ...(ctx.share ? [actionRow("share", "Share", ctx.share)] : []),
       ...(ctx.ai ? [actionRow("pulse", "AI tasks and activity", ctx.ai)] : []),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
       ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),

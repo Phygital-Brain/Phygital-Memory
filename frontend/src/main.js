@@ -1,4 +1,5 @@
 import { openAddFiles } from "./shell/addfiles.js";
+import { openShare, joinDialog } from "./shell/share.js";
 import { api, uploadStream, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
 import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
 import { docxEditor } from "./shell/docxedit.js";
@@ -198,7 +199,7 @@ async function pickFolder(prompt, start) {
 function openMenuItems() {
   return [{ label: "From this Mac", fn: openOtherFolder }, { label: "From GitHub", fn: openFromGithub },
     { label: "From WebDAV", fn: openFromCloud }, { label: "From Amazon S3 or Cloudflare R2", fn: openFromS3 },
-    { label: "From a backup file", fn: openFromBackup }];
+    { label: "From a backup file", fn: openFromBackup }, { label: "From an invite", fn: joinFromInvite }];
 }
 
 // A backup back in: a zip the app saved, or a memory's masterkey.cryptomator file. The Mac's chooser picks it.
@@ -264,7 +265,7 @@ async function openFromGithub() {
 }
 
 // Cloud only: a memory that lives in the person's cloud. Nothing talks to a cloud until they press Connect.
-async function openFromCloud() {
+async function openFromCloud(quiet = false) {
   let clouds = [];
   try { clouds = (await api("clouds")).clouds || []; } catch (e) { toastErr(e.message); }
   const v = await openCloud({ clouds, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
@@ -281,9 +282,61 @@ async function openFromCloud() {
     }
     const j = await api("fromcloud", { conn: v.conn, path: v.path });
     await refreshFolders();
-    toastOk(`Added "${j.folder.name}". Unlock it with its password.`);
+    if (!quiet) toastOk(`Added "${j.folder.name}". Unlock it with its password.`);
     await switchTo(j.folder.id);
+    return j.folder.id;
   } catch (e) { toastErr(e.message); }
+}
+
+// Working together: the Share window for the open memory.
+function openShareHere() {
+  const info = curInfo();
+  if (!info) return;
+  openShare({
+    name: info.name, load: () => api("shareinfo"), invite: (role) => api("shareinvite", { role }),
+    answer: (id, allow) => api("shareanswer", { id, allow }), role: (id, role) => api("sharerole", { id, role }),
+    remove: async (id) => { if (await confirmDialog("Remove them from this memory?", "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await api("shareremove", { id }); },
+    storage: openStoragePanel,
+  });
+}
+
+// An invite: find the shared files on this side, then ask the owner to let you in.
+async function joinFromInvite() {
+  const v = await joinDialog();
+  if (!v) return;
+  try {
+    let j;
+    if (v.where === "webdav") {
+      const fid = await openFromCloud(true);
+      if (!fid) return;
+      j = await api("joinshared", { link: v.link, folder: fid });
+    } else {
+      toast("Choose the shared memory's folder");
+      j = await api("joinshared", { link: v.link });
+      if (j.cancelled) return;
+    }
+    await refreshFolders();
+    await switchTo(j.folder.id);
+    toastOk(`Asked to join "${j.folder.name}". You can open it once the owner lets you in.`);
+  } catch (e) { toastErr(e.message); }
+}
+
+// Someone asking to join a memory you own: ask once, when it's open on screen.
+const shareAsked = new Set();
+async function watchShare() {
+  if (document.querySelector(".overlay")) return;
+  let r;
+  try { r = (await api("sharerequests")).requests || []; } catch { return; }
+  for (const q of r) {
+    if (shareAsked.has(q.id)) continue;
+    shareAsked.add(q.id);
+    const how = await choiceDialog(`"${q.name}" wants to join "${curInfo()?.name || "this memory"}"`,
+      `They used your invite (${q.role === "view" ? "Can view" : "Can edit"}). Let them in only if you sent it to them.`,
+      [["no", "Say no"], ["yes", "Let in", "primary"]], "Later");
+    if (!how) { shareAsked.delete(q.id); continue; }
+    try { await api("shareanswer", { id: q.id, allow: how === "yes" }); toastOk(how === "yes" ? `${q.name} is in.` : "Said no."); }
+    catch (e) { toastErr(e.message); }
+  }
 }
 
 async function openOtherFolder() {
@@ -379,32 +432,53 @@ function drawUnlock() {
       sel.addEventListener("change", () => switchTo(sel.value));
       kids.push(sel);
     } else kids.push(el("div", { class: "unlock-folder" }, info.name));
-    const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), "Unlock with Touch ID");
-    let on = false, setUp = false;   // setUp: Touch ID pressed before it was on, so this password turns it on
-    const viaTouch = async () => {
-      if (!on) { setUp = true; err.classList.add("hint"); err.textContent = "Type your password once. Next time, Touch ID."; pw.focus(); return; }
-      err.textContent = ""; touch.disabled = true;
-      try { await unlockCurrent(TOUCH); } catch (x) { err.textContent = x.message; pw.focus(); }
-      touch.disabled = false;
-    };
-    touch.addEventListener("click", viaTouch);
-    kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This memory is locked." : "Your notes are locked."), pw, btn, touch, err,
-      el("button", { class: "link-btn unlock-recover", type: "button", onclick: recoverWithKey }, "Forgot it? Use your recovery key"));
-    if (info.exists) api("touchidinfo", { folder: info.id }).then((j) => {
-      if (!j.available || currentFolder() !== info.id || !touch.isConnected) return;
-      on = j.on;
-      touch.classList.remove("hidden");
-      if (on && !touchTried.has(info.id)) { touchTried.add(info.id); viaTouch(); }   // opening the app: ask at once
-    }).catch(() => {});
-    unlockEl._submit = async (e) => {
-      e.preventDefault();
-      if (!pw.value) return;
-      err.textContent = ""; err.classList.remove("hint"); btn.disabled = true;
-      try { await unlockCurrent(pw.value, setUp); pw.value = ""; }
-      catch (x) { err.textContent = x.message; pw.select(); }
-      btn.disabled = false;
-    };
-    unlockEl._focus = () => pw.focus();
+    if (info.joined) {   // shared with this person: it opens with their own key, no password
+      const open = el("button", { class: "btn primary", type: "submit" }, "Open");
+      kids.push(el("div", { class: "unlock-sub" }, "Shared with you. It opens with your own key."), open, err);
+      unlockEl._submit = async (e) => {
+        e.preventDefault();
+        err.textContent = ""; err.classList.remove("hint"); open.disabled = true;
+        try {
+          const j = await api("keyunlock", { folder: info.id });
+          if (j.waiting) { err.classList.add("hint"); err.textContent = "Waiting for the owner to let you in. Try again later."; }
+          else {
+            setPass(j.pass, info.id);
+            touchTried.add(info.id);
+            await enterApp();
+            if (j.role === "view") toast("View only: you can read it, not change it.");
+          }
+        } catch (x) { err.textContent = x.message; }
+        open.disabled = false;
+      };
+      unlockEl._focus = () => open.focus();
+    } else {
+      const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), "Unlock with Touch ID");
+      let on = false, setUp = false;   // setUp: Touch ID pressed before it was on, so this password turns it on
+      const viaTouch = async () => {
+        if (!on) { setUp = true; err.classList.add("hint"); err.textContent = "Type your password once. Next time, Touch ID."; pw.focus(); return; }
+        err.textContent = ""; touch.disabled = true;
+        try { await unlockCurrent(TOUCH); } catch (x) { err.textContent = x.message; pw.focus(); }
+        touch.disabled = false;
+      };
+      touch.addEventListener("click", viaTouch);
+      kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This memory is locked." : "Your notes are locked."), pw, btn, touch, err,
+        el("button", { class: "link-btn unlock-recover", type: "button", onclick: recoverWithKey }, "Forgot it? Use your recovery key"));
+      if (info.exists) api("touchidinfo", { folder: info.id }).then((j) => {
+        if (!j.available || currentFolder() !== info.id || !touch.isConnected) return;
+        on = j.on;
+        touch.classList.remove("hidden");
+        if (on && !touchTried.has(info.id)) { touchTried.add(info.id); viaTouch(); }   // opening the app: ask at once
+      }).catch(() => {});
+      unlockEl._submit = async (e) => {
+        e.preventDefault();
+        if (!pw.value) return;
+        err.textContent = ""; err.classList.remove("hint"); btn.disabled = true;
+        try { await unlockCurrent(pw.value, setUp); pw.value = ""; }
+        catch (x) { err.textContent = x.message; pw.select(); }
+        btn.disabled = false;
+      };
+      unlockEl._focus = () => pw.focus();
+    }
   } else {
     kids.push(el("div", { class: "unlock-sub" }, "No memory yet. Open one or make a new one."));
     unlockEl._submit = (e) => e.preventDefault();
@@ -450,9 +524,9 @@ async function openSwitcher() {
   await refreshFolders();
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
-  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3,
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
-    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, ai: () => openAI("activity"), settings: openSettingsHere } : {}),
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: openShareHere, ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 
@@ -754,6 +828,7 @@ async function watchAllow() {
 async function watchChanges() {
   if (!openOnScreen() || !barEls || !barEls.cloud.isConnected) return;
   watchAllow();
+  watchShare();
   let g;
   try { g = (await api("gen")).gen; } catch { return; }
   if (g == null) return;

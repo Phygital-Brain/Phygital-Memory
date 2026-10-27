@@ -93,6 +93,23 @@ try:
         except ValueError:
             check(True, "a used invite doesn't work again")
 
+    # both editing the same note at once: lines changed in different places merge, the same lines keep both
+    with ana:
+        a = Memory(shared)
+        a.unlock_with_key(sharing.masterkey(sharing.my_key(shared)))
+    base = m.read("Plan.md")
+    m.save("Plan.md", base.replace("# Plan", "# Plan (Max's title)"))
+    _, merged = a.save_merge("Plan.md", base + "Ana's new last line\n", base=base)
+    after = m.read("Plan.md")
+    check("Max's title" in after and "Ana's new last line" in after, "edits to different lines merge", after)
+    base2 = m.read("Plan.md")
+    m.save("Plan.md", base2.replace("from Max", "Max changed this line"))
+    path, _ = a.save_merge("Plan.md", base2.replace("from Max", "Ana changed this line"), base=base2)
+    texts = [m.read(x["path"]) for x in m.list_files() if x["path"].startswith("Plan")]
+    check(any("Max changed" in t for t in texts) and any("Ana changed" in t for t in texts), "the same line changed by both keeps both versions",
+          [x["path"] for x in m.list_files() if x["path"].startswith("Plan")])
+    a.lock()
+
     # view only
     with max:
         link2 = sharing.invite(shared, m.key_raw, "view", "Work")

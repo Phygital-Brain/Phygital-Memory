@@ -96,6 +96,7 @@ class Folder:
         self.fails = {"n": 0, "until": 0.0}
         self.github, self.sync = github, None   # "owner/repo" when backed up to a private GitHub repo
         self.ai_hidden = False   # "AI can't see this": no AI app reaches it, whatever its key says
+        self.joined = False      # a memory someone shared with this person: it opens with their own key
         self.gitdir = GITDIRS / fid
         self.memory.lost_store = self.gitdir / "phygital-lost-folders.json"
         inside = self.path / ".git"
@@ -160,6 +161,7 @@ class Folder:
                 "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None,
                 "webdav": cloud.where(self.mirror_at, self.mirror_at["path"]) if self.mirror_at else None,
                 "s3": cloud.where(self.s3_at, self.s3_at["path"]) if self.s3_at else None,
+                "joined": self.joined,
                 "aiHidden": self.ai_hidden}
 
     def ready(self) -> None:
@@ -209,6 +211,7 @@ class Folders:
                 self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
                                              e.get("github"), e.get("cloud"), e.get("mirror"), e.get("s3"))
                 self.items[e["id"]].ai_hidden = bool(e.get("aiHidden"))
+                self.items[e["id"]].joined = bool(e.get("joined"))
         for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
                 cloud.unmount(point)
@@ -222,7 +225,7 @@ class Folders:
         data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {}),
                              **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"mirror": f.mirror_at} if f.mirror_at else {}),
                              **({"s3": f.s3_at} if f.s3_at else {}),
-                             **({"aiHidden": True} if f.ai_hidden else {})}
+                             **({"aiHidden": True} if f.ai_hidden else {}), **({"joined": True} if f.joined else {})}
                             for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1))
@@ -367,6 +370,7 @@ class Folders:
         with self._lock:
             moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path}, None, f.s3_at)
             moved.ai_hidden = f.ai_hidden
+            moved.joined = f.joined
             self.items[f.id] = moved
             self._save()
         return moved.info()
@@ -397,6 +401,7 @@ class Folders:
         with self._lock:
             moved = Folder(f.id, f.name, dest, f.github, None, f.cloud_at if keep_sync else None, f.s3_at)
             moved.ai_hidden = f.ai_hidden
+            moved.joined = f.joined
             self.items[fid] = moved
             self._save()
         return {**moved.info(), "cloudCopy": None if keep_sync else cloud.where(f.cloud_at, f.cloud_at["path"])}
@@ -701,6 +706,7 @@ class Folders:
             new_path = move_folder_on_disk(f.path, Path(parent))
             moved = Folder(f.id, f.name, new_path, f.github, None, f.mirror_at, f.s3_at)
             moved.ai_hidden = f.ai_hidden
+            moved.joined = f.joined
             self.items[fid] = moved
             self._save()
             return moved.info()

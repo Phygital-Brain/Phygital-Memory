@@ -652,3 +652,10 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .sel-count { white-space: nowrap; }
 .sel-bar .sel-btns { display: flex; gap: 4px; flex-wrap: nowrap; }
 .sel-bar .btn { white-space: nowrap; }
+.share-req { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: var(--r-s); background: var(--accent-soft); font-size: 13px; }
+.share-row { align-items: center; }
+.share-invite { display: flex; gap: 8px; align-items: center; }
+.share-invite code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; padding: 6px 8px; border-radius: var(--r-s); background: var(--bg-app); user-select: all; }
+.share-row .act-main { flex: 1; min-width: 0; }
+.share-row .act-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share .st-warn .btn { white-space: nowrap; flex: none; }
