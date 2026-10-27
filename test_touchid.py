@@ -89,6 +89,20 @@ api("touchid", {"on": True, "password": "12345678"}, P, fid)
 code, j = api("touchid", {"on": False}, P, fid)
 check(code == 200 and not j["on"] and not (D / f"kept-{fid}").exists(), "off: the kept password is gone")
 
+# pressed Touch ID before it was set up: the next password unlock turns it on
+api("lock", {}, P, fid)
+code, j = api("unlock", {"password": "12345678", "touchid": True}, folder=fid)
+P = j["pass"]
+check(code == 200 and (D / f"kept-{fid}").read_text() == "12345678", "the first password after pressing Touch ID turns it on")
+api("lock", {}, P, fid)
+code, j = api("unlock", {"password": "wrong", "touchid": True}, folder=fid)
+check(code != 200, "a wrong password turns nothing on")
+code, j = api("unlock", {"password": "12345678"}, folder=fid)
+P = j["pass"]
+api("touchid", {"on": False}, P, fid)
+code, j = api("unlock", {"password": "12345678"}, folder=fid)
+check(not (D / f"kept-{fid}").exists(), "a plain password unlock doesn't turn it on")
+
 # ---- an AI app's Allow needs the finger too ----
 code, _, raw = http("POST", "/register", {"redirect_uris": ["http://127.0.0.1:9/cb"], "client_name": "Finger AI",
                                           "token_endpoint_auth_method": "none",

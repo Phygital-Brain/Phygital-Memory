@@ -307,9 +307,9 @@ async function lockAll() {
 }
 
 // ---------- unlock ----------
-async function unlockCurrent(password) {
+async function unlockCurrent(password, touchid = false) {
   const fid = currentFolder();
-  const j = await api(password === TOUCH ? "touchidunlock" : "unlock", { password, folder: fid });
+  const j = await api(password === TOUCH ? "touchidunlock" : "unlock", { password, folder: fid, touchid });
   setPass(j.pass, fid);
   touchTried.add(fid);   // locked by hand later: don't ask by itself again
   await enterApp();
@@ -333,7 +333,9 @@ function drawUnlock() {
       kids.push(sel);
     } else kids.push(el("div", { class: "unlock-folder" }, info.name));
     const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), "Unlock with Touch ID");
+    let on = false, setUp = false;   // setUp: Touch ID pressed before it was on, so this password turns it on
     const viaTouch = async () => {
+      if (!on) { setUp = true; err.classList.add("hint"); err.textContent = "Type your password once. Next time, Touch ID."; pw.focus(); return; }
       err.textContent = ""; touch.disabled = true;
       try { await unlockCurrent(TOUCH); } catch (x) { err.textContent = x.message; pw.focus(); }
       touch.disabled = false;
@@ -341,15 +343,16 @@ function drawUnlock() {
     touch.addEventListener("click", viaTouch);
     kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This folder is locked." : "Your notes are locked."), pw, btn, touch, err);
     if (info.exists) api("touchidinfo", { folder: info.id }).then((j) => {
-      if (!j.on || currentFolder() !== info.id || !touch.isConnected) return;
+      if (!j.available || currentFolder() !== info.id || !touch.isConnected) return;
+      on = j.on;
       touch.classList.remove("hidden");
-      if (!touchTried.has(info.id)) { touchTried.add(info.id); viaTouch(); }   // opening the app: ask at once
+      if (on && !touchTried.has(info.id)) { touchTried.add(info.id); viaTouch(); }   // opening the app: ask at once
     }).catch(() => {});
     unlockEl._submit = async (e) => {
       e.preventDefault();
       if (!pw.value) return;
-      err.textContent = ""; btn.disabled = true;
-      try { await unlockCurrent(pw.value); pw.value = ""; }
+      err.textContent = ""; err.classList.remove("hint"); btn.disabled = true;
+      try { await unlockCurrent(pw.value, setUp); pw.value = ""; }
       catch (x) { err.textContent = x.message; pw.select(); }
       btn.disabled = false;
     };

@@ -701,7 +701,14 @@ async def api(request: Request) -> Response:
         if action == "devunlock" and os.environ.get("PHYGITAL_MEMORY_DEV_PASSWORD_FILE"):
             return _unlock(f, Path(os.environ["PHYGITAL_MEMORY_DEV_PASSWORD_FILE"]).read_text().strip())
         if action == "unlock":
-            return _unlock(f, body.get("password", ""))
+            r = _unlock(f, body.get("password", ""))
+            if body.get("touchid") and r.status_code == 200 and await asyncio.to_thread(touchid.available):
+                try:   # pressed "Unlock with Touch ID" before it was set up: this password turns it on
+                    await asyncio.to_thread(touchid.save, f.id, str(body.get("password", "")))
+                    approvals.add("Touch ID unlock on", f.name, "password")
+                except RuntimeError:
+                    pass
+            return r
         if action == "touchidinfo":   # the unlock screen: can this memory open with Touch ID?
             can = await asyncio.to_thread(touchid.available)
             return _ok({"available": can, "on": can and await asyncio.to_thread(touchid.has, f.id)})
