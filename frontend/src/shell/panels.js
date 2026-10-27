@@ -56,7 +56,7 @@ export function openStorage(ctx) {
           el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · saved ${ago(gs && gs.ago)}`),
           gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB and stay${gs.too_big.length === 1 ? "s" : ""} out of the backup.`) : null,
           el("div", {}, btn("Stop backup", () => run(() => ctx.stopGithub(s.github), "changed"), "st-stop")))
-      : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), "Back up to GitHub"));
+      : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), "Turn on backup"));
 
     const card = el("div", { class: "dlg storage", role: "dialog" },
       el("div", { class: "dlg-title" }, `Storage and backup: ${ctx.name}`),
@@ -85,7 +85,7 @@ export function openStorage(ctx) {
         !!s.s3, s.s3
           ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
               el("div", {}, btn("Stop backup", () => run(ctx.stopS3, "changed"), "st-stop")))
-          : el("div", {}, btn("Back up to Amazon S3 or Cloudflare R2", () => run(ctx.toS3, "changed")))),
+          : el("div", {}, btn("Turn on backup", () => run(ctx.toS3, "changed")))),
       option("file", "Backup file", "One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file.",
         false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null)))),
       el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
