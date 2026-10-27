@@ -9,6 +9,7 @@ included. The app says so; that's why it is only ever opened by hand and closes 
 """
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import subprocess
@@ -178,6 +179,7 @@ def _add_desktop_link(name: str, where: str) -> Path | None:
         if not os.path.lexists(link):
             try:
                 link.symlink_to(where)
+                _remember(link, True)
                 return link
             except OSError:
                 return None
@@ -187,13 +189,38 @@ def _add_desktop_link(name: str, where: str) -> Path | None:
 def _remove_desktop_link(link: Path | None) -> None:
     if link is not None and _ours(link):
         link.unlink(missing_ok=True)
+    if link is not None:
+        _remember(link, False)
+
+
+# The shortcuts made, written down next to the Finder views, so the start-up clean-up never has to read the whole
+# Desktop (macOS asks the person for that, and the app would wait on the question before it opens).
+MADE = BASE / "desktop-links.json"
+
+
+def _remember(link: Path, made: bool) -> None:
+    try:
+        links = set(json.loads(MADE.read_text()))
+    except (OSError, ValueError):
+        links = set()
+    (links.add if made else links.discard)(str(link))
+    try:
+        BASE.mkdir(parents=True, exist_ok=True)
+        MADE.write_text(json.dumps(sorted(links)))
+    except OSError:
+        pass
 
 
 def clear_desktop_links() -> None:
     """At start: remove shortcuts left from a run that ended without locking (a crash, a forced quit)."""
     try:
-        for link in DESKTOP.iterdir():
-            if _ours(link):
-                link.unlink(missing_ok=True)
-    except OSError:
-        pass
+        links = json.loads(MADE.read_text())
+    except (OSError, ValueError):
+        return
+    for link in links:
+        try:
+            if _ours(Path(link)):
+                Path(link).unlink(missing_ok=True)
+        except OSError:
+            pass
+    MADE.unlink(missing_ok=True)

@@ -2,7 +2,8 @@
 set -e
 cd "$(dirname "$0")/.."
 P=phygital_memory
-uv run pyinstaller --noconfirm --clean --onefile --name phygital-memory-server \
+# A folder, not one file: one file unpacks itself on every start, which doubled the start time.
+uv run pyinstaller --noconfirm --clean --onedir --noupx --name phygital-memory-server \
   --distpath packaging/dist --workpath packaging/build --specpath packaging \
   --paths . \
   --collect-submodules phygital_memory \
