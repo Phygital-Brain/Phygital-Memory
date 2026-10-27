@@ -1398,9 +1398,43 @@ async function setUpApprover(chip) {
   } catch (e) { toastErr(e.message); return false; }
 }
 
+// A short "sealed" moment after a signed yes: the lock closes, a ring draws round it, scrambled characters settle
+// into words. About a second; just a fade for people who turn motion down.
+function sealAnimation() {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 64 64");
+  svg.setAttribute("class", "pk-lock");
+  svg.innerHTML = '<circle class="pk-ring" cx="32" cy="32" r="29"/>'
+    + '<path class="pk-shackle" d="M24 29v-6a8 8 0 0 1 16 0v6"/>'
+    + '<rect class="pk-body" x="19" y="29" width="26" height="19" rx="4"/>'
+    + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/>';
+  const words = "Signed with Phygital Key";
+  const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
+  const box = el("div", { class: "pk-seal", "aria-hidden": "true" }, el("div", { class: "pk-card" }, svg, text));
+  document.body.append(box);
+  const glyphs = "0123456789abcdef#%&*+=<>";
+  const start = performance.now();
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const tick = (now) => {
+    const k = still ? 1 : Math.min(1, (now - start - 250) / 450);   // letters settle left to right
+    text.textContent = [...words].map((c, i) => c === " " || i / words.length < k ? c
+      : glyphs[(Math.random() * glyphs.length) | 0]).join("");
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  setTimeout(() => box.remove(), still ? 900 : 1500);
+}
+
+const SIGNED_ACTIONS = new Set(["shareanswer", "shareadd", "shareremove", "sharerole", "sharestop", "shareforget"]);
+
 async function shareApi(action, body = {}) {
   for (let i = 0; i < 4; i++) {
-    try { return await api(action, body); }
+    try {
+      const j = await api(action, body);
+      if (SIGNED_ACTIONS.has(action) && !(action === "shareanswer" && !body.allow)) sealAnimation();
+      return j;
+    }
     catch (e) {
       const d = e.data || {};
       if (d.needApprover) { if (!(await setUpApprover(d.chip))) throw new Error("Not approved."); continue; }
