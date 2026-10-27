@@ -181,9 +181,10 @@ fn fit_to_screen(win: &tauri::WebviewWindow) {
     let (free_w, free_h) = (screen.work_area().size.width as f64 / scale, screen.work_area().size.height as f64 / scale);
     let fit = |free: f64, share: f64, least: f64, most: f64| (free * share).max(least.min(free)).min(most);
     let (w, h) = (fit(free_w, 0.80, 1200.0, 2000.0), fit(free_h, 0.88, 800.0, 1400.0));
-    if win.set_size(tauri::LogicalSize::new(w, h)).is_ok() {
-        let _ = win.center();
-    }
+    // Placed from the new size directly: center() would still use the old 1200x800 and open off to the side.
+    let (left, top) = (screen.work_area().position.x as f64 / scale, screen.work_area().position.y as f64 / scale);
+    let _ = win.set_size(tauri::LogicalSize::new(w, h));
+    let _ = win.set_position(tauri::LogicalPosition::new(left + (free_w - w) / 2.0, top + (free_h - h) / 2.0));
 }
 
 fn main() {
