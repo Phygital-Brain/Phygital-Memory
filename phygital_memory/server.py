@@ -34,7 +34,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from . import activity
-from .folders import Folders, cloud_places, is_vault, pick_files, pick_folder, pick_save, write_guides
+from .folders import STATE, Folders, cloud_places, is_vault, pick_files, pick_folder, pick_save, write_guides
 from .memory import Locked, Memory, _clean_path
 from .vault.keys import WrongPassword
 
@@ -624,12 +624,27 @@ def _finish() -> None:
     closing["exit"] = True
 
 
+KEEP_FILE = STATE / "close.json"   # until when "Keep open" is remembered
+KEEP_FOR = 72 * 3600
+
+
+def _keep_remembered() -> bool:
+    try:
+        return json.loads(KEEP_FILE.read_text()).get("keep_until", 0) > time.time()
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
 def _answer_close(keep: bool) -> None:
     """Keep open: the window hides and the app stays in the Dock with the folders open, until the person locks
-    them or quits. Otherwise everything locks and the app quits."""
+    them or quits. The answer is remembered for 72 hours, so closing doesn't ask every time. Otherwise everything
+    locks and the app quits."""
     closing["asked"] = False
     closing["answer"] = {"keep": 1 if keep else 0}
-    if not keep:
+    if keep:
+        STATE.mkdir(parents=True, exist_ok=True)
+        KEEP_FILE.write_text(json.dumps({"keep_until": time.time() + KEEP_FOR}))
+    else:
         _finish()
 
 
@@ -641,6 +656,9 @@ async def shell(request: Request) -> Response:
     action = request.path_params["action"]
     if action == "close":   # ask whenever something is open: lock it all, or keep it open
         if folders.open() or any(f.finder.where() for f in folders.items.values()):
+            if _keep_remembered():   # "Keep open" chosen in the last 72 hours: don't ask again
+                closing.update(asked=False, answer={"keep": 1}, exit=False)
+                return JSONResponse({"ask": False, "keep": True})
             closing.update(asked=True, answer=None, exit=False)
             return JSONResponse({"ask": True})
         _finish()

@@ -389,6 +389,7 @@ input:focus-visible { outline: none; }
 .close-dlg { width: min(420px, calc(100vw - 32px)); }
 .close-actions { display: flex; flex-direction: column; gap: 8px; }
 .close-actions .btn { justify-content: center; padding: 8px; }
+.close-count { margin-top: 10px; font-size: 12px; color: var(--text-3); text-align: center; }
 
 /* folder switcher, Baalda-style */
 .sb-tile { flex: none; display: grid; place-items: center; }
