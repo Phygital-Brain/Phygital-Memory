@@ -171,6 +171,12 @@ fn fit_to_screen(win: &tauri::WebviewWindow) {
 
 fn main() {
     let app = tauri::Builder::default()
+        // Only ever one copy: opening the app again just brings back the window of the one already running.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus(); }
+            let h = app.clone();
+            std::thread::spawn(move || { let _ = shell(&h, "reopen"); });
+        }))
         .plugin(tauri_plugin_shell::init())
         .manage(Server(Mutex::new(None)))
         .manage(ShellToken(random_token()))
