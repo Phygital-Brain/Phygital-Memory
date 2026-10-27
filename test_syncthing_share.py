@@ -37,7 +37,13 @@ def server(port, state, folder, who):
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+APPROVER_PW = "test approval words 2026"   # test only: Max approves sharing changes with this
+SIGNED = ("shareanswer", "shareadd", "shareremove", "sharerole", "sharestop", "shareforget")
+
+
 def api(port, action, body=None, pw=None):
+    if action in SIGNED and (body or {}).get("approverPassword") is None:
+        body = {**(body or {}), "approverPassword": APPROVER_PW}
     req = urllib.request.Request(f"http://127.0.0.1:{port}/api/{action}", json.dumps(body or {}).encode(), method="POST",
                                  headers={"Content-Type": "application/json", **({"X-App-Pass": pw} if pw else {})})
     try:
@@ -67,6 +73,7 @@ def servers():
     procs = [server(A, tmp / "max", ROOT.parent / "locked-notes", "A"), server(B, tmp / "ana", tmp / "none", "B")]
     for port in (A, B):
         wait(lambda: urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1), 30)
+    api(A, "approversetup", {"kind": "password", "password": APPROVER_PW})
     return procs
 
 

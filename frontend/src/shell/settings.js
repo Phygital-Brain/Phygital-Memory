@@ -77,6 +77,14 @@ export function openSettings(folderOpts, me) {
     const name = el("input", { class: "dlg-input set-name", value: me.name || "", maxlength: "60", spellcheck: "false", "aria-label": "Your name" });
     name.addEventListener("change", async () => { name.value = await me.set(name.value.trim()); });
     rows.push(section("Sharing"), row("Your name", null, name, "What others see when you share a memory with them or join one."));
+    if (me.approver) {
+      const a = me.approver;
+      rows.push(row("Approve sharing with", a.label, a.setUp ? btn("Set up", a.setUp) : null,
+        "Letting someone in, adding, removing or forgetting a person is signed with your own key (Phygital Key format), so there's a record nobody can change."));
+      if (a.signed.length) rows.push(el("div", { class: "act-list share-hist" }, ...a.signed.map((x) => el("div", { class: "todo-row share-row" },
+        el("div", { class: "act-main" }, el("div", { class: "act-line" }, x.what[0].toUpperCase() + x.what.slice(1)),
+          el("div", { class: "act-folder" }, "Signed · " + new Date(x.t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })))))));
+    }
   }
   if (f) {
     rows.push(section(`This memory: ${f.name}`),

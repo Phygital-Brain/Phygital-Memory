@@ -13,6 +13,13 @@
 //   keep <service> <account>            keep another secret (cloud password, GitHub key...), secret on stdin
 //   read <service> <account>            print it (no prompt: the caller check is the guard)
 //   drop <service> <account>
+//   signer-new                          make a signing key inside this Mac's security chip (Secure Enclave), usable
+//                                       only after Touch ID or the Mac password; print {"blob","public"} (the blob is
+//                                       the chip's sealed handle: useless on any other Mac)
+//   signer-sign <what>                  ask ("approve: <what>"), then sign; stdin: blob line, message line (base64);
+//                                       print the signature (base64 DER). The server builds the words from the exact
+//                                       approval it signs (Phygital Key format), and only the server may run this.
+import CryptoKit
 import Darwin
 import Foundation
 import LocalAuthentication
@@ -86,7 +93,7 @@ let a = CommandLine.arguments
 guard a.count >= 2 else { fail("usage: can | ask | save | get | has | forget | keep | read | drop", 2) }
 guard callerIsOurServer() else { fail("only Phygital Memory may use this helper", 5) }
 // every service it handles is the app's own
-guard a.count < 3 || a[1] == "ask" || a[2].hasPrefix("Phygital Memory") else { fail("not one of the app's items", 2) }
+guard a.count < 3 || a[1] == "ask" || a[1] == "signer-sign" || a[2].hasPrefix("Phygital Memory") else { fail("not one of the app's items", 2) }
 
 switch (a[1], a.count) {
 case ("can", 2):
@@ -107,6 +114,28 @@ case ("has", 4):
 case ("forget", 4), ("drop", 4):
     let s = SecItemDelete(query(a[2], a[3]) as CFDictionary)
     exit(s == errSecSuccess || s == errSecItemNotFound ? 0 : 1)
+case ("signer-new", 2):
+    guard SecureEnclave.isAvailable else { fail("this Mac has no security chip", 6) }
+    var cfErr: Unmanaged<CFError>?
+    guard let access = SecAccessControlCreateWithFlags(nil, kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                                                       [.privateKeyUsage, .userPresence], &cfErr)
+    else { fail("couldn't make the access rule") }
+    do {
+        let key = try SecureEnclave.P256.Signing.PrivateKey(accessControl: access)
+        let out = ["blob": key.dataRepresentation.base64EncodedString(),
+                   "public": key.publicKey.derRepresentation.base64EncodedString()]
+        FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: out))
+    } catch { fail("couldn't make the key: \(error)") }
+case ("signer-sign", 3):
+    let lines = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self).split(separator: "\n")
+    guard lines.count == 2, let blob = Data(base64Encoded: String(lines[0])), let msg = Data(base64Encoded: String(lines[1]))
+    else { fail("give the key and the message", 2) }
+    let ctx = LAContext()
+    ctx.localizedReason = "approve: " + String(a[2].prefix(160))
+    do {
+        let key = try SecureEnclave.P256.Signing.PrivateKey(dataRepresentation: blob, authenticationContext: ctx)
+        FileHandle.standardOutput.write(try key.signature(for: msg).derRepresentation.base64EncodedString().data(using: .utf8)!)
+    } catch { fail("not signed: \(error)", 3) }
 default:
-    fail("usage: can | ask | save | get | has | forget | keep | read | drop", 2)
+    fail("usage: can | ask | save | get | has | forget | keep | read | drop | signer-new | signer-sign", 2)
 }

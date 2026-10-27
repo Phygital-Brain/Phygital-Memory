@@ -27,7 +27,7 @@ export async function api(action, body = {}) {
     lockedListeners.forEach((fn) => fn(id));
     throw new Error("locked");
   }
-  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  if (!r.ok) { const e = new Error(j.error || `Error ${r.status}`); e.data = j; throw e; }
   return j;
 }
 

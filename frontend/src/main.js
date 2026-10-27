@@ -334,17 +334,17 @@ async function openShareHere(path = null) {
   const what = path ? (path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path) : info.name;
   openShare({
     name: what, part: !!path, load: () => api("shareinfo", at), invite: (role) => api("shareinvite", { role, ...at }),
-    answer: (id, allow) => api("shareanswer", { id, allow, ...at }), role: (id, role) => api("sharerole", { id, role, ...at }),
-    remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await api("shareremove", { id, ...at }); },
+    answer: (id, allow) => shareApi("shareanswer", { id, allow, ...at }), role: (id, role) => shareApi("sharerole", { id, role, ...at }),
+    remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await shareApi("shareremove", { id, ...at }); },
     openPart: (p) => openShareHere(p),
-    people: () => api("sharepeople", at), add: (id, role) => api("shareadd", { id, role, ...at }),
+    people: () => api("sharepeople", at), add: (id, role) => shareApi("shareadd", { id, role, ...at }),
     forget: async (id, name) => {
       if (await confirmDialog(`Forget ${name}?`, "Forget", true, "They're removed from everything you share, their app deletes its copies, and they leave this list. To share with them again, send a new invite."))
-        await api("shareforget", { id });
+        await shareApi("shareforget", { id });
     },
     history: () => api("sharehistory", at),
     stopPart: async (share, p) => {
-      if (await confirmDialog(`Stop sharing "${p}"?`, "Stop sharing", true, "Nobody gets changes to it any more. Copies they already have stay with them.")) await api("sharestop", { share });
+      if (await confirmDialog(`Stop sharing "${p}"?`, "Stop sharing", true, "Nobody gets changes to it any more. Copies they already have stay with them.")) await shareApi("sharestop", { share });
     },
     storage: openStoragePanel,
   });
@@ -389,7 +389,7 @@ async function watchShare() {
       [["no", "Say no"], ["yes", "Let in", "primary"]], "Later");
     if (!how) { shareAsked.delete(q.id); continue; }
     try {
-      await api("shareanswer", { id: q.id, allow: how === "yes", ...(q.share ? { share: q.share } : {}) });
+      await shareApi("shareanswer", { id: q.id, allow: how === "yes", ...(q.share ? { share: q.share } : {}) });
       toastOk(how === "yes" ? `${q.name} is in. The files go to them now.` : "Said no.");
     }
     catch (e) { toastErr(e.message); }
@@ -821,6 +821,9 @@ async function openSettingsHere() {
   try {
     let n = (await api("myname")).name;
     me = { name: n, set: async (v) => { try { n = (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); } return n; } };
+    const ap = await api("approverinfo");
+    me.approver = { label: !ap.set ? "Not set up yet" : ap.kind === "chip" ? "Touch ID (security chip)" : "Approval password",
+      signed: ap.signed, setUp: ap.set ? null : () => setUpApprover(ap.chip) };
   } catch {}
   openSettings(info && unlocked(info.id) ? {
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
@@ -1375,6 +1378,44 @@ function rowFor(n, depth, where = "") {
 function clearDropMarks() { document.querySelectorAll(".row.drop,.row.drop-before,.row.drop-after,.tree.drop").forEach((r) => r.classList.remove("drop", "drop-before", "drop-after")); }
 
 // context menus
+// Sharing changes are approved with the person's own key (Phygital Key): Touch ID through this Mac's security chip,
+// or an approval password. Set up once, the first time; then each change asks for the fingerprint or the password.
+async function setUpApprover(chip) {
+  const how = chip ? await choiceDialog("Approve sharing with Touch ID?",
+    "Letting someone in, adding, removing or forgetting a person will ask for your fingerprint, and the app keeps a signed record of each yes (Phygital Key). The key stays in this Mac's security chip.",
+    [["password", "Use a password"], ["chip", "Use Touch ID", "primary"]]) : "password";
+  if (!how) return false;
+  try {
+    if (how === "chip") { await api("approversetup", { kind: "chip" }); return true; }
+    const pw = await askPassword("Choose a password for approving sharing changes (12 or more characters)", "Next");
+    if (!pw) return false;
+    if (pw.length < 12) { toastErr("Use at least 12 characters. A short sentence works well."); return false; }
+    const again = await askPassword("Type it again", "Save");
+    if (again !== pw) { toastErr("Those don't match."); return false; }
+    await api("approversetup", { kind: "password", password: pw });
+    toastOk("Set. Sharing changes now ask for this password.");
+    return true;
+  } catch (e) { toastErr(e.message); return false; }
+}
+
+async function shareApi(action, body = {}) {
+  for (let i = 0; i < 4; i++) {
+    try { return await api(action, body); }
+    catch (e) {
+      const d = e.data || {};
+      if (d.needApprover) { if (!(await setUpApprover(d.chip))) throw new Error("Not approved."); continue; }
+      if (d.needPassword) {
+        const pw = await askPassword(`Approve: ${d.what}`, "Approve");
+        if (!pw) throw new Error("Not approved.");
+        body = { ...body, approverPassword: pw };
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("Not approved.");
+}
+
 // What of this memory is shared, and with whom, for the right-click menu (owner only).
 async function sharingNow() {
   if (curInfo()?.joined) return null;
@@ -1390,7 +1431,7 @@ function sharingItem(path, sh) {
   const others = sh.people.filter((p) => !who.some((w) => w.id === p.id));
   const done = (msg) => () => { toastOk(msg); loadShared(); };
   const add = (p) => ({ label: `Add ${p.name}`, sub: [["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t,
-    fn: () => api("shareadd", { path, id: p.id, role: r }).then(done(`${p.name} can now ${r === "edit" ? "edit" : "view"} it. It shows up in their app by itself.`), (e) => toastErr(e.message)) })) });
+    fn: () => shareApi("shareadd", { path, id: p.id, role: r }).then(done(`${p.name} can now ${r === "edit" ? "edit" : "view"} it. It shows up in their app by itself.`), (e) => toastErr(e.message)) })) });
   const invite = { label: "Invite someone new", fn: () => openShareHere(path) };
   const above = !part && sh.parts.filter((p) => path.startsWith(p.path + "/") && p.who.length).sort((a, b) => b.path.length - a.path.length)[0];
   if (above) {   // inside a shared folder: it goes with it, managed there
@@ -1403,11 +1444,11 @@ function sharingItem(path, sh) {
   return { label: "Sharing", cls: "mi-accent", value: who.length === 1 ? "1 person" : `${who.length} people`, sub: [
     ...who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view", sub: [
       ...[["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t, check: p.role === r,
-        fn: () => api("sharerole", { share: part.id, id: p.id, role: r }).then(done(`${p.name}: ${t}.`), (e) => toastErr(e.message)) })),
+        fn: () => shareApi("sharerole", { share: part.id, id: p.id, role: r }).then(done(`${p.name}: ${t}.`), (e) => toastErr(e.message)) })),
       { sep: true },
       { label: "Remove", cls: "danger", fn: async () => {
         if (await confirmDialog(`Remove ${p.name} from "${path}"?`, "Remove", true, "Their own key stops working here."))
-          api("shareremove", { share: part.id, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
+          shareApi("shareremove", { share: part.id, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
       } }] })),
     { sep: true }, ...others.map(add), invite,
     { label: "Sharing window", fn: () => openShareHere(path) }] };

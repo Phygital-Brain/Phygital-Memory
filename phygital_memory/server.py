@@ -39,7 +39,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, shares, sharing, touchid
+from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, pka, shares, sharing, touchid
 from .syncthing import Syncthing, proof as st_proof
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
@@ -644,6 +644,21 @@ def _ok(data, status=200):
     return JSONResponse(data, status_code=status, headers=HEADERS)
 
 
+async def _approved(body: dict, request: dict, words: str):
+    """None once the person signed this exact request with their own key (Phygital Key format); otherwise what the
+    page must do next: set up a key, ask for the approval password, or say it wasn't approved."""
+    try:
+        await asyncio.to_thread(pka.approve, request, words, body.get("approverPassword"))
+        return None
+    except pka.NotSetUp:
+        return _ok({"error": "Choose how you approve sharing first.", "needApprover": True,
+                    "chip": await asyncio.to_thread(pka.chip_available)}, 400)
+    except pka.NeedPassword:
+        return _ok({"error": "Type your approval password.", "needPassword": True, "what": words}, 400)
+    except pka.Refused as e:
+        return _ok({"error": str(e)}, 403)
+
+
 def _history_hook(f) -> None:
     """While a shared memory is open here, each change this person makes goes into its history (sharing.py)."""
     if getattr(f.memory, "_history_hooked", False):
@@ -1206,6 +1221,14 @@ async def api(request: Request) -> Response:
             if "name" in body:
                 return _ok({"name": await asyncio.to_thread(sharing.set_my_name, str(body["name"]))})
             return _ok({"name": await asyncio.to_thread(sharing.saved_name), "suggest": await asyncio.to_thread(sharing.my_name)})
+        if action == "approverinfo":   # how sharing changes are approved (Phygital Key), and the signed ones
+            c = await asyncio.to_thread(pka.card)
+            return _ok({"set": bool(c), "kind": c and c["kind"], "chip": await asyncio.to_thread(pka.chip_available),
+                        "card": pka.public(c), "signed": [{"t": x["t"], "what": x["what"]} for x in pka.signed(30)]})
+        if action == "approversetup":
+            if body.get("kind") == "chip":
+                return _ok({"card": await asyncio.to_thread(pka.set_up_chip)})
+            return _ok({"card": await asyncio.to_thread(pka.set_up_password, str(body.get("password", "")))})
         if action == "pickfolder":   # the Mac's own folder chooser
             start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
             # Otherwise the Mac reopens wherever the last pick was (often inside a cloud): start at home instead.
@@ -1589,8 +1612,11 @@ async def api(request: Request) -> Response:
                 who = next((p for p in await asyncio.to_thread(_people) if p["id"] == body.get("id")), None)
                 if not who:
                     return _ok({"error": "That person isn't on your list."}, 404)
+                if need := await _approved(body, {"type": "share.forget", "params": {"person": who["name"], "person_id": who["id"]}},
+                                        f"forget {who['name']}"):
+                    return need
                 await asyncio.to_thread(_forget_person, who["id"])
-                approvals.add(f"Forgot {who['name']}", f.name, "click")
+                approvals.add(f"Forgot {who['name']}", f.name, "Phygital Key")
                 return _ok({"ok": True})
             if action == "shareadd":   # share with someone already let in: no invite, no code (checked the first time)
                 person = next((p for p in await asyncio.to_thread(_people) if p["id"] == body.get("id")), None)
@@ -1603,11 +1629,16 @@ async def api(request: Request) -> Response:
                     part = await asyncio.to_thread(shares.create, vid, rel, kind)
                     tpath, traw = await asyncio.to_thread(target, part)
                 role = str(body.get("role", "edit"))
+                item = part["path"] if part else f.name
+                if need := await _approved(body, {"type": "share.add", "params": {"item": item, "person": person["name"],
+                                                                                "person_id": person["id"], "role": role}},
+                                        f"share {item} with {person['name']} ({'can edit' if role == 'edit' else 'can view'})"):
+                    return need
                 await asyncio.to_thread(sharing.add_member, tpath, traw, person, role)
                 if person.get("device") and (part or not f.cloud_at):   # their Mac gets it straight away
                     fid = await asyncio.to_thread(_st_ensure_path, tpath, part["name"]) if part else await asyncio.to_thread(_st_ensure, f)
                     await asyncio.to_thread(_st_offer, fid, person)
-                approvals.add(f"Shared with {person['name']} ({role})", f.name + (f" › {part['path']}" if part else ""), "click")
+                approvals.add(f"Shared with {person['name']} ({role})", f.name + (f" › {part['path']}" if part else ""), "Phygital Key")
                 return _ok({"members": sharing.members(tpath, traw), "share": part and part["id"]})
             if action == "shareinvite":
                 if not sharing.saved_name():
@@ -1640,8 +1671,17 @@ async def api(request: Request) -> Response:
             what = f.name + (f" › {part['path']}" if part else "")
             if action == "shareanswer":
                 r = sharing.request_of(tpath, str(body.get("id"))) or {}
-                who = next((x["name"] for x in sharing.requests(tpath, traw) if x["id"] == body.get("id")), "someone")
+                ask = next((x for x in sharing.requests(tpath, traw) if x["id"] == body.get("id")), {})
+                who = ask.get("name", "someone")
                 allow = bool(body.get("allow"))
+                if allow:
+                    role = body.get("role") or ask.get("role", "edit")
+                    item = part["path"] if part else f.name
+                    if need := await _approved(body, {"type": "share.let_in", "params": {
+                            "item": item, "person": who, "person_id": str(body.get("id")), "role": role,
+                            "safety": ask.get("safety", "")}},
+                            f"let {who} in to {item} ({'can edit' if role == 'edit' else 'can view'})"):
+                        return need
                 sharing.answer(tpath, traw, str(body.get("id")), allow, body.get("role"))
                 if allow:
                     await asyncio.to_thread(_people)   # remembered, to share with them again later
@@ -1649,14 +1689,23 @@ async def api(request: Request) -> Response:
                     if allow:   # only now do their Mac get the files (and, inside them, their own key)
                         await asyncio.to_thread(st.share_folder, fid, r["device"])
                     await asyncio.to_thread(_st_done_with, r.get("q"), r["device"], allow)
-                approvals.add((f"Let {who} in" if allow else f"Said no to {who}"), what, "click")
+                approvals.add((f"Let {who} in" if allow else f"Said no to {who}"), what, "Phygital Key" if allow else "click")
                 return _ok({"members": sharing.members(tpath, traw)})
+            item = part["path"] if part else f.name
+            whom = next((x["name"] for x in sharing.members(tpath, traw) if x["id"] == body.get("id")), "someone")
             if action == "sharerole":
+                role = str(body.get("role"))
+                if need := await _approved(body, {"type": "share.role", "params": {"item": item, "person": whom,
+                                                                                 "person_id": str(body.get("id")), "role": role}},
+                                        f"{whom} {'can edit' if role == 'edit' else 'can only view'} {item}"):
+                    return need
                 sharing.set_role(tpath, traw, str(body.get("id")), str(body.get("role")))
                 return _ok({"members": sharing.members(tpath, traw)})
             if action == "sharestop":   # stop sharing a folder or file with everyone
                 if not part:
                     return _ok({"error": "Remove people one by one to stop sharing the whole memory."}, 400)
+                if need := await _approved(body, {"type": "share.stop", "params": {"item": item}}, f"stop sharing {item}"):
+                    return need
                 _st_gone_add(fid)   # their app may still offer it back: never take it in
                 for x in sharing.members(tpath, traw):
                     if x["role"] != "owner":
@@ -1665,12 +1714,16 @@ async def api(request: Request) -> Response:
                             _st_unshare_later(fid, x["device"], part["id"])
                 await asyncio.to_thread(shares.stopping, part["id"])
                 _st_finish_unshares()   # nobody to wait for: gone now
-                approvals.add("Stopped sharing", what, "click")
+                approvals.add("Stopped sharing", what, "Phygital Key")
                 return _ok({"ok": True})
+            if need := await _approved(body, {"type": "share.remove", "params": {"item": item, "person": whom,
+                                                                               "person_id": str(body.get("id"))}},
+                                    f"remove {whom} from {item}"):
+                return need
             gone = sharing.remove(tpath, traw, str(body.get("id")))
             if gone.get("device") and fid:   # their app deletes its copy, then their computer stops getting it
                 _st_unshare_later(fid, gone["device"])
-            approvals.add(f"Removed {gone['name']}", what, "click")
+            approvals.add(f"Removed {gone['name']}", what, "Phygital Key")
             return _ok({"members": sharing.members(tpath, traw)})
         if action == "recoverykey":   # the 44 words, after the password again
             try:
