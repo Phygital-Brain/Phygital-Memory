@@ -23,11 +23,13 @@ import json
 import os
 import secrets
 import subprocess
+import threading
 import time
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
@@ -53,9 +55,17 @@ def _unb64(s: str) -> bytes:
 
 
 _me: dict = {}   # the personal key, read from the Keychain once per run (each read can make macOS ask)
+_me_lock = threading.Lock()
 
 
 def _identity() -> X25519PrivateKey:
+    """Your personal key. A new one is made only when the Keychain truly has none: if macOS refuses the read,
+    keychain.Refused goes up and nothing is replaced."""
+    with _me_lock:
+        return _identity_locked()
+
+
+def _identity_locked() -> X25519PrivateKey:
     if IDENTITY in _me:
         return _me[IDENTITY]
     raw = keychain.read(IDENTITY, "x25519")
@@ -67,6 +77,26 @@ def _identity() -> X25519PrivateKey:
                                                                   serialization.NoEncryption())))
     _me[IDENTITY] = key
     return key
+
+
+def _sign_key() -> Ed25519PrivateKey:
+    """The owner's signing key, made from the personal key (no other Keychain item): it signs "removed" notes, so
+    only the owner can make someone's app delete its copy."""
+    raw = _identity().private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+    return Ed25519PrivateKey.from_private_bytes(HKDF(hashes.SHA256(), 32, None, b"phygital-memory owner signing v1").derive(raw))
+
+
+def my_sign_public() -> str:
+    return _b64(_sign_key().public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw))
+
+
+def _removed_words(folder: Path, mid: str) -> bytes:
+    return b"phygital-memory removed v1|" + _vault_id(folder).encode() + b"|" + mid.encode()
+
+
+def owner_sign_public(folder: Path, raw_key: bytes) -> str | None:
+    """The owner's signing key as listed in this shared memory (a member pins it the first time they open it)."""
+    return next((x.get("sign") for x in members(folder, raw_key) if x["role"] == "owner"), None)
 
 
 def my_public() -> bytes:
@@ -190,8 +220,12 @@ def start(folder: Path, raw_key: bytes) -> None:
     """Make this memory shareable: you go on the list as its owner, with your own key file too."""
     m = _read_members(folder, raw_key)
     pub = my_public()
-    if not any(x["id"] == member_id(pub) for x in m["members"]):
-        m["members"].append({"id": member_id(pub), "name": my_name(), "pub": _b64(pub), "role": "owner", "added": time.time()})
+    me = next((x for x in m["members"] if x["id"] == member_id(pub)), None)
+    if me and me["role"] == "owner" and not me.get("sign"):
+        me["sign"] = my_sign_public()
+    if not me:
+        m["members"].append({"id": member_id(pub), "name": my_name(), "pub": _b64(pub), "role": "owner", "added": time.time(),
+                             "sign": my_sign_public()})
         (folder / SHARE / "keys").mkdir(parents=True, exist_ok=True)
         (folder / SHARE / "keys" / f"{member_id(pub)}.key").write_bytes(lock_for(raw_key, pub))
     _write_members(folder, raw_key, m)
@@ -331,8 +365,8 @@ def remove(folder: Path, raw_key: bytes, mid: str) -> dict:
     if not gone:
         raise ValueError("They're not on the list.")
     (folder / SHARE / "keys" / f"{mid}.key").unlink(missing_ok=True)
-    (folder / SHARE / "removed").mkdir(exist_ok=True)   # their app sees this and deletes its copy
-    (folder / SHARE / "removed" / mid).write_text("")
+    (folder / SHARE / "removed").mkdir(exist_ok=True)   # their app sees this (signed by the owner) and deletes its copy
+    (folder / SHARE / "removed" / mid).write_text(_b64(_sign_key().sign(_removed_words(folder, mid))))
     m["members"] = [x for x in m["members"] if x["id"] != mid]
     _write_members(folder, raw_key, m)
     return gone
@@ -384,9 +418,20 @@ def my_key(folder: Path) -> bytes | None:
     return open_mine(p.read_bytes()) if p.exists() else None
 
 
-def am_removed(folder: Path) -> bool:
-    """The owner took me off this one (letting me back in deletes this note)."""
-    return (folder / SHARE / "removed" / my_id()).exists()
+def am_removed(folder: Path, owner_sign: str | None = None) -> bool:
+    """The owner took me off this one (letting me back in deletes this note). The note must carry the owner's
+    signature (their key, pinned when I first opened it), so another member can't make my app delete its copy.
+    Never opened yet (nothing pinned): only if my own key file is gone too."""
+    p = folder / SHARE / "removed" / my_id()
+    if not p.exists():
+        return False
+    if not owner_sign:
+        return not (folder / SHARE / "keys" / f"{my_id()}.key").exists()
+    try:
+        Ed25519PublicKey.from_public_bytes(_unb64(owner_sign)).verify(_unb64(p.read_text().strip()), _removed_words(folder, my_id()))
+        return True
+    except Exception:
+        return False
 
 
 def my_role(folder: Path, raw_key: bytes) -> str | None:

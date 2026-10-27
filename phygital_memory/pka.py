@@ -101,6 +101,9 @@ def chip_available() -> bool:
 
 
 def _save_card(c: dict) -> None:
+    old = card()
+    if old and old["credential_id"] != c["credential_id"]:   # the old key stays known, so its past yeses still check
+        c["retired"] = (old.get("retired") or []) + [public(old)]
     STATE.mkdir(parents=True, exist_ok=True)
     CARD.write_text(json.dumps(c))
     os.chmod(CARD, 0o600)
@@ -146,7 +149,13 @@ def public(c: dict | None) -> dict | None:
 
 
 def keyring() -> dict:
-    return {"keys": [public(card())] if card() else []}
+    """The current key and every earlier one (for checking older signed yeses)."""
+    c = card()
+    return {"keys": ([public(c)] + list(c.get("retired") or [])) if c else []}
+
+
+def replace_request(kind: str) -> dict:
+    return {"type": "approver.replace", "params": {"kind": kind, "current": (card() or {}).get("credential_id", "")}}
 
 
 def _sign(c: dict, msg: bytes, words: str, password: str | None) -> bytes:
@@ -209,6 +218,15 @@ def approve(request: dict, words: str, password: str | None = None) -> str:
 
 def verify(approval: str, request: dict, now: int | None = None) -> dict:
     """Phygital Key's checks, in order, failing closed. Returns the claims when it's a valid, unused yes."""
+    try:
+        return _verify(approval, request, now)
+    except Refused:
+        raise
+    except Exception:   # any field missing or of the wrong shape
+        raise Refused("MALFORMED")
+
+
+def _verify(approval: str, request: dict, now: int | None = None) -> dict:
     now = int(time.time()) if now is None else now
     try:
         obj = json.loads(_unb64(approval))

@@ -39,7 +39,7 @@ export function openShare(ctx) {
         ...(s.requests || []).map((r) => el("div", { class: "share-req" },
           el("span", {}, el("b", {}, r.name), ` wants to join${r.what ? ` "${r.what}"` : ""} · ${ROLE[r.role]}`,
             r.safety ? el("div", { class: "act-folder" }, `Safety code: ${r.safety}`) : null),
-          el("span", { class: "set-btns" }, btn("Say no", () => act(() => ctx.answer(r.id, false))), btn("Let in", () => act(() => ctx.answer(r.id, true)), "primary")))),
+          el("span", { class: "set-btns" }, btn("Say no", () => act(() => ctx.answer(r.id, false, r.share))), btn("Let in", () => act(() => ctx.answer(r.id, true, r.share)), "primary")))),
         el("div", { class: "set-section" }, "People"),
         el("div", { class: "act-list" }, ...(s.members.length ? s.members.map((m) => el("div", { class: "todo-row share-row" },
           el("div", { class: "act-main" }, el("div", { class: "act-line" }, m.name + (m.id === s.me ? " (you)" : "")),

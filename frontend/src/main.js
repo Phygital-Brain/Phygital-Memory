@@ -334,8 +334,8 @@ async function openShareHere(path = null) {
   const what = path ? (path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path) : info.name;
   openShare({
     name: what, part: !!path, load: () => api("shareinfo", at), invite: (role) => api("shareinvite", { role, ...at }),
-    answer: (id, allow) => shareApi("shareanswer", { id, allow, ...at }), role: (id, role) => shareApi("sharerole", { id, role, ...at }),
-    remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await shareApi("shareremove", { id, ...at }); },
+    answer: (id, allow, share) => shareApi("shareanswer", { id, allow, ...at, ...(share ? { share } : {}) }), role: (id, role) => shareApi("sharerole", { id, role, ...at }),
+    remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "They get nothing new from now on, and their app deletes its copy when it next connects. Anything they already copied out stays with them.")) await shareApi("shareremove", { id, ...at }); },
     openPart: (p) => openShareHere(p),
     people: () => api("sharepeople", at), add: (id, role) => shareApi("shareadd", { id, role, ...at }),
     forget: async (id, name) => {
@@ -1481,11 +1481,11 @@ function sharingItem(path, sh) {
   return { label: "Sharing", cls: "mi-accent", value: who.length === 1 ? "1 person" : `${who.length} people`, sub: [
     ...who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view", sub: [
       ...[["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t, check: p.role === r,
-        fn: () => shareApi("sharerole", { share: part.id, id: p.id, role: r }).then(done(`${p.name}: ${t}.`), (e) => toastErr(e.message)) })),
+        fn: () => shareApi("sharerole", { path, id: p.id, role: r }).then(done(`${p.name}: ${t}.`), (e) => toastErr(e.message)) })),
       { sep: true },
       { label: "Remove", cls: "danger", fn: async () => {
         if (await confirmDialog(`Remove ${p.name} from "${path}"?`, "Remove", true, "Their own key stops working here."))
-          shareApi("shareremove", { share: part.id, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
+          shareApi("shareremove", { path, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
       } }] })),
     { sep: true }, ...others.map(add), invite,
     { label: "Sharing window", fn: () => openShareHere(path) }] };

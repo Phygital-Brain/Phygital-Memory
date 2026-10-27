@@ -21,7 +21,31 @@ _lock = threading.Lock()
 _key: bytes | None = None
 
 
-def _seal_key() -> bytes:
+_key_lock = threading.Lock()
+
+
+def _seal_key(wait: bool = True) -> bytes:
+    """Made only when the Keychain truly has none (a refused read raises, and nothing is replaced). wait=False:
+    while another thread is still reading it (macOS may be asking), don't hold up the caller."""
+    if _key is not None:
+        return _key
+    if not _key_lock.acquire(blocking=wait):
+        raise keychain.Refused(keychain.MESSAGE)
+    try:
+        return _seal_key_locked()
+    finally:
+        _key_lock.release()
+
+
+def _quiet(fn):
+    try:
+        fn()
+    except Exception:
+        pass
+
+
+
+def _seal_key_locked() -> bytes:
     global _key
     if _key is None:
         k = (keychain.read(KEYCHAIN, "seal") or "").strip()
@@ -53,6 +77,7 @@ def add(what: str, detail: str = "", how: str = "") -> None:
         line = {"t": time.time(), "what": what[:120], "detail": detail[:200], "how": how,
                 "prev": lines[-1]["seal"] if lines else ""}
         try:
+            _seal_key(wait=False)
             line["seal"] = _seal(line["prev"], line)
         except keychain.Refused:   # macOS hasn't let the app read its seal key yet: kept, shown as unsealed
             line["seal"] = ""
@@ -75,3 +100,6 @@ def listing(limit: int = 200) -> list[dict]:
                     "how": x.get("how", ""), "sealed": ok})
         prev = x.get("seal", "")
     return out[::-1][:limit]
+
+
+threading.Thread(target=lambda: _quiet(_seal_key), name="seal key", daemon=True).start()   # read once, off the main loop

@@ -18,6 +18,9 @@ _locks: dict = {}
 _guard = threading.Lock()
 
 
+MESSAGE = "Sharing needs your sharing key from the Keychain, and macOS hasn't allowed it yet. Quit and reopen the app; when macOS asks, type your Mac login password and choose Always Allow."
+
+
 class Refused(Exception):
     """macOS didn't let the app read an item it keeps (the person said no, or didn't answer). Not the same as the
     item missing: callers must never make a new key in its place."""
@@ -34,9 +37,17 @@ def _helper(*args: str, secret: bytes | None = None, timeout: int = 30) -> subpr
 
 
 def _security_read(service: str, account: str | None) -> str | None:
-    r = subprocess.run(["security", "find-generic-password", *(["-a", account] if account else []), "-s", service, "-w"],
-                       capture_output=True, text=True)
-    return r.stdout.rstrip("\n") or None if r.returncode == 0 else None
+    """An item made by `security`. None only when it isn't there; any other trouble is a refusal, never "missing"."""
+    try:
+        r = subprocess.run(["security", "find-generic-password", *(["-a", account] if account else []), "-s", service, "-w"],
+                           capture_output=True, text=True, timeout=20)
+    except subprocess.TimeoutExpired:
+        raise Refused(MESSAGE)
+    if r.returncode == 44:   # errSecItemNotFound
+        return None
+    if r.returncode != 0:
+        raise Refused(MESSAGE)
+    return r.stdout.rstrip("\n") or None
 
 
 def _security_delete(service: str, account: str | None) -> None:
@@ -54,7 +65,9 @@ def save(service: str, account: str, secret: str) -> None:
         r = _helper("keep", service + APP_ONLY, account, secret=secret.encode())
         if not r or r.returncode != 0:
             raise RuntimeError("Couldn't keep it in the Keychain.")
-        _security_delete(service, account)   # an older copy made with `security`
+        back = _helper("read", service + APP_ONLY, account, timeout=20)
+        if back and back.returncode == 0 and back.stdout.decode() == secret:   # the new copy reads back right:
+            _security_delete(service, account)   # only now does an older copy made with `security` go
         return
     # shortcut (source runs only): the secret is passed to `security` as an argument, seen by this Mac user for a moment
     subprocess.run(["security", "add-generic-password", "-U", "-a", account, "-s", service, "-w", secret],
@@ -71,7 +84,7 @@ def read(service: str, account: str) -> str | None:
         if k in _got:
             return _got[k]
         if time.time() < _refused.get(k, 0):
-            raise Refused("macOS didn't let the app read its Keychain item. Allow it when macOS asks.")
+            raise Refused(MESSAGE)
         got = _read(service, account)
         if got is not None:
             _got[k] = got
@@ -86,7 +99,7 @@ def _read(service: str, account: str) -> str | None:
         missing = r is not None and r.returncode == 4 and b"-25300" in r.stderr   # simply not kept there
         if not missing:   # no answer, or the person said no: don't ask again for a while
             _refused[(service, account)] = time.time() + 600
-            raise Refused("macOS didn't let the app read its Keychain item. Allow it when macOS asks.")
+            raise Refused(MESSAGE)
         old = _security_read(service, account)   # made by an older version: move it behind the helper
         if old is not None:
             try:

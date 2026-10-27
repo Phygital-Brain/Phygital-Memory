@@ -120,7 +120,7 @@ def main():
               "nothing of the memory reaches Ana before Max says yes")
         r = reqs[0] if reqs else {}
         check(r.get("safety") == w.get("safety"), "both see the same safety code", (r.get("safety"), w.get("safety")))
-        api(A, "shareanswer", {"id": r.get("id"), "allow": True, "folder": fa}, pa)
+        api(A, "shareanswer", {"id": r.get("id"), "allow": True, "share": r.get("share"), "folder": fa}, pa)
         check(wait(lambda: (target / "vault.cryptomator").exists(), 90), "after the yes, the encrypted files arrive")
         check(not any(p.suffix == ".md" and p.name not in ("AGENTS.md", "CLAUDE.md") for p in target.rglob("*")), "only encrypted files came over (no readable notes)")
 

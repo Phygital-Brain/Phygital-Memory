@@ -59,12 +59,12 @@ try:
     check(opened("2026-10-20.md").get("pass"), "3. a different item (one file) arrives too")
 
     # 4. remove from one: only that copy goes
-    api(A, "shareremove", {"share": ideas, "id": aid, "folder": fa}, pa)
+    api(A, "shareremove", {"path": "Ideas", "id": aid, "folder": fa}, pa)
     check(gone("Ideas"), "4. removed from Ideas: her copy goes")
     check(ana("Projects") and ana("2026-10-20.md"), "the others stay")
 
     # 5. the same item again, after removing her
-    check(api(A, "shareadd", {"path": "Ideas", "id": aid, "role": "edit", "folder": fa}, pa).get("share") == ideas,
+    check(api(A, "shareadd", {"path": "Ideas", "id": aid, "role": "edit", "folder": fa}, pa).get("share"),
           "5. Max shares Ideas with her again")
     check(opened("Ideas", 120).get("pass"), "Ideas comes back and opens")
     check(wait(lambda: "From Ana.md" in files(B, ana("Ideas")["id"], opened("Ideas").get("pass")), 60), "with what's in it now")

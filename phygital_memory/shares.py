@@ -82,14 +82,25 @@ def stopping(sid: str) -> None:
             _save_all(d)
 
 
-def find(vault_id: str, rel: str) -> dict | None:
-    return next((s for s in of_memory(vault_id) if s["path"] == rel), None)
+def role_of(s: dict) -> str:
+    return s.get("role", "edit")
 
 
-def create(vault_id: str, rel: str, kind: str) -> dict:
-    """A new share for one folder or file of a memory: an empty locked memory with the owner's key box in it."""
+def find(vault_id: str, rel: str, role: str = "edit") -> dict | None:
+    return next((s for s in of_memory(vault_id) if s["path"] == rel and role_of(s) == role), None)
+
+
+def find_all(vault_id: str, rel: str) -> list[dict]:
+    """Every live share of one item: one for the people who can edit, one for those who can only view."""
+    return [s for s in of_memory(vault_id) if s["path"] == rel]
+
+
+def create(vault_id: str, rel: str, kind: str, role: str = "edit", fresh: bool = False) -> dict:
+    """A share for one folder or file of a memory (or the whole memory: rel "", kind "memory"), for one kind of
+    access. Edit and view never share a copy: the view copy only ever goes out from the owner's Mac, so nothing a
+    viewer does comes back. fresh: always a new one, with a new key (after someone is removed)."""
     with _lock:
-        if s := find(vault_id, rel):
+        if not fresh and (s := find(vault_id, rel, role)):
             return s
         sid = secrets.token_hex(8)
         HOME.mkdir(parents=True, exist_ok=True)
@@ -99,9 +110,18 @@ def create(vault_id: str, rel: str, kind: str) -> dict:
         finally:
             key.wipe()
         d = _all()
-        d[sid] = {"memory": vault_id, "path": rel, "kind": kind, "name": rel.rsplit("/", 1)[-1], "made": time.time()}
+        d[sid] = {"memory": vault_id, "path": rel, "kind": kind, "role": role, "made": time.time(),
+                  "name": rel.rsplit("/", 1)[-1] if rel else (_memory_name(vault_id) or "Shared memory")}
         _save_all(d)
         return {**d[sid], "id": sid}
+
+
+BUSY = [lambda folder_id: False]   # set by the server: is Syncthing still bringing this share's files in?
+MEMORY_NAMES: dict = {}   # vault id -> the memory's name, set by the server (a whole memory's share is named after it)
+
+
+def _memory_name(vault_id: str) -> str | None:
+    return MEMORY_NAMES.get(vault_id)
 
 
 def key_of(sid: str) -> bytes:
@@ -116,8 +136,9 @@ def moved(vault_id: str, old: str, new: str) -> None:
     with _lock:
         d = _all()
         for s in d.values():
-            if s["memory"] == vault_id and (s["path"] == old or s["path"].startswith(old + "/")):
+            if s["memory"] == vault_id and s["path"] and (s["path"] == old or s["path"].startswith(old + "/")):
                 s["path"] = new + s["path"][len(old):]
+                s["name"] = s["path"].rsplit("/", 1)[-1]   # a renamed file is looked for by its new name
         _save_all(d)
 
 
@@ -184,15 +205,23 @@ def sync(sid: str, a: Memory) -> int:
             b = Memory(path_of(sid))
             b.unlock_with_key(sharing.masterkey(raw))
             _open[sid] = b
-    kind = a.kind_of(s["path"])
+    kind = s["kind"] if s["kind"] == "memory" else a.kind_of(s["path"])
     if kind != s["kind"]:
         return 0   # gone or replaced: stop copying, delete nothing on their side
     raw = key_of(sid)
-    two_way = any(x["role"] == "edit" for x in sharing.members(path_of(sid), raw))
+    if BUSY[0]("pm-" + sharing._vault_id(path_of(sid))):
+        return 0   # half arrived: missing files would look deleted, so wait for the next pass
+    two_way = role_of(s) == "edit"   # decided here, on the owner's Mac, never from a file others can change
     prefix = s["path"]
-    to_b = (lambda r: r[len(prefix) + 1:]) if kind == "folder" else (lambda r: r.rsplit("/", 1)[-1])
-    to_a = (lambda r: f"{prefix}/{r}") if kind == "folder" else (lambda r: prefix)
-    asig = {to_b(r): v for r, v in a.file_sigs(prefix).items()}
+    if kind == "memory":
+        to_b = to_a = (lambda r: r)
+    elif kind == "folder":
+        to_b, to_a = (lambda r: r[len(prefix) + 1:]), (lambda r: f"{prefix}/{r}")
+    else:
+        to_b, to_a = (lambda r: r.rsplit("/", 1)[-1]), (lambda r: prefix)
+    from .memory import HIDDEN
+    asig = {to_b(r): v for r, v in a.file_sigs(prefix).items() if to_b(r).split("/")[0] not in HIDDEN}   # the app's own
+    # hidden folders aren't shared: on the other side they'd be hidden, and so look deleted
     bsig = b.file_sigs("")
     if kind == "file":
         bsig = {r: v for r, v in bsig.items() if r == s["name"]}

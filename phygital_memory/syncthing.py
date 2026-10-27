@@ -101,7 +101,7 @@ class Syncthing:
             if self.proc and self.proc.poll() is None:
                 return
             # A copy left running by an app that was force quit holds this folder: stop it first.
-            subprocess.run(["pkill", "-f", f"syncthing serve --home={self.home} "], capture_output=True)
+            subprocess.run(["pkill", "-f", "syncthing serve --home=" + re.escape(str(self.home)) + " "], capture_output=True)
             time.sleep(0.5)
             self._configure()
             env = {**os.environ, "STNOUPGRADE": "1", "STNORESTART": "1"}
