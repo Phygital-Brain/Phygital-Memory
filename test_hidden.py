@@ -74,8 +74,8 @@ check(code == 200 and base64.b64decode(j["base64"]).decode().startswith("API_KEY
 out = run(("list_notes", {}), ("list_notes", {"private": True}), ("read_file_text", {"path": ".env"}),
           ("read_file_text", {"path": ".env", "private": True}), ("recent_changes", {"limit": 50}),
           ("create_note", {"path": ".secret/x.md", "text": "x"}), ("search_notes", {"question": "API_KEY secret"}))
-check(".env" not in out[0] and ".obsidian" not in out[0], "AI lists don't show hidden files", out[0])
-check(".env" in out[1], "unless the person asked (private=true)")
+check(".env  (private: ask first)" in out[0] and ".obsidian/  (private: ask first)" in out[0], "AI lists show hidden files, marked private", out[0])
+check(".env\n" in out[1] + "\n" and "(private: ask first)" not in out[1], "with private=true, no mark")
 check(out[2].startswith("ERROR") and "secret-123" not in out[2], "AI can't read .env by itself", out[2])
 check("secret-123" in out[3], "only with private=true")
 check(".env" not in out[4], "hidden files stay out of recent changes")

@@ -410,13 +410,14 @@ def list_notes(ctx: Context, folder: FolderName = "",
     if inside:
         _private(f, inside, private, "look inside")
     priv = [] if private else f.memory.ai_private()
-    hidden = lambda p: any(p.lower().startswith(x.lower() + "/") for x in priv) or (
-        not private and any(part.startswith(".") for part in p.split("/")))   # hidden files: only when asked
+    hidden = lambda p: any(p.lower().startswith(x.lower() + "/") for x in priv)
     rows = [x for x in _guard(f.memory.list_files)
             if (not inside or x["path"] == inside or x["path"].startswith(inside + "/")) and not hidden(x["path"])]
     _log(app, f, "listed notes", inside or "everything")
     lock = {x.lower() for x in priv}
-    out = [x["path"] + ("/" if x["kind"] == "folder" else "") + ("  (private: ask first)" if x["path"].lower() in lock else "")
+    # hidden files (.env and the like) are listed, so the AI can say they exist, but marked: it opens them only when asked
+    mark = lambda p: not private and (p.lower() in lock or p.rsplit("/", 1)[-1].startswith("."))
+    out = [x["path"] + ("/" if x["kind"] == "folder" else "") + ("  (private: ask first)" if mark(x["path"]) else "")
            for x in rows[:500]]
     more = f"\n…and {len(rows) - 500} more. Use inside= to look in one subfolder." if len(rows) > 500 else ""
     return LABEL + (f"{f.name}:\n" + "\n".join(out) + more if out else "Nothing there.")
