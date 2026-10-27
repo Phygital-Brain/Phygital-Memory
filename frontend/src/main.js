@@ -581,7 +581,7 @@ let aiApps = [], openTasks = 0;
 function drawAI() {
   if (!barEls) return;
   const recent = aiApps.filter((a) => a.ago < 120);
-  barEls.ai.replaceChildren(icon("pulse", 14, 1.8), openTasks ? el("span", { class: "ai-count" }, String(openTasks)) : null);
+  barEls.ai.replaceChildren(icon("pulse", 14, 1.8), ...(openTasks ? [el("span", { class: "ai-count" }, String(openTasks))] : []));
   barEls.ai.classList.toggle("on", recent.length > 0);
   const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
   barEls.ai.title = "AI: tasks and activity\n"
