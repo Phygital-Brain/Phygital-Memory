@@ -445,7 +445,13 @@ function buildApp() {
   treeEl.addEventListener("dragover", (e) => { if (dragPath && e.target === treeEl) { e.preventDefault(); treeEl.classList.add("drop"); } });
   treeEl.addEventListener("dragleave", (e) => { if (e.target === treeEl) treeEl.classList.remove("drop"); });
   treeEl.addEventListener("drop", (e) => { if (e.target === treeEl) { e.preventDefault(); treeEl.classList.remove("drop"); moveInto(dragPath, ""); } });
-  treeEl.addEventListener("contextmenu", (e) => { if (e.target === treeEl) e.preventDefault(); });
+  treeEl.addEventListener("contextmenu", (e) => {
+    if (e.target !== treeEl) return;
+    e.preventDefault();
+    showMenu([{ label: "New note", fn: () => newNote("") }, { label: "New folder", fn: () => newFolder("") }, { sep: true },
+      { label: "Import files", fn: () => importInto("", false) }, { label: "Import folder", fn: () => importInto("", true) }], e.clientX, e.clientY);
+  });
+  dropFromFinder(treeEl);
 
   homeRowEl = el("div", { class: "row home-row", role: "button", tabindex: "0", title: "Home (⇧⌘H)", onclick: () => goHome() },
     el("span", { class: "chev none" }, icon("chevron", 12, 2)), icon("home", 18), el("span", { class: "row-name" }, "Home"));
@@ -1107,6 +1113,7 @@ function rowFor(n, depth, where = "") {
   pinned ? el("span", { class: "row-pin", title: "Pinned" }, icon("pin", 11, 2)) : null,
   (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: "Private for AI: it asks first" }, icon("lock", 11, 2)) : null,
   more);
+  row._node = n;   // files dragged in from Finder find their folder through this
   row.addEventListener("dragover", (e) => {
     const z = dropZone(e, row, n);
     if (!z) return;
@@ -1182,6 +1189,64 @@ async function importInto(dir, wholeFolder) {
     if (n) toastOk(`Imported ${n} file${n === 1 ? "" : "s"}, encrypted.` + (j.skipped ? ` Skipped ${j.skipped} hidden.` : ""));
     else toastErr(j.skipped ? `Nothing imported: only hidden files there.` : "Nothing to import there.");
   } catch (e) { toastErr(e.message); }
+}
+
+// Files dragged in from Finder: dropped on a folder they go in there, anywhere else in the list at the top. The person
+// says yes first. They're encrypted as they come in; the originals stay where they are.
+function dropFromFinder(tree) {
+  const outside = (e) => !dragPath && [...(e.dataTransfer?.types || [])].includes("Files");
+  const target = (e) => {
+    const row = e.target.closest && e.target.closest(".row");
+    const n = row && row._node;
+    return n ? (n.kind === "folder" ? n.path : dirOf(n.path)) : "";
+  };
+  const mark = (dir) => {
+    clearDropMarks();
+    const row = dir && [...tree.querySelectorAll(".row")].find((r) => r._node && r._node.path === dir);
+    row ? row.classList.add("drop") : tree.classList.add("drop");
+  };
+  tree.addEventListener("dragover", (e) => { if (!outside(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; mark(target(e)); }, true);
+  tree.addEventListener("dragleave", (e) => { if (outside(e) && !tree.contains(e.relatedTarget)) clearDropMarks(); }, true);
+  tree.addEventListener("drop", (e) => {
+    if (!outside(e)) return;
+    e.preventDefault(); e.stopPropagation(); clearDropMarks();
+    let entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+    if (!entries.length) entries = [...e.dataTransfer.files].map((f) => ({ name: f.name, isFile: true, file: (ok) => ok(f) }));
+    addDropped(entries, target(e));
+  }, true);
+}
+
+async function readDropped(entry, prefix, out) {
+  if (entry.name.startsWith(".")) return;   // Mac clutter and hidden files stay out, like Import
+  if (entry.isFile) { out.push({ rel: prefix + entry.name, file: await new Promise((ok, bad) => entry.file(ok, bad)) }); return; }
+  const reader = entry.createReader();
+  for (let batch; (batch = await new Promise((ok, bad) => reader.readEntries(ok, bad))).length;) {
+    for (const c of batch) await readDropped(c, prefix + entry.name + "/", out);
+  }
+}
+
+async function addDropped(entries, dir) {
+  const files = [];
+  try { for (const en of entries) await readDropped(en, "", files); } catch (e) { toastErr("Couldn't read what was dropped."); return; }
+  if (!files.length) { toastErr("Nothing to add: only hidden files or empty folders."); return; }
+  const where = dir ? `the "${baseName(dir)}" folder` : "the top of your memory";
+  const folderDrop = entries.length === 1 && entries[0].isDirectory;
+  const what = folderDrop ? `the folder "${entries[0].name}" (${files.length} file${files.length === 1 ? "" : "s"})`
+    : files.length === 1 ? `"${baseName(files[0].rel)}"` : `${files.length} files`;
+  const one = files.length === 1;
+  if (!await confirmDialog(`Add ${what} to ${where}?`, "Add", false,
+    `${one ? "It's" : "They're"} encrypted as ${one ? "it comes" : "they come"} in. The original${one ? " stays" : "s stay"} where ${one ? "it is" : "they are"}.`)) return;
+  const big = files.filter((f) => f.file.size > 25 * 1024 * 1024);
+  let added = 0;
+  toast(`Adding ${files.length - big.length} file${files.length - big.length === 1 ? "" : "s"}`);
+  for (const f of files) {
+    if (big.includes(f)) continue;
+    try { await uploadFile((dir ? dir + "/" : "") + f.rel, f.file); added++; } catch (e) { toastErr(`${baseName(f.rel)}: ${e.message}`); }
+  }
+  if (dir) state.open.add(dir);
+  await loadFiles();
+  if (added) toastOk(`Added ${added} file${added === 1 ? "" : "s"}, encrypted.`);
+  if (big.length) toastErr(`${big.length} file${big.length === 1 ? " is" : "s are"} over 25 MB. Use Import files for ${big.length === 1 ? "it" : "them"}.`);
 }
 
 // A readable (not encrypted) copy of a note, file or folder, to a place picked in the Mac's own box.

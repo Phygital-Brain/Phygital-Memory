@@ -43,10 +43,11 @@ export function askPassword(title, okLabel) {
   });
 }
 
-export function confirmDialog(message, okLabel, danger) {
+export function confirmDialog(message, okLabel, danger, detail) {
   return modal((done) => {
     const ok = el("button", { class: "btn " + (danger ? "danger" : "primary"), onclick: () => done(true) }, okLabel);
     const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, message),
+      detail ? el("div", { class: "mf-hint" }, detail) : null,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Cancel"), ok));
     return { card, focus: ok, submit: () => done(true) };
   }).then((v) => v === true);
