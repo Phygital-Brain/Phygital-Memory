@@ -67,6 +67,22 @@ def make_conn(kind: str, server: str, user: str) -> dict:
     return {"kind": kind, "url": url, "user": user}
 
 
+def find_conn(server: str, user: str, password: str) -> dict:
+    """One form for every WebDAV server: a full WebDAV address is used as given; a plain address (like
+    cloud.example.com) is tried the Nextcloud way first, then as it is. Returns the one that logs in."""
+    tries = [make_conn("webdav", server, user)]
+    if not urlparse(tries[0]["url"]).path.strip("/"):
+        tries.insert(0, make_conn("nextcloud", server, user))
+    err = None
+    for conn in tries:
+        try:
+            _run(conn, "lsf", "--max-depth", "1", _remote(""), password=password, timeout=60)
+            return conn
+        except CloudError as e:
+            err = err or e
+    raise err
+
+
 def label(conn: dict) -> str:
     return KINDS.get(conn.get("kind"), "Cloud")
 

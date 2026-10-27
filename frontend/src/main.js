@@ -5,7 +5,7 @@ import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
-import { askText, askPassword, confirmDialog, choiceDialog } from "./shell/dialogs.js";
+import { askText, askPassword, confirmDialog, choiceDialog, showRecoveryKey, recoveryDialog } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
@@ -194,6 +194,31 @@ async function pickFolder(prompt, start) {
 }
 
 // Another Mac: bring a private "…-Phygital-Memory" repo down from GitHub, then unlock it with its password.
+// A backup back in: a zip the app saved, or a memory's masterkey.cryptomator file. The Mac's chooser picks it.
+async function openFromBackup() {
+  try {
+    toast("Choose the backup in the window that opens");
+    const j = await api("openbackup");
+    if (j.cancelled) return;
+    await refreshFolders();
+    toastOk(`"${j.folder.name}" is back. Unlock it with its password or recovery key.`);
+    await switchTo(j.folder.id);
+  } catch (e) { toastErr(e.message); }
+}
+
+// Forgot the password: the 44-word recovery key sets a new one, then the memory opens.
+async function recoverWithKey() {
+  const fid = currentFolder();
+  const v = await recoveryDialog();
+  if (!v) return;
+  try {
+    const j = await api("recover", { folder: fid, ...v });
+    setPass(j.pass, fid);
+    toastOk("New password set. Use it from now on.");
+    await enterApp();
+  } catch (e) { toastErr(e.message); }
+}
+
 async function openFromGithub() {
   try {
     if (!(await api("githubaccount")).account
@@ -221,7 +246,7 @@ async function openFromGithub() {
 async function openFromCloud() {
   let clouds = [];
   try { clouds = (await api("clouds")).clouds || []; } catch (e) { toastErr(e.message); }
-  const v = await openCloud({ clouds, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
+  const v = await openCloud({ clouds, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
   if (!v) return;
   try {
     if (v.create) {
@@ -342,7 +367,8 @@ function drawUnlock() {
       touch.disabled = false;
     };
     touch.addEventListener("click", viaTouch);
-    kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This folder is locked." : "Your notes are locked."), pw, btn, touch, err);
+    kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This memory is locked." : "Your notes are locked."), pw, btn, touch, err,
+      el("button", { class: "link-btn unlock-recover", type: "button", onclick: recoverWithKey }, "Forgot it? Use your recovery key"));
     if (info.exists) api("touchidinfo", { folder: info.id }).then((j) => {
       if (!j.available || currentFolder() !== info.id || !touch.isConnected) return;
       on = j.on;
@@ -401,7 +427,7 @@ async function openSwitcher() {
   await refreshFolders();
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
-  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud,
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
     ...(unlocked(currentFolder()) ? { storage: openStoragePanel, ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
@@ -637,6 +663,11 @@ async function openSettingsHere() {
     lockAll: folderList.filter((f) => unlocked(f.id)).length > 1 ? lockAll : null,
     revealVault: info.cloudOnly ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     aiHidden: !!info.aiHidden,
+    recoveryKey: async () => {
+      const password = await askPassword("Your password, to show the recovery key", "Show");
+      if (!password) return;
+      try { showRecoveryKey((await api("recoverykey", { password })).words); } catch (e) { toastErr(e.message); }
+    },
     showHidden: { on: getPref("showHidden", false), set: (v) => { if (v !== getPref("showHidden", false)) toggleHidden(); return v; } },
     setAiHidden: async (v) => { try { await api("aihide", { hidden: v }); await refreshFolders(); return v; } catch (e) { toastErr(e.message); return !v; } },
     aiApps: () => openAIApps({
@@ -747,7 +778,7 @@ function drawAI() {
 async function moveToCloud(info) {
   let clouds = [];
   try { clouds = (await api("clouds")).clouds || []; } catch {}
-  const v = await openCloud({ clouds, move: { name: info.name }, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
+  const v = await openCloud({ clouds, move: { name: info.name }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
   if (!v) return false;
   if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
   toast(`Locking "${info.name}" and uploading its encrypted files`);
@@ -786,7 +817,7 @@ async function openStoragePanel() {
     toWebdav: async () => {
       let clouds = [];
       try { clouds = (await api("clouds")).clouds || []; } catch {}
-      const v = await openCloud({ clouds, move: { name: info.name, keepMac: true }, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
+      const v = await openCloud({ clouds, move: { name: info.name, keepMac: true }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
       if (!v) return false;
       toast("Uploading the encrypted files");
       await api("towebdav", { conn: v.conn, parent: v.move.parent });
@@ -831,6 +862,12 @@ async function openStoragePanel() {
       toastOk("Backed up to GitHub. It updates a few seconds after each change.");
       refreshBar();
       return true;
+    },
+    saveBackup: async () => {
+      await saveAll();
+      const j = await api("savebackup");
+      if (!j.cancelled) toastOk(`Saved "${j.name}" (${(j.size / 1e6).toFixed(1)} MB), encrypted.`);
+      return false;   // the window stays open
     },
     download: async () => { const j = await api("download"); toastOk(`Downloading ${j.asked} file${j.asked === 1 ? "" : "s"}.`); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),

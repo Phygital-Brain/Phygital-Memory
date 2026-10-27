@@ -81,6 +81,8 @@ export function openStorage(ctx) {
       el("div", { class: "set-section" }, "Backup"),
       option("lock", "GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB.",
         !!s.github, el("div", { class: "st-gh-note" }, "Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup."), github),
+      option("file", "Backup file", "One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file.",
+        false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null)))),
       el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
@@ -365,6 +367,7 @@ export function openCloud(ctx) {
       el("div", { class: "act-main" }, el("div", { class: "act-line" }, main), el("div", { class: "act-folder" }, sub)));
 
     const pick = () => {
+      if (!ctx.clouds.length) { login(); return; }   // nothing connected yet: straight to the form
       title.textContent = top; err.textContent = ""; submit = null;
       body.replaceChildren(
         el("div", { class: "mf-hint" }, keep ? "Pick the server. Only encrypted files go up. The copy on this Mac stays."
@@ -372,33 +375,40 @@ export function openCloud(ctx) {
           : "Open a memory that's on a WebDAV server. Nothing is kept on this Mac. The server only gets encrypted files."),
         el("div", { class: "act-list" },
           ...ctx.clouds.map((c) => row("cloud", c.where, `Connected as ${c.user}`, () => look(c))),
-          row("cloud", "Nextcloud", "Server address, user name and an app password", () => login("nextcloud")),
-          row("cloud", "Other WebDAV server", "ownCloud, Synology, Koofr and others", () => login("webdav"))),
-        el("div", { class: "st-gh-note" }, "Nothing connects until you press Connect."));
+          row("plus", "Another server", "Nextcloud, ownCloud, Synology, Koofr or any WebDAV server", () => login())));
       actions.replaceChildren(cancel);
     };
 
-    const login = (kind, prefill = {}) => {
-      title.textContent = kind === "nextcloud" ? "Connect Nextcloud" : "Connect a WebDAV cloud";
-      err.textContent = "";
+    const login = (prefill = {}) => {
+      title.textContent = "Connect to WebDAV";
+      err.textContent = ""; err.classList.remove("ok");
       const server = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.server || "",
-        placeholder: kind === "nextcloud" ? "Server, like cloud.example.com" : "WebDAV address, like https://dav.example.com/files", "aria-label": "Server" });
+        placeholder: "Server address, like cloud.example.com", "aria-label": "Server" });
       const user = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.user || "", placeholder: "User name", "aria-label": "User name" });
-      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off",
-        placeholder: kind === "nextcloud" ? "App password" : "Password", "aria-label": "Password" });
+      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password or app password", "aria-label": "Password" });
+      const fields = () => {
+        if (!server.value.trim() || !user.value.trim() || !pw.value) { err.classList.remove("ok"); err.textContent = "Fill in all three."; return null; }
+        return { server: server.value, user: user.value, password: pw.value };
+      };
+      const test = async () => {
+        const f = fields(); if (!f) return;
+        err.classList.remove("ok"); err.textContent = ""; busy(true);
+        try { const j = await ctx.test(f); err.classList.add("ok"); err.textContent = `Connected to ${j.where}.`; }
+        catch (e) { err.textContent = e.message; }
+        busy(false);
+      };
       submit = async () => {
-        if (!server.value.trim() || !user.value.trim() || !pw.value) { err.textContent = "Fill in all three."; return; }
-        err.textContent = ""; busy(true);
+        const f = fields(); if (!f) return;
+        err.classList.remove("ok"); err.textContent = ""; busy(true);
         try {
-          const j = await ctx.connect({ kind, server: server.value, user: user.value, password: pw.value });
+          const j = await ctx.connect(f);
           pw.value = ""; busy(false); (ctx.move ? moveTo : list)(j.conn, j.memories);
         } catch (e) { err.textContent = e.message; busy(false); }
       };
       body.replaceChildren(server, user, pw,
-        el("div", { class: "st-gh-note" }, kind === "nextcloud"
-          ? "Make an app password in Nextcloud: Settings › Security › Devices & sessions. It's kept in this Mac's Keychain."
-          : "The password is kept in this Mac's Keychain."));
-      actions.replaceChildren(btn("Back", () => { pw.value = ""; pick(); }), btn("Connect", submit, "primary"));
+        el("div", { class: "st-gh-note" }, "For Nextcloud, make an app password: Settings › Security. The password stays in this Mac's Keychain."));
+      actions.replaceChildren(ctx.clouds.length ? btn("Back", () => { pw.value = ""; pick(); }) : cancel,
+        btn("Test connection", test), btn("Connect", submit, "primary"));
       server.value ? (prefill.user ? pw : user).focus() : server.focus();
     };
 
@@ -408,7 +418,7 @@ export function openCloud(ctx) {
       try { const j = await ctx.memories(c); busy(false); list(j.conn, j.memories); }
       catch (e) {
         busy(false);
-        login(c.kind, { server: c.kind === "nextcloud" ? c.url.split("/remote.php/")[0] : c.url, user: c.user });
+        login({ server: c.kind === "nextcloud" ? c.url.split("/remote.php/")[0] : c.url, user: c.user });
         err.textContent = e.message;
       }
     };

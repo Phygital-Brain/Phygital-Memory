@@ -53,7 +53,8 @@ export function switcherItems(ctx) {
     { label: "Open memory", icon: "folder", cls: "fo-menu-item", sub: [
       { label: "From this Mac", fn: ctx.openOther },
       ...(ctx.fromGithub ? [{ label: "From GitHub", fn: ctx.fromGithub }] : []),
-      ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : [])] },
+      ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : []),
+      ...(ctx.fromBackup ? [{ label: "From a backup file", fn: ctx.fromBackup }] : [])] },
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },

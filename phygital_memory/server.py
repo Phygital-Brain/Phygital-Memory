@@ -41,6 +41,7 @@ from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
 from .memory import Locked, Memory, _clean_path
+from .vault import keys as keys_mod, manage
 from .vault.keys import WrongPassword
 
 HERE = Path(__file__).resolve().parent
@@ -726,6 +727,35 @@ async def api(request: Request) -> Response:
             start = start if any(p["path"] == start for p in cloud_places()) else str(Path.home())
             path = await asyncio.to_thread(pick_folder, body.get("prompt") or "Choose a folder", start)
             return _ok({"path": path})
+        if action == "openbackup":   # a backup back in: a zip, or a memory's .cryptomator file; the Mac's chooser picks
+            chosen = await asyncio.to_thread(pick_files, "Choose a backup .zip, or a memory's masterkey.cryptomator file")
+            if not chosen:
+                return _ok({"cancelled": True})
+            src = chosen[0]
+            parent = None
+            if src.lower().endswith(".zip"):
+                parent = await asyncio.to_thread(pick_folder, "Choose where to put the memory", str(Path.home()))
+                if not parent:
+                    return _ok({"cancelled": True})
+            return _ok({"folder": await asyncio.to_thread(folders.open_backup, src, parent)})
+        if action == "recover":   # a forgotten password: the recovery key sets a new one, then it unlocks
+            f = folders.get(body.get("folder"))
+            if time.time() < f.fails["until"]:
+                return _ok({"error": "Too many wrong tries. Wait a minute."}, 429)
+            new = str(body.get("password", ""))
+            if new != str(body.get("again", "")):
+                return _ok({"error": "The two passwords don't match."}, 400)
+            await asyncio.to_thread(f.ready)
+            try:
+                await asyncio.to_thread(manage.reset_password, f.path, str(body.get("words", "")), new)
+            except keys_mod.VaultError as e:
+                f.fails["n"] += 1
+                if f.fails["n"] >= 5:
+                    f.fails.update(n=0, until=time.time() + 60)
+                return _ok({"error": str(e)}, 400)
+            if await asyncio.to_thread(touchid.has, f.id):
+                await asyncio.to_thread(touchid.save, f.id, new)   # Touch ID keeps working with the new password
+            return _unlock(f, new, "recovery key")
         if action == "addfolder":
             return _ok({"folder": folders.add_existing(body["path"])})
         if action == "createfolder":
@@ -770,8 +800,13 @@ async def api(request: Request) -> Response:
         # ---- Cloud only (only when the person presses a button; nothing talks to a cloud before) ----
         if action == "clouds":   # the clouds this Mac is already connected to
             return _ok({"clouds": folders.clouds()})
+        if action == "cloudtest":   # Test connection: only checks the login, keeps nothing
+            conn = await asyncio.to_thread(cloud.find_conn, str(body.get("server", "")), str(body.get("user", "")),
+                                           str(body.get("password", "")))
+            return _ok({"ok": True, "where": cloud.where(conn, "").split(" / ")[0]})
         if action == "cloudconnect":   # check the login, keep the password in the Keychain, list the memories there
-            conn = cloud.make_conn(str(body.get("kind", "")), str(body.get("server", "")), str(body.get("user", "")))
+            conn = await asyncio.to_thread(cloud.find_conn, str(body.get("server", "")), str(body.get("user", "")),
+                                           str(body.get("password", "")))
             await asyncio.to_thread(cloud.connect, conn, str(body.get("password", "")))
             return _ok({"conn": conn, "memories": await asyncio.to_thread(cloud.find_memories, conn)})
         if action == "cloudmemories":   # a cloud connected before: look for memories again
@@ -926,6 +961,18 @@ async def api(request: Request) -> Response:
             await asyncio.to_thread(touchid.save, f.id, str(body.get("password", "")))
             approvals.add("Touch ID unlock on", f.name, "password")
             return _ok({"on": True})
+        if action == "recoverykey":   # the 44 words, after the password again
+            try:
+                return _ok({"words": await asyncio.to_thread(m.recovery_words, str(body.get("password", "")))})
+            except WrongPassword:
+                return _ok({"error": "That's not the password."}, 403)
+        if action == "savebackup":   # one zip of the encrypted files, where the person chooses
+            dest = await asyncio.to_thread(pick_save, f'Save a backup of "{f.name}"', f"{f.name} {time.strftime('%Y-%m-%d')}.zip")
+            if not dest:
+                return _ok({"cancelled": True})
+            size = await asyncio.to_thread(folders.save_backup, f.id, dest)
+            approvals.add("Saved a backup file", f.name, "click")
+            return _ok({"size": size, "name": Path(dest).name})
         if action == "approvals":   # the sealed list of yeses, for Activity
             return _ok({"approvals": approvals.listing()})
         if action == "claudecodeadd":   # one button: add the door, with its key, to Claude Code

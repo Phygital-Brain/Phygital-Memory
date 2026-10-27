@@ -641,3 +641,8 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .af-what { flex: 1; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .af-where { flex: 1; min-width: 0; padding: 6px 8px; background: var(--bg-app); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-s); font: inherit; font-size: 13px; }
 .dlg.add-files { width: min(440px, calc(100vw - 32px)); }
+.rk-words { columns: 4; margin: 0; padding-left: 26px; font: 12.5px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; user-select: text; }
+.dlg.rk { width: min(560px, calc(100vw - 32px)); }
+.rk-input { resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+.unlock-recover { font-size: 12px; }
+.dlg-err.ok { color: var(--success); }

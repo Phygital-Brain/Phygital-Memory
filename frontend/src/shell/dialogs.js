@@ -54,6 +54,39 @@ export function choiceDialog(message, detail, buttons) {
   });
 }
 
+// The recovery key: 44 words, shown once on request, with a Copy button.
+export function showRecoveryKey(words) {
+  return modal((done) => {
+    const list = el("ol", { class: "rk-words" }, ...words.split(" ").map((w) => el("li", {}, w)));
+    const copy = el("button", { class: "btn", type: "button", onclick: () => navigator.clipboard.writeText(words).then(() => { copy.textContent = "Copied"; }) }, "Copy");
+    const card = el("div", { class: "dlg rk", role: "dialog" }, el("div", { class: "dlg-title" }, "Your recovery key"),
+      el("div", { class: "mf-hint" }, "These 44 words open this memory if you forget the password. Keep them somewhere safe and private. Anyone with them can open it."),
+      list, el("div", { class: "dlg-actions" }, copy, el("button", { class: "btn primary", type: "button", onclick: () => done(true) }, "Done")));
+    return { card };
+  });
+}
+
+// Forgot the password: the recovery key, and a new password twice. Resolves {words, password, again} or null.
+export function recoveryDialog() {
+  return modal((done) => {
+    const words = el("textarea", { class: "dlg-input rk-input", rows: "4", spellcheck: "false", placeholder: "The 44 words, in order", "aria-label": "Recovery key" });
+    const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "new-password", placeholder: "New password (8 or more characters)", "aria-label": "New password" });
+    const again = el("input", { class: "dlg-input", type: "password", autocomplete: "new-password", placeholder: "New password again", "aria-label": "New password again" });
+    const err = el("div", { class: "dlg-err" });
+    const submit = () => {
+      if (words.value.trim().split(/\s+/).length !== 44) { err.textContent = "A recovery key has 44 words."; return; }
+      if (pw.value.length < 8) { err.textContent = "Use at least 8 characters."; return; }
+      if (pw.value !== again.value) { err.textContent = "The two passwords don't match."; return; }
+      done({ words: words.value.trim(), password: pw.value, again: again.value });
+    };
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, "Use your recovery key"),
+      el("div", { class: "mf-hint" }, "Type the 44 words, then choose a new password."), words, pw, again, err,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel"),
+        el("button", { class: "btn primary", type: "button", onclick: submit }, "Set new password")));
+    return { card, focus: words };
+  });
+}
+
 export function confirmDialog(message, okLabel, danger, detail) {
   return modal((done) => {
     const ok = el("button", { class: "btn " + (danger ? "danger" : "primary"), onclick: () => done(true) }, okLabel);

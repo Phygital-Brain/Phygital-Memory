@@ -90,6 +90,8 @@ export function openSettings(folderOpts) {
     rows.push(section("Security and AI"));
     if (f.touchId) rows.push(row("Unlock with Touch ID", "Your finger instead of your password.", toggle("Unlock with Touch ID", f.touchId.on, f.touchId.set),
       "Your password is kept in the Mac's Keychain. Only this app can read it, after your fingerprint."));
+    if (f.recoveryKey) rows.push(row("Recovery key", "44 words that open the memory if you forget the password.", btn("Show", f.recoveryKey),
+      "Write them down or keep them in a password manager. Anyone with these words can open the memory."));
     if (f.aiApps) rows.push(row("AI apps", "Which AI apps can use your notes.", btn("Manage", f.aiApps),
       "Each app gets its own key and only reaches unlocked memories."));
     rows.push(row("Hide from AI", "No AI app can reach this memory.", toggle("Hide from AI", f.aiHidden, f.setAiHidden),
