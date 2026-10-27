@@ -8,6 +8,7 @@ uv run pyinstaller --noconfirm --clean --onefile --name phygital-memory-server \
   --collect-submodules phygital_memory \
   --collect-all wsgidav --collect-submodules cheroot \
   --add-data "$PWD/$P/app.html:$P" \
+  --add-data "$PWD/$P/closeask.html:$P" \
   --add-data "$PWD/$P/web:$P/web" \
   --add-data "$PWD/$P/engram_config.json:$P" \
   --add-data "$PWD/$P/vault/words_en.txt:$P/vault" \

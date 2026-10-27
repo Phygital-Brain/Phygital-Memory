@@ -334,6 +334,14 @@ async def page(request: Request) -> Response:
     return HTMLResponse(page_file.read_text(), headers=HEADERS)
 
 
+@mcp.custom_route("/closeask", methods=["GET"])
+async def close_page(request: Request) -> Response:
+    """The closing question's own small window (the Mac app keeps it ready, hidden)."""
+    if not _local(request):
+        return Response("Wrong address.", status_code=421)
+    return HTMLResponse((HERE / "closeask.html").read_text(), headers=HEADERS)
+
+
 WEB = HERE / "web"   # the built front end (frontend/ builds into it)
 ASSET_TYPES = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".svg": "image/svg+xml"}
 
@@ -400,6 +408,11 @@ async def api(request: Request) -> Response:
                      "canUndo": bool(a.get("undo")) and a["undo"] in activity.undo}
                     for a in reversed(activity.log) if a["folder"] in mine]
             return _ok({"activity": rows[:200]})
+        if action == "closeanswer":   # from the closing question's window, only while that question is open
+            if not closing["asked"]:
+                return _ok({"error": "Nothing to answer."}, 409)
+            _answer_close(bool(body.get("keep")))
+            return _ok({"answer": closing["answer"]})
         if action == "wanted":   # a folder the person asked for by double-clicking its opener file (once)
             fid, wanted["id"] = wanted["id"], None
             return _ok({"id": fid})
@@ -605,7 +618,7 @@ def cloud_place(path: Path) -> str | None:
 # When the window closes while a folder is open in Finder, the page asks whether to keep it open for a while.
 # Keeping it: the window hides, and when the time is up every folder locks (Finder views close) and the app quits.
 
-closing = {"answer": None, "exit": False}
+closing = {"asked": False, "answer": None, "exit": False}
 
 
 def _finish() -> None:
@@ -628,6 +641,7 @@ def _answer_close(keep: bool) -> None:
     """Keep open: the window hides and the app stays in the Dock with the folders open, until the person locks
     them or quits. The answer is remembered for 72 hours, so closing doesn't ask every time. Otherwise everything
     locks and the app quits."""
+    closing["asked"] = False
     closing["answer"] = {"keep": 1 if keep else 0}
     if keep:
         STATE.mkdir(parents=True, exist_ok=True)
@@ -647,8 +661,8 @@ async def shell(request: Request) -> Response:
             if _keep_remembered():   # "Keep open" chosen in the last 72 hours: don't ask again
                 closing.update(answer={"keep": 1}, exit=False)
                 return JSONResponse({"ask": False, "keep": True})
-            closing.update(answer=None, exit=False)
-            return JSONResponse({"ask": True})   # the Mac app asks in its own small box, then calls "decide"
+            closing.update(asked=True, answer=None, exit=False)
+            return JSONResponse({"ask": True})   # the Mac app shows its small question window
         _finish()
         return JSONResponse({"ask": False})
     if action == "decide":   # the person's answer to the closing question (no answer in 30 s counts as lock)
@@ -677,7 +691,7 @@ async def shell(request: Request) -> Response:
         wanted["id"] = fid
         return JSONResponse({"id": fid})
     if action == "reopen":   # the person came back from the Dock
-        closing.update(answer=None, exit=False)
+        closing.update(asked=False, answer=None, exit=False)
         return JSONResponse({"ok": True})
     return JSONResponse({"error": "Unknown."}, status_code=404)
 
