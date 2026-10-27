@@ -1410,7 +1410,16 @@ function renderStatus() {
   if (t && t.err) statusEl.title = t.err; else statusEl.removeAttribute("title");
 }
 
+// At most MAX_TABS tabs: opening one more closes the oldest (leftmost) other tab, saving it first.
+const MAX_TABS = 6;
+function trimTabs(keep) {
+  const extra = state.tabs.length - MAX_TABS;
+  if (extra <= 0) return;
+  for (const t of state.tabs.filter((t) => t !== keep).slice(0, extra)) closeTab(t);
+}
+
 function activate(tab, opts = {}) {
+  trimTabs(tab);
   state.active = tab;
   for (const t of state.tabs) t.pane.classList.toggle("hidden", t !== tab);
   paneHost._empty.classList.add("hidden");
