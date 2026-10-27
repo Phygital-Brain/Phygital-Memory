@@ -410,7 +410,8 @@ def list_notes(ctx: Context, folder: FolderName = "",
     if inside:
         _private(f, inside, private, "look inside")
     priv = [] if private else f.memory.ai_private()
-    hidden = lambda p: any(p.lower().startswith(x.lower() + "/") for x in priv)
+    hidden = lambda p: any(p.lower().startswith(x.lower() + "/") for x in priv) or (
+        not private and any(part.startswith(".") for part in p.split("/")))   # hidden files: only when asked
     rows = [x for x in _guard(f.memory.list_files)
             if (not inside or x["path"] == inside or x["path"].startswith(inside + "/")) and not hidden(x["path"])]
     _log(app, f, "listed notes", inside or "everything")

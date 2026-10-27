@@ -617,3 +617,5 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .ai-door code, .ai-setup { font: 12px/1.5 var(--font-mono); background: var(--bg-app); border: 1px solid var(--border); border-radius: var(--r-s); padding: 6px 8px; }
 .ai-door code { flex: 1; overflow-x: auto; white-space: nowrap; }
 .ai-setup { margin: 0; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; user-select: text; }
+
+.row.dotfile .row-name, .row.dotfile svg { opacity: .55; }

@@ -464,7 +464,8 @@ class Memory:
             out = []
             for path, entry in self._tree.walk():
                 rel = path.lstrip("/")
-                if rel.split("/")[0] in HIDDEN or entry.kind == "link":
+                if rel.split("/")[0] in HIDDEN or entry.kind == "link" or entry.name == ".DS_Store" \
+                        or entry.name.startswith("._"):
                     continue
                 item = {"path": rel, "kind": "folder" if entry.kind == "dir" else "file"}
                 if entry.kind == "file":
@@ -962,6 +963,8 @@ class Memory:
 
     def is_ai_private(self, rel: str) -> bool:
         rel = str(rel).strip("/").lower()
+        if any(p.startswith(".") for p in rel.split("/")):   # hidden files (.env keys and the like) are private always
+            return True
         return any(rel == p.lower() or rel.startswith(p.lower() + "/") for p in self.ai_private())
 
     def set_ai_private(self, rel: str, on: bool) -> list[str]:
@@ -1034,7 +1037,8 @@ def merge3(base: str, mine: str, theirs: str) -> str | None:
 
 def _clean_path(rel: str, md: bool = True) -> str:
     parts = [p for p in rel.replace("\\", "/").strip("/").split("/") if p]
-    if not parts or any(p in (".", "..") or p.startswith(".") for p in parts):
+    # Dot files (.env, .gitignore) are fine; the app's own hidden folders and Mac clutter are not.
+    if not parts or any(p in (".", "..") or p in HIDDEN or p == ".DS_Store" or p.startswith("._") for p in parts):
         raise ValueError("Give a path inside the notes, like 'Projects/idea.md'.")
     if md and not parts[-1].lower().endswith(".md"):
         parts[-1] += ".md"

@@ -428,7 +428,8 @@ function buildApp() {
   const sortBtn = ib("sort", "Sort", (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const cur = getPref("sortMode", "recent");
-    showMenu(SORTS.map(([k, t, hint]) => ({ label: t, hint, check: cur === k, fn: () => { setPref("sortMode", k); renderTree(); } })), r.left, r.bottom + 4);
+    showMenu([...SORTS.map(([k, t, hint]) => ({ label: t, hint, check: cur === k, fn: () => { setPref("sortMode", k); renderTree(); } })),
+      { sep: true }, { label: "Show hidden files", hint: "⇧⌘.", check: getPref("showHidden", false), fn: toggleHidden }], r.left, r.bottom + 4);
   });
 
   sbName = el("div", { class: "sb-name" }, "Phygital Memory");
@@ -548,11 +549,22 @@ function preloadGraph() {
   }, 1200);
 }
 
+// Hidden files (.env, .gitignore, .obsidian/) show only with Show hidden files on (⇧⌘.), a little faded.
+const isDot = (p) => p.split("/").some((s) => s.startsWith("."));
+function visibleFiles() { return (state.allFiles || []).filter((f) => getPref("showHidden", false) || !isDot(f.path)); }
+function toggleHidden() {
+  setPref("showHidden", !getPref("showHidden", false));
+  state.files = visibleFiles();
+  renderTree();
+  toast(getPref("showHidden", false) ? "Showing hidden files" : "Hidden files hidden");
+}
+
 async function loadFiles() {
   const fid = loadedFolder;
   const j = await api("files");
   if (fid !== loadedFolder) return;
-  state.files = (j.files || []).filter((f) => !baseName(f.path).startsWith("."));
+  state.allFiles = j.files || [];
+  state.files = visibleFiles();
   try { state.aiPrivate = (await api("aiprivate")).paths || []; } catch { state.aiPrivate = []; }
   if (fid !== loadedFolder) return;
   renderTree();
@@ -1018,7 +1030,7 @@ function rowFor(n, depth) {
   const pinned = getPref("pins", []).includes(n.path);
   const more = el("button", { class: "row-more", title: "More", "aria-label": "More", onclick: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); rowMenu(n, r.left, r.bottom + 4); } }, icon("more", 15));
   const row = el("div", {
-    class: "row" + (cur ? " active" : "") + (state.sel.has(n.path) ? " sel" : ""), role: "treeitem", draggable: true, style: `padding-left:${8 + depth * 14}px`,
+    class: "row" + (cur ? " active" : "") + (state.sel.has(n.path) ? " sel" : "") + (isDot(n.path) ? " dotfile" : ""), role: "treeitem", draggable: true, style: `padding-left:${8 + depth * 14}px`,
     onclick: (e) => {
       if (e.metaKey || e.ctrlKey) {
         state.sel.has(n.path) ? state.sel.delete(n.path) : state.sel.add(n.path);
@@ -1347,7 +1359,7 @@ function makeFileTab(path) {
         el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, "Export…")));
     return tab;
   }
-  if (CSV.test(path) || TEXT_EXT.test(path)) {
+  if (CSV.test(path) || TEXT_EXT.test(path) || /^\.[^.]/.test(baseName(path)) && !/\.(png|jpe?g|gif|webp|pdf|docx)$/i.test(path)) {
     editableFile(tab, body, fail);
     return tab;
   }
@@ -2171,6 +2183,7 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && state.sel.size && !document.querySelector(".overlay,.menu")) { state.sel.clear(); renderTree(); return; }
   if (!mod || e.altKey) return;
   if (e.key === ",") { e.preventDefault(); openSettingsHere(); }
+  else if (e.code === "Period" && e.shiftKey) { e.preventDefault(); toggleHidden(); }
   else if (k === "h" && e.shiftKey) { e.preventDefault(); goHome(); }
   else if (k === "o" && e.shiftKey) { e.preventDefault(); openSwitcher(); }
   else if (/^[1-9]$/.test(k) && !e.shiftKey && !e.altKey && folderList[Number(k) - 1]) { e.preventDefault(); switchTo(folderList[Number(k) - 1].id); }
