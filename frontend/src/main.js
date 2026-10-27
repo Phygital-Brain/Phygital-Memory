@@ -94,6 +94,29 @@ function resetState() {
   blToken++; blData = [];
 }
 
+// The empty page's search: Engram results as you type, a click opens one, Enter opens the full search.
+function emptySearch() {
+  const input = el("input", { name: "q", placeholder: "Search your notes", spellcheck: "false", autocomplete: "off", "aria-label": "Search your notes" });
+  const list = el("div", { class: "empty-results" });
+  let token = 0, timer = null;
+  const run = async () => {
+    const q = input.value.trim(), mine = ++token;
+    if (!q) { list.replaceChildren(); return; }
+    let rows = [];
+    try { rows = (await api("search", { q, n: 6 })).results || []; } catch { return; }
+    if (mine !== token) return;
+    list.replaceChildren(...(rows.length ? rows.slice(0, 6).map((r) => el("button", { class: "er-row", type: "button",
+      onclick: () => { input.value = ""; list.replaceChildren(); openAt(r.path, r.heading.split(" > ").slice(1).join(" > ")); } },
+      el("span", { class: "er-title" }, r.heading.split(" > ").join(" › ")),
+      el("span", { class: "er-snip" }, r.snippet))) : [el("div", { class: "er-none" }, "Nothing found yet.")]));
+  };
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 150); });
+  return el("div", { class: "empty-search-wrap" },
+    el("form", { class: "empty-search", onsubmit: (e) => { e.preventDefault(); const q = input.value.trim(); if (q) { input.value = ""; list.replaceChildren(); openSearchView(q); } } },
+      icon("search", 15), input),
+    list);
+}
+
 // Take a folder's screen out of the window and keep it in memory.
 function detachTab(t) {
   clearTimeout(t.timer);
@@ -198,7 +221,7 @@ async function pickFolder(prompt, start) {
   return (await api("pickfolder", { prompt, ...(start ? { start } : {}) })).path || null;
 }
 
-// Another Mac: bring a private "…-Phygital-Memory" repo down from GitHub, then unlock it with its password.
+// Another Mac: bring a private "NAME-Phygital-Memory" repo down from GitHub, then unlock it with its password.
 // The ways to open a memory, the same everywhere (the memory menu's submenu, the unlock screen).
 function openMenuItems() {
   return [{ label: "From this Mac", fn: openOtherFolder }, { label: "From GitHub", fn: openFromGithub },
@@ -653,11 +676,9 @@ function buildApp() {
     el("div", { class: "empty-card" }, icon("file", 28, 1.4),
       el("div", { class: "empty-title" }, "Nothing open yet"),
       el("div", { class: "empty-sub" }, "Pick a note on the left, or start a new one."),
-      el("form", { class: "empty-search", onsubmit: (e) => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) { e.target.q.value = ""; openSearchView(q); } } },
-        icon("search", 15), el("input", { name: "q", placeholder: "Search your notes", spellcheck: "false", autocomplete: "off", "aria-label": "Search your notes" })),
+      emptySearch(),
       el("div", { class: "empty-actions" },
-        el("button", { class: "btn primary", onclick: () => newNote() }, icon("plus", 14, 2), "New note"),
-        el("button", { class: "btn", onclick: openSearch }, icon("search", 14), "Find a note")),
+        el("button", { class: "btn primary", onclick: () => newNote() }, icon("plus", 14, 2), "New note")),
       el("div", { class: "empty-keys" }, "⌘N new · ⌘K find · ⌘G graph")));
   paneHost.append(empty);
   paneHost._empty = empty;
@@ -1366,8 +1387,15 @@ function sharingItem(path, sh) {
   const done = (msg) => () => { toastOk(msg); loadShared(); };
   const add = (p) => ({ label: `Add ${p.name}`, sub: [["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t,
     fn: () => api("shareadd", { path, id: p.id, role: r }).then(done(`${p.name} can now ${r === "edit" ? "edit" : "view"} it. It shows up in their app by itself.`), (e) => toastErr(e.message)) })) });
-  const invite = { label: "Invite someone new…", fn: () => openShareHere(path) };
-  if (!part) return others.length ? { label: "Share", sub: [...others.map(add), { sep: true }, invite] } : { label: "Share…", fn: () => openShareHere(path) };
+  const invite = { label: "Invite someone new", fn: () => openShareHere(path) };
+  const above = !part && sh.parts.filter((p) => path.startsWith(p.path + "/") && p.who.length).sort((a, b) => b.path.length - a.path.length)[0];
+  if (above) {   // inside a shared folder: it goes with it, managed there
+    const top = above.path.split("/").pop();
+    return { label: "Sharing", cls: "mi-accent", value: `through ${top}`, sub: [
+      ...above.who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view" })),
+      { sep: true }, { label: `Manage in ${top}`, fn: () => openShareHere(above.path) }] };
+  }
+  if (!part) return others.length ? { label: "Share", sub: [...others.map(add), { sep: true }, invite] } : { label: "Share", fn: () => openShareHere(path) };
   return { label: "Sharing", cls: "mi-accent", value: who.length === 1 ? "1 person" : `${who.length} people`, sub: [
     ...who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view", sub: [
       ...[["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t, check: p.role === r,
@@ -1378,7 +1406,7 @@ function sharingItem(path, sh) {
           api("shareremove", { share: part.id, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
       } }] })),
     { sep: true }, ...others.map(add), invite,
-    { label: "Sharing window…", fn: () => openShareHere(path) }] };
+    { label: "Sharing window", fn: () => openShareHere(path) }] };
 }
 
 // Shared folders and files get a small symbol in the sidebar: {path: "Ana, Tom"}.
@@ -1822,7 +1850,7 @@ function wordFile(tab, body, fail) {
   api("docxread", { path: tab.path }).then(tab.show).catch(fail);
 }
 
-// Open a file in its own Mac app (Word, Pages, Numbers…). Needs the Finder view, which asks first.
+// Open a file in its own Mac app (Word, Pages, Numbers). Needs the Finder view, which asks first.
 async function openInApp(path) {
   const tab = state.tabs.find((t) => t.path === path);
   if (tab && tab.dirty) await saveNow(tab);
@@ -2059,7 +2087,7 @@ function saveNow(tab) {
   return tab.chain;
 }
 
-// Short-lived words after an action (Undone, Restored…), then back to the save state.
+// Short-lived words after an action (Undone, Restored), then back to the save state.
 let statusFlash = null;
 function flashStatus(text, tone = "") {
   statusFlash = { text, tone, tab: state.active, until: Date.now() + 2200 };

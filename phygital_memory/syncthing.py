@@ -6,7 +6,7 @@
 - Computers find each other on the same network, or through Syncthing's public discovery and relays, which only ever
   see encrypted traffic of encrypted files. Tests turn all of that off and connect on 127.0.0.1.
 - A computer may connect only if its name carries proof of an invite (an HMAC of its Syncthing ID with the invite's
-  one-time code). It then gets one small "pmq-..." folder, which only carries its request to join (name and public
+  one-time code). It then gets one small "pmq-" folder, which only carries its request to join (name and public
   key) to the owner. The memory's files go to it only after the owner says yes, together with its own key."""
 from __future__ import annotations
 

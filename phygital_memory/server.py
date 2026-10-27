@@ -432,7 +432,7 @@ def list_notes(ctx: Context, folder: FolderName = "",
     mark = lambda p: not private and (p.lower() in lock or p.rsplit("/", 1)[-1].startswith("."))
     out = [x["path"] + ("/" if x["kind"] == "folder" else "") + ("  (private: ask first)" if mark(x["path"]) else "")
            for x in rows[:500]]
-    more = f"\n…and {len(rows) - 500} more. Use inside= to look in one subfolder." if len(rows) > 500 else ""
+    more = f"\nAnd {len(rows) - 500} more. Use inside= to look in one subfolder." if len(rows) > 500 else ""
     return LABEL + (f"{f.name}:\n" + "\n".join(out) + more if out else "Nothing there.")
 
 
@@ -757,6 +757,8 @@ def _st_watch() -> None:
                             inv[code]["devs"] = sorted(set(inv[code].get("devs", [])) | {dev})
                             _st_save_invites({**_st_invites(), code: inv[code]})
                 _st_take_offers()
+                _st_drop_removed()
+                _st_finish_unshares()
                 for code, i in inv.items():   # a request came in: put it where the owner's app looks
                     try:
                         r = json.loads((ST_REQUESTS / i["q"] / "request.json").read_text())
@@ -797,6 +799,73 @@ def _st_gone() -> set:
 def _st_gone_add(fid: str) -> None:
     STATE.mkdir(parents=True, exist_ok=True)
     ST_GONE.write_text(json.dumps(sorted(_st_gone() | {fid})))
+
+
+ST_UNSHARE = STATE / "syncthing-unshare.json"   # removed people: stop sending once their app saw it (and deleted)
+UNSHARE_WAIT = 30 * 86400   # someone who never comes back: stop anyway after 30 days
+
+
+def _st_unshares() -> list:
+    try:
+        return json.loads(ST_UNSHARE.read_text())
+    except (OSError, ValueError):
+        return []
+
+
+def _st_unshare_later(fid: str, device: str, forget: str | None = None) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    ST_UNSHARE.write_text(json.dumps(_st_unshares() + [{"folder": fid, "device": device, "since": time.time(),
+                                                         **({"forget": forget} if forget else {})}]))
+
+
+def _st_finish_unshares() -> None:
+    """Their Mac has everything (the note that they were removed, and their key gone): stop sending to it.
+    A stopped share is deleted here once nobody is left waiting for it."""
+    todo = _st_unshares()
+    if not todo:
+        return
+    left = []
+    for u in todo:
+        done = time.time() - u["since"] > UNSHARE_WAIT
+        if not done and st.running():
+            try:
+                c = st.rest("GET", f"/rest/db/completion?folder={u['folder']}&device={u['device']}")
+                done = c.get("remoteState") == "notSharing" or (   # their app already dropped it, or has it all
+                    c.get("completion") == 100 and c.get("remoteState") == "valid"
+                    and u["device"] in st.connected() and time.time() - u["since"] > 10)
+            except Exception:
+                done = False
+        if done:
+            try:
+                st.unshare_folder(u["folder"], u["device"])
+            except Exception:
+                left.append(u)
+                continue
+        else:
+            left.append(u)
+    for sid in {u["forget"] for u in todo if u.get("forget")} - {u.get("forget") for u in left}:
+        st.remove_folder("pm-" + sharing._vault_id(shares.path_of(sid))) if shares.path_of(sid).exists() else None
+        shares.forget(sid)
+    ST_UNSHARE.write_text(json.dumps(left))
+
+
+def _st_drop_removed() -> None:
+    """The owner removed me from something shared with me: this Mac's copy is deleted and it leaves the list."""
+    for x in list(folders.items.values()):
+        if not (x.joined and x.syncthing and is_vault(x.path) and sharing.am_removed(x.path)):
+            continue
+        try:
+            x.lock()
+        except Exception:
+            pass
+        st.remove_folder(x.syncthing)
+        _st_gone_add(x.syncthing)   # never taken back in, even while the owner's Mac still offers it
+        with folders._lock:
+            folders.items.pop(x.id, None)
+            folders._save()
+        if (STATE / "Shared with me") in x.path.parents:   # only copies the app made itself
+            shutil.rmtree(x.path, ignore_errors=True)
+        approvals.add("Removed by the owner: copy deleted", x.name, "owner")
 
 
 def _people() -> list[dict]:
@@ -1449,15 +1518,19 @@ async def api(request: Request) -> Response:
             if action == "sharestop":   # stop sharing a folder or file with everyone
                 if not part:
                     return _ok({"error": "Remove people one by one to stop sharing the whole memory."}, 400)
-                if st.running():
-                    await asyncio.to_thread(st.remove_folder, fid)
                 _st_gone_add(fid)   # their app may still offer it back: never take it in
-                await asyncio.to_thread(shares.forget, part["id"])
+                for x in sharing.members(tpath, traw):
+                    if x["role"] != "owner":
+                        sharing.remove(tpath, traw, x["id"])
+                        if x.get("device"):
+                            _st_unshare_later(fid, x["device"], part["id"])
+                await asyncio.to_thread(shares.stopping, part["id"])
+                _st_finish_unshares()   # nobody to wait for: gone now
                 approvals.add("Stopped sharing", what, "click")
                 return _ok({"ok": True})
             gone = sharing.remove(tpath, traw, str(body.get("id")))
-            if gone.get("device") and fid and st.running():   # their computer stops getting it
-                await asyncio.to_thread(st.unshare_folder, fid, gone["device"])
+            if gone.get("device") and fid:   # their app deletes its copy, then their computer stops getting it
+                _st_unshare_later(fid, gone["device"])
             approvals.add(f"Removed {gone['name']}", what, "click")
             return _ok({"members": sharing.members(tpath, traw)})
         if action == "recoverykey":   # the 44 words, after the password again

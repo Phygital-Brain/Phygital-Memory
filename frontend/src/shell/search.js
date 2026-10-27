@@ -18,7 +18,7 @@ function marked(parent, text, words) {
   if (last < text.length) parent.append(text.slice(last));
 }
 
-// Engram marks the matched words of a snippet with \x02 … \x03; those become <mark>s.
+// Engram marks the matched words of a snippet with \x02 and \x03; those become <mark>s.
 function engramMarks(parent, text) {
   const parts = text.split(/\x02|\x03/);
   parts.forEach((part, i) => { if (part) parent.append(i % 2 ? el("mark", {}, part) : part); });

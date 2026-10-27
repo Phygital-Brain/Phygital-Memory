@@ -51,7 +51,7 @@ export function openShare(ctx) {
         ...((s.parts || []).length ? [el("div", { class: "set-section" }, "Shared folders and files"),
           el("div", { class: "act-list" }, ...s.parts.map((p) => el("div", { class: "todo-row share-row" },
             el("div", { class: "act-main" }, el("div", { class: "act-line" }, p.path),
-              el("div", { class: "act-folder" }, p.people.length ? "With " + p.people.join(", ") : "Invite sent, nobody in yet")),
+              el("div", { class: "act-folder" }, p.people.length ? "With " + p.people.join(", ") : "Nobody has it right now")),
             el("span", { class: "set-btns" }, btn("Open", () => { done(null); ctx.openPart(p.path); }),
               btn("Stop sharing", () => act(() => ctx.stopPart(p.id, p.path)), "danger")))))] : []),
         ...(owner && people.length ? [el("div", { class: "set-section" }, "Add someone you already share with"),
@@ -89,7 +89,7 @@ export function openShare(ctx) {
 // Joining: paste the invite, then say where the shared files are on this Mac. Resolves {link, where} or null.
 export function joinDialog() {
   return modal((done) => {
-    const link = el("textarea", { class: "dlg-input rk-input", rows: "3", spellcheck: "false", placeholder: "phygitalmemory://join?…", "aria-label": "Invite" });
+    const link = el("textarea", { class: "dlg-input rk-input", rows: "3", spellcheck: "false", placeholder: "Paste the invite here", "aria-label": "Invite" });
     const err = el("div", { class: "dlg-err" });
     const where = el("div", { class: "mf-hint" });
     const read = () => {

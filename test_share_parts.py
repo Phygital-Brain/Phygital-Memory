@@ -6,6 +6,7 @@ reaches her.
 Run: uv run python test_share_parts.py   (needs a fresh test folder: make_test_vault.py --fresh)
 """
 import time
+from pathlib import Path
 
 from test_syncthing_share import A, B, ROOT, api, check, cleanup, ok, servers, tmp, wait
 
@@ -68,6 +69,11 @@ try:
     check(wait(lambda: gi.update(api(B, "keyunlock", {"folder": fi.get("id")})) or gi.get("pass"), 90), "Ana opens Ideas with her own key", gi)
     check(wait(lambda: "Pocket-Library.md" in files(B, fi.get("id"), gi.get("pass")), 60), "and its notes are there")
     check(not api(A, "sharepeople", {"path": "Ideas", "folder": fa}, pa).get("people"), "once in, she's off the pick list")
+    ideas_dir = Path(fi.get("path", "/nonexistent"))
+    api(A, "shareremove", {"share": add.get("share"), "id": people[0]["id"] if people else "", "folder": fa}, pa)
+    check(wait(lambda: not any(x["name"] == "Ideas" for x in api(B, "folders")["folders"]), 60),
+          "removed from Ideas: it leaves Ana's list")
+    check(not ideas_dir.exists(), "and her copy is deleted from her Mac", ideas_dir)
 
     sf, ff, pf = join("People/Tom-Becker.md", "view", "Tom-Becker.md")
     check(wait(lambda: files(B, ff, pf) == {"Tom-Becker.md"}, 60), "one file shared: only that file reaches Ana")
@@ -78,14 +84,14 @@ try:
           "Max's change to the file reaches Ana")
 
     parts = api(A, "shareinfo", {"folder": fa}, pa).get("parts", [])
-    check({p["path"] for p in parts} == {"Work", "Ideas", "People/Tom-Becker.md"} and all(p["people"] == ["Ana"] for p in parts),
+    parts = [p for p in parts if p["people"]]   # Ideas stays listed, with nobody in it after the removal
+    check({p["path"] for p in parts} == {"Work", "People/Tom-Becker.md"} and all(p["people"] == ["Ana"] for p in parts),
           "the memory's Share window lists what's shared and with whom", parts)
     api(A, "sharestop", {"share": sf, "folder": fa}, pa)
-    time.sleep(3)
-    api(A, "save", {"path": "People/Tom-Becker.md", "text": "# Tom\nafter stop\n", "folder": fa}, pa)
-    time.sleep(10)
-    check("after stop" not in api(B, "read", {"path": "Tom-Becker.md", "folder": ff}, pf)["text"],
-          "after Stop sharing, Ana gets no more changes")
+    check(wait(lambda: not any(x["id"] == ff for x in api(B, "folders")["folders"]), 60),
+          "after Stop sharing, the file leaves Ana's list and her copy is deleted")
+    check(wait(lambda: not any(p["path"] == "People/Tom-Becker.md" for p in api(A, "shareinfo", {"folder": fa}, pa).get("parts", [])), 30),
+          "and it's gone from Max's shared list")
 finally:
     cleanup(procs)
 

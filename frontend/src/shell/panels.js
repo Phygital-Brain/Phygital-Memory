@@ -500,7 +500,7 @@ export function openS3(ctx) {
     const tabs = el("div", { class: "seg", role: "radiogroup" });
     const drawTabs = () => tabs.replaceChildren(...[["s3", "Amazon S3"], ["r2", "Cloudflare R2"]].map(([k, t]) =>
       el("button", { class: "seg-b" + (kind === k ? " on" : ""), type: "button", onclick: () => {
-        kind = k; drawTabs(); drawHint(); where.placeholder = k === "r2" ? "S3 endpoint, like https://….r2.cloudflarestorage.com" : "Region, like eu-west-1";
+        kind = k; drawTabs(); drawHint(); where.placeholder = k === "r2" ? "S3 endpoint, like https://ID.r2.cloudflarestorage.com" : "Region, like eu-west-1";
         where.setAttribute("aria-label", k === "r2" ? "S3 endpoint" : "Region"); } }, t)));
     drawTabs();
     const fields = () => {

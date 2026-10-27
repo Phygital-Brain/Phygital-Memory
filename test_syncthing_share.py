@@ -134,9 +134,9 @@ def main():
         time.sleep(3)
         api(A, "save", {"path": "After removing.md", "text": "# Not for Ana\n", "new": True, "folder": fa}, pa)
         time.sleep(10)
-        check(not any("After removing" in p.name for p in target.rglob("*")) and
-              not any(x["path"] == "After removing.md" for x in api(B, "files", {"folder": fb}, pb)["files"]),
-              "once removed, Ana's computer gets no more changes")
+        check(wait(lambda: not any(x["id"] == fb for x in api(B, "folders")["folders"]), 60),
+              "once removed, the memory leaves Ana's list (her app drops its copy)")
+        check(not any("After removing" in p.name for p in target.rglob("*")), "and her computer gets no more changes")
     finally:
         cleanup(procs)
 

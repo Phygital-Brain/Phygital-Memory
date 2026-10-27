@@ -89,7 +89,7 @@ export default function folding(opts) {
     extensions: [
       codeFolding({
         placeholderDOM(view, onclick) {
-          const p = document.createElement("span"); p.className = "md-fold-placeholder"; p.textContent = "…";
+          const p = document.createElement("span"); p.className = "md-fold-placeholder"; p.textContent = "more";
           p.title = "Unfold"; p.onclick = onclick; return p;
         },
       }),

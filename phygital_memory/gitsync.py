@@ -168,7 +168,7 @@ def _exists(repo: str) -> bool:
 
 def repo_name(name: str) -> str:
     """"Notes - Phygital Memory" as GitHub allows it (no spaces): "Notes-Phygital-Memory". A memory already called
-    "Phygital Memory" (or "… Phygital Memory") isn't doubled: "Phygital-Memory"."""
+    "Phygital Memory" (or "NAME Phygital Memory") isn't doubled: "Phygital-Memory"."""
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.") or "Notes"
     if slug.lower() == "phygital-memory" or slug.lower().endswith(SUFFIX.lower()):
         return slug[:90]

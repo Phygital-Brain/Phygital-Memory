@@ -90,7 +90,7 @@ def make_s3_conn(kind: str, key_id: str, where_: str, endpoint: str = "") -> dic
         if m:
             return {"kind": "r2", "url": f"https://{m.group(0)}", "user": key_id, "region": "auto"}
         if not re.fullmatch(r"[0-9a-f]{32}", where_):
-            raise CloudError("Paste the S3 endpoint Cloudflare shows, like https://….r2.cloudflarestorage.com.")
+            raise CloudError("Paste the S3 endpoint Cloudflare shows, like https://ID.r2.cloudflarestorage.com.")
         return {"kind": "r2", "url": f"https://{where_}.r2.cloudflarestorage.com", "user": key_id, "region": "auto"}
     if not re.fullmatch(r"[a-z]{2}(-[a-z]+)+-\d", where_):
         raise CloudError("Type the region, like eu-west-1.")

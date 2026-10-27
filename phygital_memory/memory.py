@@ -295,10 +295,10 @@ class Memory:
                 pass
 
     def _write_note(self, rel, parent, name, existing, data: bytes, keep_version: bool) -> None:
-        self._did("edited" if existing else "added", rel)
         if existing:
             self._keep_version(rel, existing, data, force=keep_version)
         entry = self._writer.write_file(parent, name, data, replace=existing)
+        self._did("edited" if existing else "added", rel)
         remove_file(self._con, rel)
         self._index_one(rel, entry)
         self._con.commit()

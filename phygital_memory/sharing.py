@@ -239,6 +239,7 @@ def answer(folder: Path, raw_key: bytes, rid: str, allow: bool, role: str | None
             raise ValueError("That invite ran out or was used. Send a new one.")
         (folder / SHARE / "keys").mkdir(parents=True, exist_ok=True)
         (folder / SHARE / "keys" / f"{member_id(pub)}.key").write_bytes(lock_for(raw_key, pub))
+        (folder / SHARE / "removed" / member_id(pub)).unlink(missing_ok=True)
         m["members"].append({"id": member_id(pub), "name": name, "pub": r["pub"], "role": role or inv["role"], "added": time.time(),
                              **({"device": str(r["device"])[:80]} if r.get("device") else {})})
         inv["used"] = True
@@ -256,6 +257,7 @@ def add_member(folder: Path, raw_key: bytes, person: dict, role: str) -> None:
     if member_id(pub) != person["id"]:
         raise ValueError("That person's key doesn't match.")
     (folder / SHARE / "keys" / f"{person['id']}.key").write_bytes(lock_for(raw_key, pub))
+    (folder / SHARE / "removed" / person["id"]).unlink(missing_ok=True)   # back in after being removed
     m["members"] = [x for x in m["members"] if x["id"] != person["id"]] + [
         {"id": person["id"], "name": str(person["name"])[:60], "pub": person["pub"], "role": role, "added": time.time(),
          **({"device": str(person["device"])[:80]} if person.get("device") else {})}]
@@ -322,6 +324,8 @@ def remove(folder: Path, raw_key: bytes, mid: str) -> dict:
     if not gone:
         raise ValueError("They're not on the list.")
     (folder / SHARE / "keys" / f"{mid}.key").unlink(missing_ok=True)
+    (folder / SHARE / "removed").mkdir(exist_ok=True)   # their app sees this and deletes its copy
+    (folder / SHARE / "removed" / mid).write_text("")
     m["members"] = [x for x in m["members"] if x["id"] != mid]
     _write_members(folder, raw_key, m)
     return gone
@@ -371,6 +375,11 @@ def my_key(folder: Path) -> bytes | None:
     """The memory's key, if the owner said yes (your key file is there). None while waiting."""
     p = folder / SHARE / "keys" / f"{my_id()}.key"
     return open_mine(p.read_bytes()) if p.exists() else None
+
+
+def am_removed(folder: Path) -> bool:
+    """The owner took me off this one (letting me back in deletes this note)."""
+    return (folder / SHARE / "removed" / my_id()).exists()
 
 
 def my_role(folder: Path, raw_key: bytes) -> str | None:

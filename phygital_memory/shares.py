@@ -70,7 +70,16 @@ def of_all() -> list[dict]:
 
 
 def of_memory(vault_id: str) -> list[dict]:
-    return [{**s, "id": k} for k, s in _all().items() if s["memory"] == vault_id]
+    return [{**s, "id": k} for k, s in _all().items() if s["memory"] == vault_id and not s.get("stopping")]
+
+
+def stopping(sid: str) -> None:
+    """Stopped: hidden and no longer copied, kept only until everyone's app has deleted its copy."""
+    with _lock:
+        d = _all()
+        if sid in d:
+            d[sid]["stopping"] = True
+            _save_all(d)
 
 
 def find(vault_id: str, rel: str) -> dict | None:

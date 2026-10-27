@@ -81,7 +81,7 @@ def snippet_multi(body, q, width=240):
     for w in sorted(set(ws), key=len, reverse=True):
         s = re.sub(r"(?i)\b(" + re.escape(w[:5]) + r"\w*)", HL_OPEN + r"\1" + HL_CLOSE, s)
     s = re.sub(HL_OPEN + "+", HL_OPEN, re.sub(HL_CLOSE + "+", HL_CLOSE, s))
-    return ("... " if start else "") + s
+    return s   # no "..." in front: the app shows no ellipses
 
 
 def exact_terms(q):
@@ -106,7 +106,7 @@ def make_snippet(body, term, width=240):
     s = body[start:start + width]
     j = s.lower().find(term.lower())
     s = s[:j] + HL_OPEN + s[j:j + len(term)] + HL_CLOSE + s[j + len(term):]
-    return ("... " if start else "") + s
+    return s   # no "..." in front: the app shows no ellipses
 
 
 def _row(r, score, exact=False, snippet=None):

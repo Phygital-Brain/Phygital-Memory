@@ -555,7 +555,7 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .top-search kbd { font: inherit; font-size: 10.5px; color: var(--text-faint); }
 .top-search:focus-within kbd { display: none; }
 
-/* many tabs: they shrink first (names get "…"), then the strip scrolls; + / search / graph keep their place */
+/* many tabs: they shrink first (names get cut short), then the strip scrolls; + / search / graph keep their place */
 .tabs { flex: 0 1 auto; }
 .tab { flex: 0 1 180px; min-width: 76px; max-width: 200px; }
 .tab .tab-label { flex: 1; min-width: 0; }
@@ -661,6 +661,14 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .empty-search { display: flex; align-items: center; gap: 8px; width: 340px; max-width: 100%; margin: 14px auto 0; padding: 0 12px;
   border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2, transparent); color: var(--text-3); }
 .empty-search:focus-within { border-color: var(--accent); }
+.empty-search-wrap { width: 340px; max-width: 100%; margin: 14px auto 0; text-align: left; }
+.empty-search-wrap .empty-search { margin: 0; width: 100%; }
+.empty-results { display: flex; flex-direction: column; margin-top: 6px; }
+.er-row { display: flex; flex-direction: column; gap: 2px; padding: 7px 10px; border-radius: 8px; text-align: left; }
+.er-row:hover, .er-row:focus-visible { background: var(--accent-soft); }
+.er-title { font-size: 13px; color: var(--text); }
+.er-snip { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.er-none { padding: 7px 10px; font-size: 12px; color: var(--text-3); }
 .empty-search input { flex: 1; height: 38px; border: 0; background: none; color: var(--text); font: inherit; outline: none; }
 .share-invite { display: flex; gap: 8px; align-items: center; }
 .share-invite code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; padding: 6px 8px; border-radius: var(--r-s); background: var(--bg-app); user-select: all; }

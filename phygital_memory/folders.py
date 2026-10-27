@@ -640,7 +640,7 @@ class Folders:
         return repo
 
     def from_github(self, repo: str, parent: Path) -> dict:
-        """Another Mac: bring a private "…-Phygital-Memory" repo down into parent, and add it to the list."""
+        """Another Mac: bring a private "NAME-Phygital-Memory" repo down into parent, and add it to the list."""
         repo = repo.strip().removeprefix("https://github.com/").removesuffix(".git").strip("/")
         if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repo):
             raise ValueError('Write it like "your-name/Notes-Phygital-Memory".')
