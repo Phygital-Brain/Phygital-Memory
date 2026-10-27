@@ -1,12 +1,9 @@
 <!doctype html><meta charset="utf-8"><title>Phygital Memory</title>
-<!-- Shown for the second or so while the app's own server starts; then the window goes to the real page. -->
+<!-- Shown for the second or so while the app's own server starts: just the background colour, so the app's animated
+     splash screen is the only one people see. -->
 <style>
-:root{color-scheme:dark;--bg:#121214;--text:#ececf1;--faint:#85858f;--accent:#a69cff}
-@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#faf9f8;--text:#1a1a1e;--faint:#9a9aa5;--accent:#7f73ff}}
+:root{color-scheme:dark;--bg:#121214}
+@media (prefers-color-scheme:light){:root{color-scheme:light;--bg:#faf9f8}}
 html,body{height:100%;margin:0;background:var(--bg);-webkit-user-select:none;cursor:default}
-body{display:grid;place-items:center;font:600 22px/1.2 -apple-system,"SF Pro Display",system-ui,sans-serif;color:var(--text)}
-b{color:var(--accent);font-weight:600}
-p{margin:10px 0 0;text-align:center;font:400 12.5px -apple-system,system-ui,sans-serif;color:var(--faint);opacity:0;animation:in .3s .6s forwards}
-@keyframes in{to{opacity:1}}
 </style>
-<body data-tauri-drag-region><div data-tauri-drag-region>Phygital <b>Memory</b><p>Starting…</p></div></body>
+<body data-tauri-drag-region></body>
