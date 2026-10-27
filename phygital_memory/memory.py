@@ -300,7 +300,24 @@ class Memory:
             self._con.commit()
         self.clashes.append({"path": rel, "copy": copy, "t": time.time()})
         del self.clashes[:-50]
+        if rel.lower().endswith(".md") and rel.split("/")[0] not in HIDDEN:
+            self._conflict_task(rel, copy)
         return copy
+
+    def _conflict_task(self, rel: str, copy: str) -> None:
+        """A clash copy becomes an AI task: the AI puts what's missing into the note, and finishing the task moves
+        the copy to the trash (where it can still be restored)."""
+        try:
+            items = self.todo()
+            if any(i.get("copy") == copy and not i.get("done") for i in items):
+                return
+            ask = (f'This note was changed in two places at once. The other version is kept as "{Path(copy).stem}". '
+                   "Bring anything from it that's missing here into this note, keeping both sides' work, then finish "
+                   "this task. The other version then goes to the trash.")
+            self._save_todo(items + [{"id": "h-" + secrets.token_hex(4), "path": rel, "copy": copy, "ask": ask,
+                                      "t": time.time(), "done": False}])
+        except Exception:
+            pass   # the copy itself is what matters; the task is a helper
 
     def _fix_clash_copies(self) -> int:
         """Cloud drives keep both sides of a clash as an extra encrypted file, like "ABC (1).c9r" or "ABC (conflicted
@@ -871,6 +888,11 @@ class Memory:
             item.update(done=bool(done), done_t=time.time() if done else None,
                         by=str(by)[:60] if done else "", result=str(result).strip()[:TODO_ASK_MAX] if done else "")
             self._save_todo(items)
+            if done and item.get("copy"):   # a merged clash: the other version goes to the trash, not lost
+                try:
+                    self.trash(item["copy"])
+                except Exception:
+                    pass   # already gone
             return item
 
     def todo_remove(self, tid: str) -> None:
