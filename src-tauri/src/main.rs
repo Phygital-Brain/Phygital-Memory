@@ -98,25 +98,39 @@ fn quit(app: &tauri::AppHandle) {
     app.exit(0);
 }
 
-// The window is closing (or Cmd+Q). If a folder is open, the window hides and a small box of its own asks: lock
-// all, or keep open. No answer in 30 seconds locks everything. Keeping it leaves the app in the Dock; the server
-// remembers that answer for 72 hours, and closing then skips the question.
+// The window is closing (or Cmd+Q). If a folder is open, the window hides and the small question window shows at
+// once (it was made, hidden, at start): lock all, or keep open. No answer in 30 seconds locks everything. Keeping it
+// leaves the app in the Dock; the server remembers that answer for 72 hours, and closing then skips the question.
 fn handle_close(app: tauri::AppHandle) {
     if CLOSING.swap(true, Ordering::SeqCst) { return; }
+    let reply = shell(&app, "close").unwrap_or_default().replace(' ', "");
+    if !reply.contains("\"keep\":true") && !reply.contains("\"ask\":true") { return quit(&app); }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.eval("window.phygitalSaveAll && window.phygitalSaveAll()");   // nothing just typed is lost
+        let _ = w.hide();
+    }
+    let ask = if reply.contains("\"ask\":true") { app.get_webview_window("closeask") } else { None };
+    if let Some(q) = &ask {
+        let _ = q.eval("window.startAsk && window.startAsk()");
+        let _ = q.center();
+        let _ = q.show();
+        let _ = q.set_focus();
+    }
     std::thread::spawn(move || {
-        let reply = shell(&app, "close").unwrap_or_default().replace(' ', "");
-        if !reply.contains("\"keep\":true") && !reply.contains("\"ask\":true") { return quit(&app); }
-        if let Some(w) = app.get_webview_window("main") {
-            let _ = w.eval("window.phygitalSaveAll && window.phygitalSaveAll()");   // nothing just typed is lost
-            let _ = w.hide();
+        let mut keep = reply.contains("\"keep\":true");
+        if let Some(q) = ask {
+            let mut answered = false;
+            for _ in 0..350 {   // the window locks by itself after 30 s with no answer; 35 s here is the backstop
+                std::thread::sleep(Duration::from_millis(100));
+                let a = shell(&app, "answer").unwrap_or_default().replace(' ', "");
+                if a.contains("\"keep\":1") { keep = true; answered = true; break; }
+                if a.contains("\"keep\":0") { answered = true; break; }
+            }
+            let _ = q.hide();
+            if !answered { let _ = shell_with(&app, "decide", "{\"keep\":false}"); }
         }
-        let keep = reply.contains("\"keep\":true") || {
-            let keep = ask_keep_open();
-            let _ = shell_with(&app, "decide", if keep { "{\"keep\":true}" } else { "{\"keep\":false}" });
-            keep
-        };
         if !keep {
-            std::thread::sleep(Duration::from_millis(800));   // let the last save land before everything locks
+            std::thread::sleep(Duration::from_millis(500));   // let the last save land before everything locks
             return quit(&app);
         }
         CLOSING.store(false, Ordering::SeqCst);
@@ -129,28 +143,14 @@ fn handle_close(app: tauri::AppHandle) {
     });
 }
 
-// The closing question, in the Mac's own small box with the app's icon. True only for "Keep open"; no answer in
-// 30 seconds, or any error, means lock.
-fn ask_keep_open() -> bool {
-    let icon = std::env::current_exe().ok()
-        .and_then(|exe| exe.parent()?.parent().map(|c| c.join("Resources/icon.icns")))
-        .filter(|p| p.exists())
-        .map(|p| format!(" with icon POSIX file \"{}\"", p.to_string_lossy().replace('"', "")))
-        .unwrap_or_default();
-    let script = format!("display dialog \"Lock your notes before closing?\" & return & return & \
-        \"Lock all: everything locks and the app quits.\" & return & \
-        \"Keep open: your AI apps can still reach your notes, and the app stays in the Dock. Remembered for 3 days.\" & return & return & \
-        \"With no answer, everything locks in 30 seconds.\" \
-        with title \"Phygital Memory\" buttons {{\"Keep open\", \"Lock all and close\"}} \
-        default button \"Lock all and close\"{icon} giving up after 30");
-    let out = std::process::Command::new("osascript").args(["-e", "activate", "-e", &script]).output();
-    match out {
-        Ok(o) => {
-            let text = String::from_utf8_lossy(&o.stdout);
-            text.contains("button returned:Keep open") && !text.contains("gave up:true")
-        }
-        Err(_) => false,
-    }
+// The closing question's small window, made hidden at start so it can show the moment the main window closes.
+fn ask_window(app: &tauri::AppHandle) {
+    let _ = WebviewWindowBuilder::new(app, "closeask", WebviewUrl::External("http://127.0.0.1:8790/closeask".parse().unwrap()))
+        .title("Phygital Memory").inner_size(440.0, 230.0).resizable(false).minimizable(false).maximizable(false)
+        .closable(false).always_on_top(true).visible(false).center()
+        .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
+        .on_navigation(|url| own_page(url))
+        .build();
 }
 
 // The window may only ever show our own local page. A note, a link or injected HTML that tries to send it
@@ -212,7 +212,7 @@ fn main() {
             std::thread::spawn(move || {
                 if start_server(&h).is_ok() {
                     let h2 = h.clone();
-                    let _ = h.run_on_main_thread(move || { let _ = main_window(&h2); });
+                    let _ = h.run_on_main_thread(move || { let _ = main_window(&h2); ask_window(&h2); });
                 }
             });
             Ok(())
