@@ -36,6 +36,7 @@ from . import keychain
 from .vault import keys as vkeys
 
 SHARE = ".phygital-share"
+ME_FILE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser() / "me.json"
 IDENTITY = os.environ.get("PHYGITAL_MEMORY_IDENTITY_KEYCHAIN", "Phygital Memory identity")
 INVITE_DAYS = 7
 ROLES = ("edit", "view")
@@ -74,9 +75,33 @@ def member_id(pub: bytes) -> str:
 
 
 def my_name() -> str:
-    """The name others see: this Mac user's full name."""
+    """The name others see: the one set in Settings, or else this Mac user's full name."""
+    try:
+        name = json.loads((ME_FILE).read_text()).get("name", "").strip()
+    except (OSError, ValueError):
+        name = ""
+    if name:
+        return name[:60]
     r = subprocess.run(["id", "-F"], capture_output=True, text=True)
     return (r.stdout.strip() or os.environ.get("USER", "Someone"))[:60]
+
+
+def set_my_name(name: str) -> str:
+    name = " ".join(str(name).split())[:60]
+    ME_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ME_FILE.write_text(json.dumps({"name": name}))
+    return my_name()
+
+
+def safety_code(pub: bytes, vault_id: str) -> str:
+    """Four words both people see when someone asks to join. If they match, it really is them (nobody swapped keys)."""
+    from .vault.manage import WORDS
+    n = int.from_bytes(hashlib.sha256(pub + vault_id.encode()).digest()[:6], "big")
+    return " ".join(WORDS[(n >> (12 * i)) & 0xFFF] for i in range(4))
+
+
+def my_safety_code(folder: Path) -> str:
+    return safety_code(my_public(), _vault_id(folder))
 
 
 # ---------- locking the memory's key to one person ----------
@@ -185,7 +210,7 @@ def requests(folder: Path, raw_key: bytes) -> list[dict]:
         inv = next((i for i in m["invites"] if not i.get("used") and i["expires"] > time.time()
                     and hmac.compare_digest(_proof(i["code"], pub, name), str(r.get("proof", "")))), None)
         if inv and not any(x["id"] == member_id(pub) for x in m["members"]):
-            out.append({"id": member_id(pub), "name": name, "role": inv["role"]})
+            out.append({"id": member_id(pub), "name": name, "role": inv["role"], "safety": safety_code(pub, _vault_id(folder))})
     return out
 
 
@@ -204,7 +229,8 @@ def answer(folder: Path, raw_key: bytes, rid: str, allow: bool, role: str | None
             raise ValueError("That invite ran out or was used. Send a new one.")
         (folder / SHARE / "keys").mkdir(parents=True, exist_ok=True)
         (folder / SHARE / "keys" / f"{member_id(pub)}.key").write_bytes(lock_for(raw_key, pub))
-        m["members"].append({"id": member_id(pub), "name": name, "pub": r["pub"], "role": role or inv["role"], "added": time.time()})
+        m["members"].append({"id": member_id(pub), "name": name, "pub": r["pub"], "role": role or inv["role"], "added": time.time(),
+                             **({"device": str(r["device"])[:80]} if r.get("device") else {})})
         inv["used"] = True
         _write_members(folder, raw_key, m)
     req.unlink()
@@ -221,13 +247,16 @@ def set_role(folder: Path, raw_key: bytes, mid: str, role: str) -> None:
     _write_members(folder, raw_key, m)
 
 
-def remove(folder: Path, raw_key: bytes, mid: str) -> None:
+def remove(folder: Path, raw_key: bytes, mid: str) -> dict:
+    """Takes them off the list and deletes their key file. Returns who it was (with their Syncthing device, if any)."""
     m = _read_members(folder, raw_key)
-    if not any(x["id"] == mid and x["role"] != "owner" for x in m["members"]):
+    gone = next((x for x in m["members"] if x["id"] == mid and x["role"] != "owner"), None)
+    if not gone:
         raise ValueError("They're not on the list.")
     (folder / SHARE / "keys" / f"{mid}.key").unlink(missing_ok=True)
     m["members"] = [x for x in m["members"] if x["id"] != mid]
     _write_members(folder, raw_key, m)
+    return gone
 
 
 # ---------- the joining side ----------
@@ -240,7 +269,7 @@ def parse_link(link: str) -> dict:
     return {"vault": q["m"][0], "code": q["c"][0], "name": (q.get("n") or ["Shared memory"])[0][:60]}
 
 
-def ask_to_join(folder: Path, link: str) -> dict:
+def ask_to_join(folder: Path, link: str, device: str = "") -> dict:
     """Leave a request in the shared memory's folder. The owner sees it in their app and says yes or no."""
     inv = parse_link(link)
     if _vault_id(folder) != inv["vault"]:
@@ -248,7 +277,8 @@ def ask_to_join(folder: Path, link: str) -> dict:
     pub, name = my_public(), my_name()
     (folder / SHARE / "requests").mkdir(parents=True, exist_ok=True)
     (folder / SHARE / "requests" / f"{member_id(pub)}.json").write_text(
-        json.dumps({"pub": _b64(pub), "name": name, "proof": _proof(inv["code"], pub, name), "at": time.time()}))
+        json.dumps({"pub": _b64(pub), "name": name, "proof": _proof(inv["code"], pub, name), "at": time.time(),
+                    **({"device": device} if device else {})}))
     return inv
 
 

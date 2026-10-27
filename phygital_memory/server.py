@@ -12,12 +12,13 @@ Passwords are typed on that page only, never in a chat.
 from __future__ import annotations
 
 import asyncio
+import atexit
 import base64
 import hashlib
 import json
 import os
 import queue
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlparse
 import re
 import secrets
 import subprocess
@@ -38,6 +39,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, sharing, touchid
+from .syncthing import Syncthing, proof as st_proof
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -663,6 +665,99 @@ def _unlock(f, password: str, how: str = "password"):
     return _ok({**s, "pass": p, "folder": f.id})
 
 
+# ---------- the app's own Syncthing: shared memories sync straight between people's Macs ----------
+
+st = Syncthing()
+ST_INVITES = STATE / "syncthing-invites.json"   # open invites by one-time code, to recognise a joining computer
+
+
+def _st_invites() -> dict:
+    try:
+        return {c: i for c, i in json.loads(ST_INVITES.read_text()).items() if i["expires"] > time.time()}
+    except (OSError, ValueError):
+        return {}
+
+
+def _st_save_invites(inv: dict) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    ST_INVITES.write_text(json.dumps(inv))
+    os.chmod(ST_INVITES, 0o600)
+
+
+def _st_ensure(f) -> str:
+    """This memory syncs through the app's Syncthing (folder "pm-VAULTID"), started if needed."""
+    fid = "pm-" + sharing._vault_id(f.path)
+    if not st.has_folder(fid):
+        st.add_folder(fid, f.path, f.name)
+    if f.syncthing != fid:
+        f.syncthing = fid
+        folders._save()
+    _st_watch()
+    return fid
+
+
+_st_watching = {"on": False}
+
+
+def _st_watch() -> None:
+    """While Syncthing runs: a computer asking to connect is let in only with proof of an open invite (its name holds
+    an HMAC of its ID with the invite's code). It then gets the memory's encrypted files, nothing more."""
+    if _st_watching["on"]:
+        return
+    _st_watching["on"] = True
+
+    def loop():
+        while st.running():
+            try:
+                inv = _st_invites()
+                for dev, info in (st.pending_devices() or {}).items():
+                    name = str(info.get("name", ""))
+                    if not name.startswith("pm-join "):
+                        continue
+                    code = next((c for c in inv if hmac_eq(st_proof(c, dev), name.split(" ", 1)[1])), None)
+                    if code:
+                        st.add_device(dev, "Joining", "dynamic")
+                        st.share_folder(inv[code]["folder"], dev)
+            except Exception:
+                pass
+            time.sleep(2)
+        _st_watching["on"] = False
+    threading.Thread(target=loop, name="syncthing invites", daemon=True).start()
+
+
+def hmac_eq(a: str, b: str) -> bool:
+    return secrets.compare_digest(a.encode(), b.encode())
+
+
+def _st_join_when_ready(j, link: str) -> None:
+    """A memory coming over Syncthing: once its files arrive, ask the owner to let us in."""
+    def wait():
+        end = time.time() + 3600
+        while time.time() < end:
+            if is_vault(j.path):
+                try:
+                    sharing.ask_to_join(j.path, link, st.device_id())
+                    return
+                except Exception:
+                    pass
+            time.sleep(2)
+    threading.Thread(target=wait, name="syncthing join", daemon=True).start()
+
+
+def _st_resume() -> None:
+    """Memories shared before keep syncing after a restart (the person chose it; nothing starts otherwise)."""
+    if any(x.syncthing for x in folders.items.values()):
+        try:
+            st.start()
+            _st_watch()
+        except Exception:
+            pass
+
+
+threading.Thread(target=_st_resume, name="syncthing resume", daemon=True).start()
+atexit.register(lambda: st.stop())
+
+
 def _place(f) -> str | None:
     """Where a memory's files are, in words, for an invite (None: only on this Mac, so nobody else can reach them)."""
     if f.cloud_at:
@@ -671,6 +766,8 @@ def _place(f) -> str | None:
         return cloud.where(f.mirror_at, f.mirror_at["path"])
     if f.github:
         return f"GitHub · {f.github}"
+    if f.syncthing:
+        return "Syncthing · straight from Mac to Mac"
     place = cloud_place(f.path)
     return f"{place} · {f.path.name}" if place else f"This Mac · {f.path.name}"   # never the full path on this Mac
 
@@ -764,6 +861,10 @@ async def api(request: Request) -> Response:
         # ---- the folder list: the switcher shows it before anything is unlocked (names and places only) ----
         if action == "folders":
             return _ok({"folders": folders.list()})
+        if action == "myname":   # the name others see when you share or join
+            if "name" in body:
+                return _ok({"name": await asyncio.to_thread(sharing.set_my_name, str(body["name"]))})
+            return _ok({"name": await asyncio.to_thread(sharing.my_name)})
         if action == "pickfolder":   # the Mac's own folder chooser
             start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
             # Otherwise the Mac reopens wherever the last pick was (often inside a cloud): start at home instead.
@@ -772,7 +873,30 @@ async def api(request: Request) -> Response:
             return _ok({"path": path})
         if action == "joinshared":   # an invite: find the shared files (a folder here, or a memory already added from
             link = str(body.get("link", ""))   # WebDAV), then leave a request there for the owner to say yes to
-            sharing.parse_link(link)
+            inv = sharing.parse_link(link)
+            q = parse_qs(urlparse(link).query)
+            if q.get("d") and body.get("where") != "mac" and not body.get("folder"):   # Syncthing: the files come straight
+                parent = body.get("parent") or await asyncio.to_thread(   # from the owner's Mac into a new folder here
+                    pick_folder, "Choose where to keep the shared memory", str(Path.home()))
+                if not parent:
+                    return _ok({"cancelled": True})
+                name = re.sub(r'[/\\:*?"<>|]', "-", inv["name"]).strip() or "Shared memory"
+                target, n = Path(parent) / name, 1
+                while target.exists():
+                    n += 1
+                    target = Path(parent) / f"{name} {n}"
+                me = await asyncio.to_thread(st.device_id)
+                await asyncio.to_thread(st.set_name, "pm-join " + st_proof(inv["code"], me))
+                await asyncio.to_thread(st.add_device, q["d"][0], inv["name"], (q.get("a") or ["dynamic"])[0])
+                fid = "pm-" + inv["vault"]
+                await asyncio.to_thread(st.add_folder, fid, target, inv["name"], [q["d"][0]])
+                with folders._lock:
+                    j = folders._add(target, inv["name"])
+                j.joined, j.syncthing = True, fid
+                folders._save()
+                _st_watch()
+                _st_join_when_ready(j, link)
+                return _ok({"folder": j.info(), "syncthing": True})
             if body.get("folder"):
                 j = folders.get(str(body["folder"]))
             else:
@@ -908,12 +1032,12 @@ async def api(request: Request) -> Response:
         if action == "status":
             return _ok({"open": f.memory.is_open, "folder": f.id})
         if action == "bar":   # the small status icons at the bottom of the sidebar
-            st = f.memory.status() if _has_pass(request, f) else {"open": False}
+            stat = f.memory.status() if _has_pass(request, f) else {"open": False}
             now = time.time()
-            return _ok({"open": bool(st.get("open")),
+            return _ok({"open": bool(stat.get("open")),
                         "cloud": f.info()["cloudOnly"] or ("WebDAV" if f.mirror_at else None) or (None if f.cloud_at else cloud_place(f.path)),
                         "cloudOnly": bool(f.cloud_at), "backup": "GitHub" if f.github else None,
-                        "cloudHealth": await asyncio.to_thread(f.drive.health) if f.drive and st.get("open") else None,
+                        "cloudHealth": await asyncio.to_thread(f.drive.health) if f.drive and stat.get("open") else None,
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})
         # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
@@ -933,9 +1057,11 @@ async def api(request: Request) -> Response:
             return r
         if action == "keyunlock":   # a memory shared with you: open it with your own key (after Touch ID, if this Mac has it)
             await asyncio.to_thread(f.ready)
+            if not is_vault(f.path):   # coming over Syncthing: the files haven't arrived yet
+                return _ok({"waiting": True, "files": False})
             raw = await asyncio.to_thread(sharing.my_key, f.path)
             if raw is None:
-                return _ok({"waiting": True})
+                return _ok({"waiting": True, "files": True, "safety": await asyncio.to_thread(sharing.my_safety_code, f.path)})
             if await asyncio.to_thread(touchid.available) and not await asyncio.to_thread(touchid.ask, "unlock"):
                 return _ok({"error": "Touch ID didn't confirm."}, 403)
             return _unlock_shared(f, raw)
@@ -1007,7 +1133,11 @@ async def api(request: Request) -> Response:
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
         if action == "movefolder":   # move it (locked) to another place; the page then asks for the password again
-            return _ok({"folder": await asyncio.to_thread(folders.relocate, f.id, body["parent"])})
+            info = await asyncio.to_thread(folders.relocate, f.id, body["parent"])
+            moved = folders.get(f.id)
+            if moved.syncthing and st.running():   # Syncthing follows it to the new place
+                await asyncio.to_thread(st.move_folder, moved.syncthing, moved.path)
+            return _ok({"folder": info})
         if action == "renamefolder":
             return _ok({"folder": folders.rename(f.id, body["name"])})
         # ---- AI apps (Settings › AI apps): only from a page that unlocked a memory with its password ----
@@ -1076,6 +1206,13 @@ async def api(request: Request) -> Response:
                 return _ok({"error": "Only the memory's owner can do that."}, 403)
             if action == "shareinvite":
                 link = sharing.invite(f.path, m.key_raw, str(body.get("role", "edit")), f.name)
+                code = sharing.parse_link(link)["code"]
+                if not f.cloud_at:   # Syncthing, straight between Macs: no cloud and no accounts needed
+                    fid = await asyncio.to_thread(_st_ensure, f)
+                    inv = _st_invites()
+                    inv[code] = {"folder": fid, "expires": time.time() + sharing.INVITE_DAYS * 86400}
+                    _st_save_invites(inv)
+                    link += f"&d={await asyncio.to_thread(st.device_id)}&a={quote(st.address())}"
                 approvals.add(f"Invite made ({body.get('role', 'edit')})", f.name, "click")
                 return _ok({"link": link + "&w=" + quote(_place(f)), "place": _place(f)})
             if action == "shareanswer":
@@ -1086,9 +1223,10 @@ async def api(request: Request) -> Response:
             if action == "sharerole":
                 sharing.set_role(f.path, m.key_raw, str(body.get("id")), str(body.get("role")))
                 return _ok({"members": sharing.members(f.path, m.key_raw)})
-            gone = next((x["name"] for x in sharing.members(f.path, m.key_raw) if x["id"] == body.get("id")), "someone")
-            sharing.remove(f.path, m.key_raw, str(body.get("id")))
-            approvals.add(f"Removed {gone}", f.name, "click")
+            gone = sharing.remove(f.path, m.key_raw, str(body.get("id")))
+            if gone.get("device") and f.syncthing and st.running():   # their computer stops getting this memory
+                await asyncio.to_thread(st.unshare_folder, f.syncthing, gone["device"])
+            approvals.add(f"Removed {gone['name']}", f.name, "click")
             return _ok({"members": sharing.members(f.path, m.key_raw)})
         if action == "recoverykey":   # the 44 words, after the password again
             try:
@@ -1333,6 +1471,7 @@ github_pending: dict = {}   # the Sign in with GitHub in progress (its device co
 
 def _finish() -> None:
     folders.lock_all()
+    st.stop()
     closing["exit"] = True
 
 

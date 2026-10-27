@@ -311,13 +311,14 @@ async function joinFromInvite() {
       if (!fid) return;
       j = await api("joinshared", { link: v.link, folder: fid });
     } else {
-      toast("Choose the shared memory's folder");
-      j = await api("joinshared", { link: v.link });
+      toast(v.where === "syncthing" ? "Choose where to keep it on this Mac" : "Choose the shared memory's folder");
+      j = await api("joinshared", { link: v.link, where: v.where });
       if (j.cancelled) return;
     }
     await refreshFolders();
     await switchTo(j.folder.id);
-    toastOk(`Asked to join "${j.folder.name}". You can open it once the owner lets you in.`);
+    toastOk(j.syncthing ? `Getting "${j.folder.name}" from the owner's Mac. Keep both apps open.`
+      : `Asked to join "${j.folder.name}". You can open it once the owner lets you in.`);
   } catch (e) { toastErr(e.message); }
 }
 
@@ -331,7 +332,8 @@ async function watchShare() {
     if (shareAsked.has(q.id)) continue;
     shareAsked.add(q.id);
     const how = await choiceDialog(`"${q.name}" wants to join "${curInfo()?.name || "this memory"}"`,
-      `They used your invite (${q.role === "view" ? "Can view" : "Can edit"}). Let them in only if you sent it to them.`,
+      `They used your invite (${q.role === "view" ? "Can view" : "Can edit"}). Let them in only if you sent it to them.`
+        + (q.safety ? ` Their safety code is "${q.safety}". Check it matches what they see.` : ""),
       [["no", "Say no"], ["yes", "Let in", "primary"]], "Later");
     if (!how) { shareAsked.delete(q.id); continue; }
     try { await api("shareanswer", { id: q.id, allow: how === "yes" }); toastOk(how === "yes" ? `${q.name} is in.` : "Said no."); }
@@ -440,7 +442,11 @@ function drawUnlock() {
         err.textContent = ""; err.classList.remove("hint"); open.disabled = true;
         try {
           const j = await api("keyunlock", { folder: info.id });
-          if (j.waiting) { err.classList.add("hint"); err.textContent = "Waiting for the owner to let you in. Try again later."; }
+          if (j.waiting) {
+            err.classList.add("hint");
+            err.textContent = !j.files ? "Getting the files from the owner's Mac. Keep both apps open."
+              : `Waiting for the owner to let you in. Your safety code is "${j.safety}". It should match what they see.`;
+          }
           else {
             setPass(j.pass, info.id);
             touchTried.add(info.id);
@@ -749,6 +755,8 @@ async function openSettingsHere() {
   const info = curInfo();
   let touch = null;
   if (info && unlocked(info.id)) try { touch = await api("touchidinfo", { folder: info.id }); } catch {}
+  let me = null;
+  try { const n = (await api("myname")).name; me = { name: n, set: async (v) => { try { return (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); return n; } } }; } catch {}
   openSettings(info && unlocked(info.id) ? {
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
       const password = v ? await askPassword("Your password, once, to unlock with Touch ID from now on", "Turn on") : "";
@@ -772,7 +780,7 @@ async function openSettingsHere() {
       load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
       remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
     }),
-  } : null);
+  } : null, me);
 }
 
 // ---------- the small status icons at the bottom of the sidebar ----------

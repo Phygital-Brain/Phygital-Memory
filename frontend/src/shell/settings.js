@@ -33,7 +33,7 @@ let open = null;
 export function closeSettings() { if (open) { open.close(); } }
 
 // folderOpts (optional): {name, finderShown, finderAvailable, toggleFinder()} for the "This folder" section.
-export function openSettings(folderOpts) {
+export function openSettings(folderOpts, me) {
   if (open) return;
   const prev = document.activeElement;
   const seg = (options, get, set) => {
@@ -73,6 +73,11 @@ export function openSettings(folderOpts) {
       "System follows your Mac's light or dark mode."),
     row("Font size", null, el("div", { class: "set-range" }, size, sizeVal), "Text size in the editor."),
     row("Show properties", "Fields under a note's title.", sw(props), "The info block at the top of a note, like tags and dates.")];
+  if (me) {
+    const name = el("input", { class: "dlg-input set-name", value: me.name || "", maxlength: "60", spellcheck: "false", "aria-label": "Your name" });
+    name.addEventListener("change", async () => { name.value = await me.set(name.value.trim()); });
+    rows.push(section("Sharing"), row("Your name", null, name, "What others see when you share a memory with them or join one."));
+  }
   if (f) {
     rows.push(section(`This memory: ${f.name}`),
       row("Name", null, btn("Rename", f.rename)),

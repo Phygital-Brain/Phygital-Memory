@@ -659,3 +659,4 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .share-row .act-main { flex: 1; min-width: 0; }
 .share-row .act-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .share .st-warn .btn { white-space: nowrap; flex: none; }
+.set-name { width: 180px; margin: 0; }
