@@ -89,6 +89,11 @@ export function openSettings(folderOpts) {
     hide.addEventListener("change", async () => { hide.checked = !!(await folderOpts.setAiHidden(hide.checked)); });
     rows.push(row("AI can't see this", "No AI app can reach this memory, whatever its access says.",
       el("label", { class: "switch" }, hide, el("span", { class: "switch-t" }))));
+    if (folderOpts.showHidden) {
+      const sh = el("input", { type: "checkbox", checked: !!folderOpts.showHidden.on, "aria-label": "Show hidden files" });
+      sh.addEventListener("change", () => { sh.checked = !!folderOpts.showHidden.set(sh.checked); });
+      rows.push(row("Show hidden files", "⇧⌘.", el("label", { class: "switch" }, sh, el("span", { class: "switch-t" }))));
+    }
     if (folderOpts.touchId) {
       const tid = el("input", { type: "checkbox", checked: !!folderOpts.touchId.on, "aria-label": "Unlock with Touch ID" });
       tid.addEventListener("change", async () => { tid.checked = !!(await folderOpts.touchId.set(tid.checked)); });

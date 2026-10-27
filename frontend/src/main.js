@@ -428,8 +428,7 @@ function buildApp() {
   const sortBtn = ib("sort", "Sort", (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     const cur = getPref("sortMode", "recent");
-    showMenu([...SORTS.map(([k, t, hint]) => ({ label: t, hint, check: cur === k, fn: () => { setPref("sortMode", k); renderTree(); } })),
-      { sep: true }, { label: "Show hidden files", hint: "⇧⌘.", check: getPref("showHidden", false), fn: toggleHidden }], r.left, r.bottom + 4);
+    showMenu(SORTS.map(([k, t, hint]) => ({ label: t, hint, check: cur === k, fn: () => { setPref("sortMode", k); renderTree(); } })), r.left, r.bottom + 4);
   });
 
   sbName = el("div", { class: "sb-name" }, "Phygital Memory");
@@ -631,6 +630,7 @@ async function openSettingsHere() {
     lockAll: folderList.filter((f) => unlocked(f.id)).length > 1 ? lockAll : null,
     revealVault: info.cloudOnly ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     aiHidden: !!info.aiHidden,
+    showHidden: { on: getPref("showHidden", false), set: (v) => { if (v !== getPref("showHidden", false)) toggleHidden(); return v; } },
     setAiHidden: async (v) => { try { await api("aihide", { hidden: v }); await refreshFolders(); return v; } catch (e) { toastErr(e.message); return !v; } },
     aiApps: () => openAIApps({
       load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
@@ -954,11 +954,13 @@ function sortKids(kids, dirPath) {
     return mode === "za" ? -byName(a, b) : byName(a, b);
   });
   const manual = getPref("order", {})[dirPath];
+  let out = arr;
   if (Array.isArray(manual) && manual.length) {
     const idx = new Map(manual.map((n, i) => [n, i]));
-    return arr.filter((k) => idx.has(k.name)).sort((a, b) => idx.get(a.name) - idx.get(b.name)).concat(arr.filter((k) => !idx.has(k.name)));
+    out = arr.filter((k) => idx.has(k.name)).sort((a, b) => idx.get(a.name) - idx.get(b.name)).concat(arr.filter((k) => !idx.has(k.name)));
   }
-  return arr;
+  // hidden files and folders (.env, .obsidian) always go last, below the rest
+  return out.filter((k) => !k.name.startsWith(".")).concat(out.filter((k) => k.name.startsWith(".")));
 }
 
 function nodeAt(path) {
@@ -972,7 +974,9 @@ function renderTree() {
   const rows = [];
   state.visible = [];
   const walk = (node, depth) => {
+    let gap = false;
     for (const n of sortKids(node.children.values(), node.path)) {
+      if (!gap && n.name.startsWith(".")) { gap = true; if (rows.length) rows.push(el("div", { class: "tree-gap", "aria-hidden": "true" })); }
       rows.push(rowFor(n, depth));
       state.visible.push(n.path);
       if (n.kind === "folder" && state.open.has(n.path)) walk(n, depth + 1);

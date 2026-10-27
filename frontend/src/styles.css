@@ -619,3 +619,4 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .ai-setup { margin: 0; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; user-select: text; }
 
 .row.dotfile .row-name, .row.dotfile svg { opacity: .55; }
+.tree-gap { height: 10px; }
