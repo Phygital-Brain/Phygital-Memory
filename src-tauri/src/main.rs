@@ -98,21 +98,26 @@ fn quit(app: &tauri::AppHandle) {
     app.exit(0);
 }
 
-// The window is closing (or Cmd+Q). If a folder is open in Finder, the page asks how long to keep it open;
-// keeping it hides the window, and the app quits by itself once the server has locked everything.
+// The window is closing (or Cmd+Q). If a folder is open, the page asks: lock all, or keep open. Keeping it hides
+// the window and the app stays in the Dock; the server remembers that answer for 72 hours.
 fn handle_close(app: tauri::AppHandle) {
     if CLOSING.swap(true, Ordering::SeqCst) { return; }
     std::thread::spawn(move || {
-        let reply = shell(&app, "close").unwrap_or_default();
-        if !reply.replace(' ', "").contains("\"ask\":true") { return quit(&app); }
-        if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
+        let reply = shell(&app, "close").unwrap_or_default().replace(' ', "");
         let mut keep: Option<u64> = None;
-        for _ in 0..600 {   // up to 3 minutes for an answer
-            std::thread::sleep(Duration::from_millis(300));
-            let a = shell(&app, "answer").unwrap_or_default().replace(' ', "");
-            if let Some(i) = a.find("\"keep\":") {
-                keep = a[i + 7..].chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok();
-                break;
+        if reply.contains("\"keep\":true") {
+            keep = Some(1);   // "Keep open" was chosen in the last 72 hours: no question
+        } else if !reply.contains("\"ask\":true") {
+            return quit(&app);
+        } else {
+            if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
+            for _ in 0..150 {   // the page locks by itself after 30 s with no answer; 45 s here is the backstop
+                std::thread::sleep(Duration::from_millis(300));
+                let a = shell(&app, "answer").unwrap_or_default().replace(' ', "");
+                if let Some(i) = a.find("\"keep\":") {
+                    keep = a[i + 7..].chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok();
+                    break;
+                }
             }
         }
         match keep {
