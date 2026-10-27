@@ -469,8 +469,8 @@ async function unlockCurrent(password, touchid = false) {
   const j = await api(password === TOUCH ? "touchidunlock" : "unlock", { password, folder: fid, touchid });
   setPass(j.pass, fid);
   touchTried.add(fid);   // locked by hand later: don't ask by itself again
+  sealAnimation(true);   // up first, so the notes appear behind it (a new memory opens here too)
   await enterApp();
-  sealAnimation();   // opened (a new memory opens here too)
 }
 const TOUCH = {};             // unlockCurrent(TOUCH): open with Touch ID instead of a password
 const touchTried = new Set(); // memories whose Touch ID ask already came up by itself since the app opened
@@ -510,8 +510,8 @@ function drawUnlock() {
           else {
             setPass(j.pass, info.id);
             touchTried.add(info.id);
+            sealAnimation(true);   // a shared memory opened with your own key (also the first time, right after you're let in)
             await enterApp();
-            sealAnimation();   // a shared memory opened with your own key (also the first time, right after you're let in)
             if (j.role === "view") toast("View only: you can read it, not change it.");
           }
         } catch (x) { err.textContent = x.message; }
@@ -1402,10 +1402,10 @@ async function setUpApprover(chip) {
 }
 
 // The "sealed" moment: wires run in from both sides, the lock between closes, a ring draws round it and scrambled
-// characters settle into the app's name, on one colour over the whole screen, then it all fades out (about six
-// seconds; a click skips it). Plays after a signed
+// characters settle into the app's name, on one colour over the whole screen, then it all fades out (about three
+// seconds; a click skips it). On unlock it's solid from the start, so the notes appear behind it. Plays after a signed
 // sharing yes, an unlock, being let in, allowing an AI app and making a new memory. A plain fade with motion turned down.
-function sealAnimation() {
+function sealAnimation(cover = false) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 176 64");
@@ -1419,19 +1419,19 @@ function sealAnimation() {
     + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/></g>';
   const words = "Phygital Memory";
   const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
-  const box = el("div", { class: "pk-seal", "aria-hidden": "true", onclick: () => box.remove() }, el("div", { class: "pk-card" }, svg, text));
+  const box = el("div", { class: "pk-seal" + (cover ? " pk-cover" : ""), "aria-hidden": "true", onclick: () => box.remove() }, el("div", { class: "pk-card" }, svg, text));
   document.body.append(box);
   const glyphs = "0123456789abcdef#%&*+=<>";
   const start = performance.now();
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tick = (now) => {
-    const k = still ? 1 : Math.min(1, (now - start - 2000) / 1800);   // letters settle left to right, once wired
+    const k = still ? 1 : Math.min(1, (now - start - 1000) / 900);   // letters settle left to right, once wired
     text.textContent = [...words].map((c, i) => c === " " || i / words.length < k ? c
       : glyphs[(Math.random() * glyphs.length) | 0]).join("");
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
-  setTimeout(() => box.remove(), still ? 900 : 6400);
+  setTimeout(() => box.remove(), still ? 900 : 3200);
 }
 
 const SIGNED_ACTIONS = new Set(["shareanswer", "shareadd", "shareremove", "sharerole", "sharestop", "shareforget"]);
