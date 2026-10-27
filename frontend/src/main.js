@@ -299,13 +299,21 @@ async function ensureName() {
   try { await api("myname", { name: v.trim() }); return true; } catch (e) { toastErr(e.message); return false; }
 }
 
-async function openShareHere() {
+// path: one folder or file of it (it goes to them in its own locked copy, with its own key). None: the whole memory.
+async function openShareHere(path = null) {
   const info = curInfo();
   if (!info || !(await ensureName())) return;
+  if (info.joined) { toastErr("Only the owner can share it."); return; }
+  const at = path ? { path } : {};
+  const what = path ? (path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path) : info.name;
   openShare({
-    name: info.name, load: () => api("shareinfo"), invite: (role) => api("shareinvite", { role }),
-    answer: (id, allow) => api("shareanswer", { id, allow }), role: (id, role) => api("sharerole", { id, role }),
-    remove: async (id) => { if (await confirmDialog("Remove them from this memory?", "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await api("shareremove", { id }); },
+    name: what, part: !!path, load: () => api("shareinfo", at), invite: (role) => api("shareinvite", { role, ...at }),
+    answer: (id, allow) => api("shareanswer", { id, allow, ...at }), role: (id, role) => api("sharerole", { id, role, ...at }),
+    remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await api("shareremove", { id, ...at }); },
+    openPart: (p) => openShareHere(p),
+    stopPart: async (share, p) => {
+      if (await confirmDialog(`Stop sharing "${p}"?`, "Stop sharing", true, "Nobody gets changes to it any more. Copies they already have stay with them.")) await api("sharestop", { share });
+    },
     storage: openStoragePanel,
   });
 }
@@ -328,7 +336,7 @@ async function joinFromInvite() {
     }
     await refreshFolders();
     await switchTo(j.folder.id);
-    toastOk(j.syncthing ? `Getting "${j.folder.name}" from the owner's Mac. Keep both apps open.`
+    toastOk(j.syncthing ? `Asked to join "${j.folder.name}". The files come once the owner lets you in.`
       : `Asked to join "${j.folder.name}". You can open it once the owner lets you in.`);
   } catch (e) { toastErr(e.message); }
 }
@@ -342,12 +350,15 @@ async function watchShare() {
   for (const q of r) {
     if (shareAsked.has(q.id)) continue;
     shareAsked.add(q.id);
-    const how = await choiceDialog(`"${q.name}" wants to join "${curInfo()?.name || "this memory"}"`,
+    const how = await choiceDialog(`"${q.name}" wants to join "${q.what || curInfo()?.name || "this memory"}"`,
       `They used your invite (${q.role === "view" ? "Can view" : "Can edit"}). Let them in only if you sent it to them.`
         + (q.safety ? ` Their safety code is "${q.safety}". Check it matches what they see.` : ""),
       [["no", "Say no"], ["yes", "Let in", "primary"]], "Later");
     if (!how) { shareAsked.delete(q.id); continue; }
-    try { await api("shareanswer", { id: q.id, allow: how === "yes" }); toastOk(how === "yes" ? `${q.name} is in.` : "Said no."); }
+    try {
+      await api("shareanswer", { id: q.id, allow: how === "yes", ...(q.share ? { share: q.share } : {}) });
+      toastOk(how === "yes" ? `${q.name} is in. The files go to them now.` : "Said no.");
+    }
     catch (e) { toastErr(e.message); }
   }
 }
@@ -455,8 +466,9 @@ function drawUnlock() {
           const j = await api("keyunlock", { folder: info.id });
           if (j.waiting) {
             err.classList.add("hint");
-            err.textContent = !j.files ? "Getting the files from the owner's Mac. Keep both apps open."
-              : `Waiting for the owner to let you in. Your safety code is "${j.safety}". It should match what they see.`;
+            err.textContent = j.files || j.safety
+              ? `Waiting for the owner to let you in. Your safety code is "${j.safety}". It should match what they see. Keep both apps open.`
+              : "Getting the files from the owner's Mac. Keep both apps open.";
           }
           else {
             setPass(j.pass, info.id);
@@ -543,7 +555,7 @@ async function openSwitcher() {
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
-    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: openShareHere, ai: () => openAI("activity"), settings: openSettingsHere } : {}),
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 
@@ -1342,6 +1354,7 @@ function rowMenu(n, x, y) {
     if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
     items.push({ sep: true });
   }
+  if (!curInfo()?.joined) items.push({ label: "Share…", fn: () => openShareHere(n.path) });
   items.push(
     { label: "Export", fn: () => exportPath(n.path) },
     { label: "Show in Finder", fn: () => revealInFinder(n.path) },

@@ -399,6 +399,7 @@ input:focus-visible { outline: none; }
 .fo-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .fo-name { font-weight: 600; font-size: 13.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fo-sub { font-size: 11.5px; color: var(--text-3); }
+.fo-head { padding: 6px 10px 2px; font-size: 11px; font-weight: 650; color: var(--text-3); }
 .fo-sub.warn, .mf-state.warn { color: var(--warning); }
 .fo-key { color: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 .fo-action { display: flex; align-items: center; gap: 12px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text); }

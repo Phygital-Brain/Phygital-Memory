@@ -5,8 +5,9 @@
 - Each shared memory is one Syncthing folder, "pm-VAULTID", holding only the memory's encrypted files.
 - Computers find each other on the same network, or through Syncthing's public discovery and relays, which only ever
   see encrypted traffic of encrypted files. Tests turn all of that off and connect on 127.0.0.1.
-- A computer is let in only if its name carries proof of an invite (an HMAC of its Syncthing ID with the invite's
-  one-time code). It then gets the encrypted files; the person still needs the owner's yes to get a key."""
+- A computer may connect only if its name carries proof of an invite (an HMAC of its Syncthing ID with the invite's
+  one-time code). It then gets one small "pmq-..." folder, which only carries its request to join (name and public
+  key) to the owner. The memory's files go to it only after the owner says yes, together with its own key."""
 from __future__ import annotations
 
 import hashlib
@@ -98,6 +99,9 @@ class Syncthing:
         with self._lock:
             if self.proc and self.proc.poll() is None:
                 return
+            # A copy left running by an app that was force quit holds this folder: stop it first.
+            subprocess.run(["pkill", "-f", f"syncthing serve --home={self.home} "], capture_output=True)
+            time.sleep(0.5)
             self._configure()
             env = {**os.environ, "STNOUPGRADE": "1", "STNORESTART": "1"}
             self.proc = subprocess.Popen([binary(), "serve", f"--home={self.home}", "--no-browser", "--no-restart"],
@@ -163,14 +167,14 @@ class Syncthing:
         except Exception:
             pass
 
-    def add_folder(self, folder_id: str, path: Path, label: str, devices: list[str] = ()) -> None:
+    def add_folder(self, folder_id: str, path: Path, label: str, devices: list[str] = (), kind: str = "sendreceive") -> None:
         self.start()
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         (path / ".stignore").write_text(IGNORE)   # this side's own list; Syncthing never syncs it
         me = self.device_id()
         self.rest("PUT", f"/rest/config/folders/{folder_id}", {
-            "id": folder_id, "label": label[:60], "path": str(path), "type": "sendreceive",
+            "id": folder_id, "label": label[:60], "path": str(path), "type": kind,
             "devices": [{"deviceID": d} for d in dict.fromkeys([me, *devices])],
             "rescanIntervalS": 60, "fsWatcherEnabled": True, "fsWatcherDelayS": 2, "ignorePerms": True,
             "maxConflicts": 10, "paused": False})
@@ -210,6 +214,10 @@ class Syncthing:
 
     def pending_devices(self) -> dict:
         return self.rest("GET", "/rest/cluster/pending/devices") or {}
+
+    def pending_folders(self) -> dict:
+        """Folders other computers offer us: {folder id: {"offeredBy": {device id: {...}}}}."""
+        return self.rest("GET", "/rest/cluster/pending/folders") or {}
 
     def connected(self) -> list[str]:
         c = self.rest("GET", "/rest/system/connections").get("connections", {})

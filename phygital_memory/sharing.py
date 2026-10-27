@@ -279,17 +279,34 @@ def parse_link(link: str) -> dict:
     return {"vault": q["m"][0], "code": q["c"][0], "name": (q.get("n") or ["Shared memory"])[0][:60]}
 
 
+def request_for(link: str, device: str = "") -> dict:
+    """What a request to join says: your name, your public key, and proof you have the invite."""
+    inv = parse_link(link)
+    pub, name = my_public(), my_name()
+    return {"pub": _b64(pub), "name": name, "proof": _proof(inv["code"], pub, name), "at": time.time(),
+            **({"device": device} if device else {})}
+
+
+def put_request(folder: Path, r: dict) -> None:
+    """Drop a request into the shared memory's folder, where the owner's app finds it."""
+    (folder / SHARE / "requests").mkdir(parents=True, exist_ok=True)
+    (folder / SHARE / "requests" / f"{member_id(_unb64(r['pub']))}.json").write_text(json.dumps(r))
+
+
 def ask_to_join(folder: Path, link: str, device: str = "") -> dict:
     """Leave a request in the shared memory's folder. The owner sees it in their app and says yes or no."""
     inv = parse_link(link)
     if _vault_id(folder) != inv["vault"]:
         raise ValueError("That folder holds a different memory than the one in the invite.")
-    pub, name = my_public(), my_name()
-    (folder / SHARE / "requests").mkdir(parents=True, exist_ok=True)
-    (folder / SHARE / "requests" / f"{member_id(pub)}.json").write_text(
-        json.dumps({"pub": _b64(pub), "name": name, "proof": _proof(inv["code"], pub, name), "at": time.time(),
-                    **({"device": device} if device else {})}))
+    put_request(folder, request_for(link, device))
     return inv
+
+
+def request_of(folder: Path, rid: str) -> dict | None:
+    try:
+        return json.loads((folder / SHARE / "requests" / f"{rid}.json").read_text())
+    except (OSError, ValueError):
+        return None
 
 
 def my_key(folder: Path) -> bytes | None:

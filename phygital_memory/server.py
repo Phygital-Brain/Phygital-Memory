@@ -21,6 +21,7 @@ import queue
 from urllib.parse import parse_qs, quote, urlparse
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import threading
@@ -38,7 +39,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, sharing, touchid
+from . import activity, approvals, cloud, gate as gate_mod, github_auth, gitsync, shares, sharing, touchid
 from .syncthing import Syncthing, proof as st_proof
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
@@ -686,14 +687,27 @@ def _st_save_invites(inv: dict) -> None:
 
 def _st_ensure(f) -> str:
     """This memory syncs through the app's Syncthing (folder "pm-VAULTID"), started if needed."""
-    fid = "pm-" + sharing._vault_id(f.path)
-    if not st.has_folder(fid):
-        st.add_folder(fid, f.path, f.name)
+    fid = _st_ensure_path(f.path, f.name)
     if f.syncthing != fid:
         f.syncthing = fid
         folders._save()
+    return fid
+
+
+def _st_ensure_path(path: Path, label: str) -> str:
+    """A memory (or a share of one part of it) syncs through the app's Syncthing, with nobody yet."""
+    fid = "pm-" + sharing._vault_id(path)
+    if not st.has_folder(fid):
+        st.add_folder(fid, path, label)
     _st_watch()
     return fid
+
+
+ST_REQUESTS = STATE / "st-requests"   # one small folder per invite: it only carries the request to join
+
+
+def _st_qid(code: str) -> str:
+    return "pmq-" + hashlib.sha256(code.encode()).hexdigest()[:16]
 
 
 _st_watching = {"on": False}
@@ -701,7 +715,8 @@ _st_watching = {"on": False}
 
 def _st_watch() -> None:
     """While Syncthing runs: a computer asking to connect is let in only with proof of an open invite (its name holds
-    an HMAC of its ID with the invite's code). It then gets the memory's encrypted files, nothing more."""
+    an HMAC of its ID with the invite's code). It then gets only the invite's request folder, through which its
+    request to join reaches the owner. The memory's files go to it after the owner's yes (shareanswer)."""
     if _st_watching["on"]:
         return
     _st_watching["on"] = True
@@ -717,7 +732,26 @@ def _st_watch() -> None:
                     code = next((c for c in inv if hmac_eq(st_proof(c, dev), name.split(" ", 1)[1])), None)
                     if code:
                         st.add_device(dev, "Joining", "dynamic")
-                        st.share_folder(inv[code]["folder"], dev)
+                        st.share_folder(inv[code]["q"], dev)
+                        inv[code]["devs"] = sorted(set(inv[code].get("devs", [])) | {dev})
+                        _st_save_invites({**_st_invites(), code: inv[code]})
+                by_q = {i["q"]: c for c, i in inv.items()}
+                for qid, info in (st.pending_folders() or {}).items():   # a computer already known (it joined
+                    code = by_q.get(qid)                                 # something before) offers the request folder:
+                    if code:                                             # its name is a hash of the invite's code
+                        for dev in (info.get("offeredBy") or {}):
+                            st.share_folder(qid, dev)
+                            inv[code]["devs"] = sorted(set(inv[code].get("devs", [])) | {dev})
+                            _st_save_invites({**_st_invites(), code: inv[code]})
+                for code, i in inv.items():   # a request came in: put it where the owner's app looks
+                    try:
+                        r = json.loads((ST_REQUESTS / i["q"] / "request.json").read_text())
+                    except (OSError, ValueError):
+                        continue
+                    if isinstance(r, dict) and r.get("device") in i.get("devs", []) and code in _st_invites():
+                        target = Path(i["target"])
+                        if sharing.request_of(target, sharing.member_id(sharing._unb64(str(r.get("pub"))))) != {**r, "q": i["q"]}:
+                            sharing.put_request(target, {**r, "q": i["q"]})
             except Exception:
                 pass
             time.sleep(2)
@@ -725,28 +759,24 @@ def _st_watch() -> None:
     threading.Thread(target=loop, name="syncthing invites", daemon=True).start()
 
 
+def _st_done_with(qid: str | None, device: str | None = None, keep_device: bool = True) -> None:
+    """An invite was answered: its request folder goes, and the invite can't be used again."""
+    if not qid:
+        return
+    st.remove_folder(qid)
+    shutil.rmtree(ST_REQUESTS / qid, ignore_errors=True)
+    _st_save_invites({c: i for c, i in _st_invites().items() if i.get("q") != qid})
+    if device and not keep_device:
+        st.remove_device(device)
+
+
 def hmac_eq(a: str, b: str) -> bool:
     return secrets.compare_digest(a.encode(), b.encode())
 
 
-def _st_join_when_ready(j, link: str) -> None:
-    """A memory coming over Syncthing: once its files arrive, ask the owner to let us in."""
-    def wait():
-        end = time.time() + 3600
-        while time.time() < end:
-            if is_vault(j.path):
-                try:
-                    sharing.ask_to_join(j.path, link, st.device_id())
-                    return
-                except Exception:
-                    pass
-            time.sleep(2)
-    threading.Thread(target=wait, name="syncthing join", daemon=True).start()
-
-
 def _st_resume() -> None:
     """Memories shared before keep syncing after a restart (the person chose it; nothing starts otherwise)."""
-    if any(x.syncthing for x in folders.items.values()):
+    if any(x.syncthing for x in folders.items.values()) or shares._all():
         try:
             st.start()
             _st_watch()
@@ -755,6 +785,33 @@ def _st_resume() -> None:
 
 
 threading.Thread(target=_st_resume, name="syncthing resume", daemon=True).start()
+
+
+def _shares_loop() -> None:
+    """Shared folders and files stay in step with their memory while it's open on this Mac (shares.py)."""
+    ids: dict[str, str] = {}
+    while True:
+        time.sleep(3)
+        try:
+            if not shares._all():
+                continue
+            for f in list(folders.items.values()):
+                if f.joined or not is_vault(f.path):
+                    continue
+                vid = ids.get(str(f.path)) or ids.setdefault(str(f.path), sharing._vault_id(f.path))
+                if not f.memory.is_open:
+                    shares.close_for(vid)
+                    continue
+                for s in shares.of_memory(vid):
+                    try:
+                        shares.sync(s["id"], f.memory)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+
+threading.Thread(target=_shares_loop, name="shares", daemon=True).start()
 atexit.register(lambda: st.stop())
 
 
@@ -888,16 +945,19 @@ async def api(request: Request) -> Response:
                     n += 1
                     target = Path(parent) / f"{name} {n}"
                 me = await asyncio.to_thread(st.device_id)
+                owner = q["d"][0]
                 await asyncio.to_thread(st.set_name, "pm-join " + st_proof(inv["code"], me))
-                await asyncio.to_thread(st.add_device, q["d"][0], inv["name"], (q.get("a") or ["dynamic"])[0])
+                await asyncio.to_thread(st.add_device, owner, inv["name"], (q.get("a") or ["dynamic"])[0])
                 fid = "pm-" + inv["vault"]
-                await asyncio.to_thread(st.add_folder, fid, target, inv["name"], [q["d"][0]])
+                await asyncio.to_thread(st.add_folder, fid, target, inv["name"], [owner])   # empty until the owner's yes
+                qid = _st_qid(inv["code"])   # the request goes to the owner through its own small folder
+                await asyncio.to_thread(st.add_folder, qid, ST_REQUESTS / qid, "Request to join", [owner], "sendonly")
+                (ST_REQUESTS / qid / "request.json").write_text(json.dumps(sharing.request_for(link, me)))
                 with folders._lock:
                     j = folders._add(target, inv["name"])
                 j.joined, j.syncthing = True, fid
                 folders._save()
                 _st_watch()
-                _st_join_when_ready(j, link)
                 return _ok({"folder": j.info(), "syncthing": True})
             if body.get("folder"):
                 j = folders.get(str(body["folder"]))
@@ -1059,8 +1119,9 @@ async def api(request: Request) -> Response:
             return r
         if action == "keyunlock":   # a memory shared with you: open it with your own key (after Touch ID, if this Mac has it)
             await asyncio.to_thread(f.ready)
-            if not is_vault(f.path):   # coming over Syncthing: the files haven't arrived yet
-                return _ok({"waiting": True, "files": False})
+            if not is_vault(f.path):   # coming over Syncthing: the owner hasn't let them in yet (or files are on the way)
+                return _ok({"waiting": True, "files": False, **({"safety": sharing.safety_code(
+                    sharing.my_public(), f.syncthing[3:])} if f.syncthing else {})})
             raw = await asyncio.to_thread(sharing.my_key, f.path)
             if raw is None:
                 return _ok({"waiting": True, "files": True, "safety": await asyncio.to_thread(sharing.my_safety_code, f.path)})
@@ -1192,46 +1253,100 @@ async def api(request: Request) -> Response:
             approvals.add("Touch ID unlock on", f.name, "password")
             return _ok({"on": True})
         # ---- working together (the owner's side; the memory is open, so its key is at hand) ----
-        if action == "shareinfo":
-            place = _place(f)
-            shared = sharing.is_shared(f.path)
-            role = sharing.my_role(f.path, m.key_raw) if shared else "owner"
-            return _ok({"place": place, "shared": shared, "role": role, "me": sharing.my_id(),
-                        "members": sharing.members(f.path, m.key_raw) if shared else [],
-                        "requests": sharing.requests(f.path, m.key_raw) if shared and role == "owner" else []})
-        if action == "sharerequests":   # polled while open: people asking to join (owner only)
-            if not sharing.is_shared(f.path) or sharing.my_role(f.path, m.key_raw) != "owner":
-                return _ok({"requests": []})
-            return _ok({"requests": sharing.requests(f.path, m.key_raw)})
-        if action in ("shareinvite", "shareanswer", "sharerole", "shareremove"):
-            if sharing.is_shared(f.path) and sharing.my_role(f.path, m.key_raw) != "owner":
+        if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop"):
+            vid = sharing._vault_id(f.path)
+            owner = not f.joined and (not sharing.is_shared(f.path) or sharing.my_role(f.path, m.key_raw) == "owner")
+            part = shares.get(str(body["share"])) if body.get("share") else None
+            if body.get("share") and (not part or part["memory"] != vid):
+                return _ok({"error": "That share is gone."}, 404)
+            rel = None if part or not body.get("path") else _clean_path(str(body["path"]), md=False)
+            if rel and not part:
+                part = shares.find(vid, rel)
+
+            def target(s):   # where a share's members and keys live, and its key: the memory itself, or a share
+                return (shares.path_of(s["id"]), shares.key_of(s["id"])) if s else (f.path, m.key_raw)
+            tpath, traw = await asyncio.to_thread(target, part)
+
+            if action == "shareinfo":
+                if rel and not part:   # a folder or file nobody has been invited to yet
+                    return _ok({"place": "Syncthing · straight from Mac to Mac", "shared": False, "role": "owner",
+                                "me": sharing.my_id(), "members": [], "requests": [], "kind": m.kind_of(rel)})
+                shared = sharing.is_shared(tpath)
+                role = sharing.my_role(tpath, traw) if shared else "owner"
+                out = {"place": "Syncthing · straight from Mac to Mac" if part else _place(f), "shared": shared,
+                       "role": role, "me": sharing.my_id(), "share": part and part["id"],
+                       "members": sharing.members(tpath, traw) if shared else [],
+                       "requests": sharing.requests(tpath, traw) if shared and role == "owner" else []}
+                if not part and owner:   # the whole memory's window also lists its shared folders and files
+                    out["parts"] = [{"id": x["id"], "path": x["path"], "kind": x["kind"],
+                                     "people": [y["name"] for y in sharing.members(shares.path_of(x["id"]), shares.key_of(x["id"]))
+                                                if y["role"] != "owner"]} for x in shares.of_memory(vid)]
+                return _ok(out)
+            if action == "sharerequests":   # polled while open: people asking to join it, or one of its shared parts
+                if not owner:
+                    return _ok({"requests": []})
+                out = [r for r in sharing.requests(f.path, m.key_raw)] if sharing.is_shared(f.path) else []
+                for x in shares.of_memory(vid):
+                    out += [{**r, "share": x["id"], "what": x["path"]} for r in sharing.requests(shares.path_of(x["id"]), shares.key_of(x["id"]))]
+                return _ok({"requests": out})
+            if not owner:
                 return _ok({"error": "Only the memory's owner can do that."}, 403)
             if action == "shareinvite":
                 if not sharing.saved_name():
                     return _ok({"error": "Add your name first.", "needName": True}, 400)
-                link = sharing.invite(f.path, m.key_raw, str(body.get("role", "edit")), f.name)
+                if rel and not part:
+                    kind = m.kind_of(rel)
+                    if not kind:
+                        return _ok({"error": "That folder or file isn't there any more."}, 404)
+                    part = await asyncio.to_thread(shares.create, vid, rel, kind)
+                    tpath, traw = await asyncio.to_thread(target, part)
+                name = part["name"] if part else f.name
+                link = sharing.invite(tpath, traw, str(body.get("role", "edit")), name)
                 code = sharing.parse_link(link)["code"]
-                if not f.cloud_at:   # Syncthing, straight between Macs: no cloud and no accounts needed
-                    fid = await asyncio.to_thread(_st_ensure, f)
+                if part or not f.cloud_at:   # Syncthing, straight between Macs: no cloud and no accounts needed
+                    fid = await asyncio.to_thread(_st_ensure_path, tpath, name) if part else await asyncio.to_thread(_st_ensure, f)
+                    qid = _st_qid(code)
+                    await asyncio.to_thread(st.add_folder, qid, ST_REQUESTS / qid, "Request to join", [], "receiveonly")
                     inv = _st_invites()
-                    inv[code] = {"folder": fid, "expires": time.time() + sharing.INVITE_DAYS * 86400}
+                    inv[code] = {"folder": fid, "q": qid, "target": str(tpath), "expires": time.time() + sharing.INVITE_DAYS * 86400}
                     _st_save_invites(inv)
                     link += f"&d={await asyncio.to_thread(st.device_id)}&a={quote(st.address())}"
-                approvals.add(f"Invite made ({body.get('role', 'edit')})", f.name, "click")
-                return _ok({"link": link + "&w=" + quote(_place(f)), "place": _place(f)})
+                    if part:
+                        link += f"&k={part['kind']}"
+                place = "Syncthing · straight from Mac to Mac" if part else _place(f)
+                approvals.add(f"Invite made ({body.get('role', 'edit')})", f.name + (f" › {part['path']}" if part else ""), "click")
+                return _ok({"link": link + "&w=" + quote(place), "place": place, "share": part and part["id"]})
+            if not part and rel:
+                return _ok({"error": "Nobody has been invited to that yet."}, 404)
+            fid = ("pm-" + sharing._vault_id(tpath)) if part else f.syncthing
+            what = f.name + (f" › {part['path']}" if part else "")
             if action == "shareanswer":
-                who = next((r["name"] for r in sharing.requests(f.path, m.key_raw) if r["id"] == body.get("id")), "someone")
-                sharing.answer(f.path, m.key_raw, str(body.get("id")), bool(body.get("allow")), body.get("role"))
-                approvals.add((f"Let {who} in" if body.get("allow") else f"Said no to {who}"), f.name, "click")
-                return _ok({"members": sharing.members(f.path, m.key_raw)})
+                r = sharing.request_of(tpath, str(body.get("id"))) or {}
+                who = next((x["name"] for x in sharing.requests(tpath, traw) if x["id"] == body.get("id")), "someone")
+                allow = bool(body.get("allow"))
+                sharing.answer(tpath, traw, str(body.get("id")), allow, body.get("role"))
+                if r.get("device") and fid and st.running():
+                    if allow:   # only now do their Mac get the files (and, inside them, their own key)
+                        await asyncio.to_thread(st.share_folder, fid, r["device"])
+                    await asyncio.to_thread(_st_done_with, r.get("q"), r["device"], allow)
+                approvals.add((f"Let {who} in" if allow else f"Said no to {who}"), what, "click")
+                return _ok({"members": sharing.members(tpath, traw)})
             if action == "sharerole":
-                sharing.set_role(f.path, m.key_raw, str(body.get("id")), str(body.get("role")))
-                return _ok({"members": sharing.members(f.path, m.key_raw)})
-            gone = sharing.remove(f.path, m.key_raw, str(body.get("id")))
-            if gone.get("device") and f.syncthing and st.running():   # their computer stops getting this memory
-                await asyncio.to_thread(st.unshare_folder, f.syncthing, gone["device"])
-            approvals.add(f"Removed {gone['name']}", f.name, "click")
-            return _ok({"members": sharing.members(f.path, m.key_raw)})
+                sharing.set_role(tpath, traw, str(body.get("id")), str(body.get("role")))
+                return _ok({"members": sharing.members(tpath, traw)})
+            if action == "sharestop":   # stop sharing a folder or file with everyone
+                if not part:
+                    return _ok({"error": "Remove people one by one to stop sharing the whole memory."}, 400)
+                if st.running():
+                    await asyncio.to_thread(st.remove_folder, fid)
+                await asyncio.to_thread(shares.forget, part["id"])
+                approvals.add("Stopped sharing", what, "click")
+                return _ok({"ok": True})
+            gone = sharing.remove(tpath, traw, str(body.get("id")))
+            if gone.get("device") and fid and st.running():   # their computer stops getting it
+                await asyncio.to_thread(st.unshare_folder, fid, gone["device"])
+            approvals.add(f"Removed {gone['name']}", what, "click")
+            return _ok({"members": sharing.members(tpath, traw)})
         if action == "recoverykey":   # the 44 words, after the password again
             try:
                 return _ok({"words": await asyncio.to_thread(m.recovery_words, str(body.get("password", "")))})
@@ -1348,7 +1463,9 @@ async def api(request: Request) -> Response:
         if action == "mkdir":
             return _ok({"path": m.make_folder(body["path"])})
         if action == "move":
-            return _ok({"path": m.move(body["from"], body["to"])})
+            new = m.move(body["from"], body["to"])
+            shares.moved(sharing._vault_id(f.path), _clean_path(body["from"], md=False), new)   # a shared part follows
+            return _ok({"path": new})
         if action == "trash":
             m.trash(body["path"])
             return _ok({"ok": True})

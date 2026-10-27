@@ -529,6 +529,57 @@ class Memory:
             self._writer.write_file(parent, name, data, replace=existing)
             return rel
 
+    # ---------- copying between a memory and a part of it shared on its own (shares.py) ----------
+
+    def kind_of(self, rel: str) -> str | None:
+        """"file", "folder", or None if nothing is there."""
+        with self._lock:
+            self._need_open()
+            try:
+                return "folder" if self._tree.resolve(_clean_path(rel, md=False)).kind == "dir" else "file"
+            except (NotFound, ValueError):
+                return None
+
+    def file_sigs(self, under: str = "") -> dict[str, tuple]:
+        """Every file at or under one path: {path: (mtime, size)}, so a copier can tell what changed cheaply."""
+        with self._lock:
+            self._need_open()
+            self._sync()
+            out = {}
+            for path, entry in self._tree.walk():
+                rel = path.lstrip("/")
+                if entry.kind != "file" or rel.split("/")[0] in HIDDEN or entry.name == ".DS_Store" \
+                        or entry.name.startswith("._") or (under and rel != under and not rel.startswith(under + "/")):
+                    continue
+                out[rel] = (self._tree.contents_path(entry).stat().st_mtime, self._tree.file_size(entry))
+            return out
+
+    def get_file(self, rel: str) -> bytes:
+        """Any file's bytes, any size (the copier, not the editor)."""
+        with self._lock:
+            self._need_open()
+            return self._tree.read_file(self._tree.resolve(_clean_path(rel, md=False)))
+
+    def put_file(self, rel: str, data: bytes) -> str:
+        """Write any file at exactly this path, replacing it. Notes keep a version and stay searchable."""
+        rel = _clean_path(rel, md=False)
+        if rel.lower().endswith(".md"):
+            return self.save(rel, data.decode("utf-8", "replace"), keep_version=True)
+        with self._lock:
+            self._need_open()
+            parent, name = self._make_parents(rel)
+            existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+            self._writer.write_file(parent, name, data, replace=existing)
+            self._gen += 1
+            return rel
+
+    def free_path(self, rel: str) -> str:
+        """rel, or "name 2.ext" (3, 4...) if that's taken."""
+        with self._lock:
+            self._need_open()
+            parent, name = self._free_name(_clean_path(rel, md=False))
+            return "/".join(rel.split("/")[:-1] + [name])
+
     # ---------- Word files: change words, keep the format (see docx.py) ----------
 
     def docx_read(self, rel: str) -> dict:

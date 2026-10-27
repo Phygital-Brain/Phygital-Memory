@@ -5,7 +5,8 @@ import { info } from "./panels.js";
 
 const ROLE = { owner: "Owner", edit: "Can edit", view: "Can view" };
 
-// ctx: {name, load() -> shareinfo, invite(role) -> {link, place}, answer(id, allow), role(id, role), remove(id), storage()}
+// ctx: {name, part (one folder or file, not the whole memory), load() -> shareinfo, invite(role) -> {link, place},
+//       answer(id, allow), role(id, role), remove(id), openPart(path), stopPart(share, path), storage()}
 export function openShare(ctx) {
   return modal((done) => {
     const body = el("div", { class: "cl-body" });
@@ -27,9 +28,11 @@ export function openShare(ctx) {
         el("button", { class: "seg-b" + (pick === k ? " on" : ""), type: "button", onclick: () => { pick = k; drawRole(); } }, t)));
       drawRole();
       body.replaceChildren(
-        el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, "Everyone opens it with their own key. Your password is never shared.")),
+        el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, ctx.part
+          ? "Only this goes to them, in its own locked copy with its own key. The rest of your memory stays with you."
+          : "Everyone opens it with their own key. Your password is never shared.")),
         ...(s.requests || []).map((r) => el("div", { class: "share-req" },
-          el("span", {}, el("b", {}, r.name), ` wants to join · ${ROLE[r.role]}`,
+          el("span", {}, el("b", {}, r.name), ` wants to join${r.what ? ` "${r.what}"` : ""} · ${ROLE[r.role]}`,
             r.safety ? el("div", { class: "act-folder" }, `Safety code: ${r.safety}`) : null),
           el("span", { class: "set-btns" }, btn("Say no", () => act(() => ctx.answer(r.id, false))), btn("Let in", () => act(() => ctx.answer(r.id, true)), "primary")))),
         el("div", { class: "set-section" }, "People"),
@@ -40,6 +43,12 @@ export function openShare(ctx) {
             btn(m.role === "edit" ? "Make view only" : "Let edit", () => act(() => ctx.role(m.id, m.role === "edit" ? "view" : "edit"))),
             btn("Remove", () => act(() => ctx.remove(m.id)), "danger")) : null))
           : [el("div", { class: "act-empty" }, "Only you, so far.")])),
+        ...((s.parts || []).length ? [el("div", { class: "set-section" }, "Shared folders and files"),
+          el("div", { class: "act-list" }, ...s.parts.map((p) => el("div", { class: "todo-row share-row" },
+            el("div", { class: "act-main" }, el("div", { class: "act-line" }, p.path),
+              el("div", { class: "act-folder" }, p.people.length ? "With " + p.people.join(", ") : "Invite sent, nobody in yet")),
+            el("span", { class: "set-btns" }, btn("Open", () => { done(null); ctx.openPart(p.path); }),
+              btn("Stop sharing", () => act(() => ctx.stopPart(p.id, p.path)), "danger")))))] : []),
         ...(owner ? [
           el("div", { class: "set-section" }, "Invite someone"),
           el("div", { class: "af-row" }, role, btn("Make invite", () => act(async () => { made = await ctx.invite(pick); }), "primary")),
@@ -47,7 +56,7 @@ export function openShare(ctx) {
             el("code", {}, made.link),
             el("div", { class: "set-btns" }, btn("Copy", (e) => navigator.clipboard.writeText(made.link).then(() => { e.target.textContent = "Copied"; })))) : null,
           made ? el("div", { class: "mf-hint" }, made.place.startsWith("Syncthing")
-            ? "Send it to them. It works once, for 7 days. The files go straight from this Mac to theirs while both apps are open."
+            ? "Send it to them. It works once, for 7 days. Nothing goes to them until you press Let in. Then the files go straight from this Mac to theirs while both apps are open."
             : `Send it to them. It works once, for 7 days. They also need the files: share "${made.place}" with them there.`,
             info("The invite only proves who's asking. You let them in here, and only then does their app get their own key to this memory.")) : null] : [
           el("div", { class: "mf-hint" }, "Only the owner can invite people or change who can edit.")]));
@@ -78,14 +87,15 @@ export function joinDialog() {
       try { q = new URL(link.value.trim()).searchParams; } catch {}
       const st = !!(q && q.get("d"));   // the owner shares straight from their Mac: no cloud to set up
       const w = q && q.get("w");
-      where.textContent = st ? "The files come straight from their Mac. No cloud or account needed."
+      const k = q && q.get("k");
+      where.textContent = st ? `${k === "file" ? "A file" : k === "folder" ? "A folder" : "A memory"} from their Mac. It comes once they let you in. No cloud or account needed.`
         : w ? `The files are in: ${w}. Make sure it's shared with you there.` : "";
       ask.classList.toggle("hidden", st);
       other.forEach((b) => b.classList.toggle("hidden", st));
       direct.classList.toggle("hidden", !st);
     });
     const go = (kind) => { const t = read(); if (t) done({ link: t, where: kind }); };
-    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, "Join a shared memory"),
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, "Join something shared with you"),
       el("div", { class: "mf-hint" }, "Paste the invite you were sent."), link, where, err,
       ask,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel"), ...other, direct));

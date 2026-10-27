@@ -48,7 +48,8 @@ export function switcherItems(ctx) {
   });
   const cur = ctx.list.find((f) => f.id === ctx.currentId);
   const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id));
-  const items = [...rows, { sep: true },
+  const mine = rows.filter((_, i) => !ctx.list[i].joined), theirs = rows.filter((_, i) => ctx.list[i].joined);
+  const items = [...mine, ...(theirs.length ? [{ sep: true }, { node: el("div", { class: "fo-head" }, "Shared with me") }, ...theirs] : []), { sep: true },
     actionRow("plus", "New memory", ctx.createNew),
     { label: "Open memory", icon: "folder", cls: "fo-menu-item", sub: [
       { label: "From this Mac", fn: ctx.openOther },
