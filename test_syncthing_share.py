@@ -66,16 +66,19 @@ try:
         wait(lambda: urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1), 30)
     fa = api(A, "folders")["folders"][0]["id"]
     pa = api(A, "unlock", {"password": "12345678", "folder": fa})["pass"]
+    check(api(A, "shareinvite", {"role": "edit", "folder": fa}, pa).get("needName"), "no invite before a name is set")
+    check(api(A, "myname", {"name": "  "}).get("status") == 400, "an empty name is refused")
     api(A, "myname", {"name": "Max", "folder": fa})
     inv = api(A, "shareinvite", {"role": "edit", "folder": fa}, pa)
     link = inv.get("link", "")
     check("&d=" in link and "Syncthing" in inv.get("place", ""), "the invite carries Max's Syncthing ID, no cloud", inv)
 
     (tmp / "AnaMac").mkdir()
+    check(api(B, "joinshared", {"link": link, "parent": str(tmp / "AnaMac")}).get("needName"), "no joining before a name is set")
+    api(B, "myname", {"name": "Ana"})
     j = api(B, "joinshared", {"link": link, "parent": str(tmp / "AnaMac")})
     fb = j.get("folder", {}).get("id")
     check(j.get("syncthing") and fb, "Ana's app joins over Syncthing", j)
-    api(B, "myname", {"name": "Ana", "folder": fb})
     target = tmp / "AnaMac" / "locked-notes"
     check(wait(lambda: (target / "vault.cryptomator").exists(), 90), "the encrypted files arrive on Ana's side")
     check(not any(p.suffix == ".md" and p.name not in ("AGENTS.md", "CLAUDE.md") for p in target.rglob("*")), "only encrypted files came over (no readable notes)")

@@ -86,8 +86,18 @@ def my_name() -> str:
     return (r.stdout.strip() or os.environ.get("USER", "Someone"))[:60]
 
 
+def saved_name() -> str:
+    """The name set in the app. Sharing needs one: others must know who's asking or inviting."""
+    try:
+        return json.loads(ME_FILE.read_text()).get("name", "").strip()[:60]
+    except (OSError, ValueError):
+        return ""
+
+
 def set_my_name(name: str) -> str:
     name = " ".join(str(name).split())[:60]
+    if not name:
+        raise ValueError("Your name can't be empty.")
     ME_FILE.parent.mkdir(parents=True, exist_ok=True)
     ME_FILE.write_text(json.dumps({"name": name}))
     return my_name()

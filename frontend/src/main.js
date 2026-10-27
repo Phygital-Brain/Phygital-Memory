@@ -289,9 +289,19 @@ async function openFromCloud(quiet = false) {
 }
 
 // Working together: the Share window for the open memory.
-function openShareHere() {
+// Sharing needs a name: it's what the other person sees. Asked once, then changed in Settings.
+async function ensureName() {
+  let n;
+  try { n = await api("myname"); } catch (e) { toastErr(e.message); return false; }
+  if (n.name) return true;
+  const v = await askText("Your name", n.suggest || "", "Save", (x) => (x.trim() ? "" : "Add a name. It's what others see when you share."));
+  if (!v) return false;
+  try { await api("myname", { name: v.trim() }); return true; } catch (e) { toastErr(e.message); return false; }
+}
+
+async function openShareHere() {
   const info = curInfo();
-  if (!info) return;
+  if (!info || !(await ensureName())) return;
   openShare({
     name: info.name, load: () => api("shareinfo"), invite: (role) => api("shareinvite", { role }),
     answer: (id, allow) => api("shareanswer", { id, allow }), role: (id, role) => api("sharerole", { id, role }),
@@ -302,6 +312,7 @@ function openShareHere() {
 
 // An invite: find the shared files on this side, then ask the owner to let you in.
 async function joinFromInvite() {
+  if (!(await ensureName())) return;
   const v = await joinDialog();
   if (!v) return;
   try {
@@ -756,7 +767,10 @@ async function openSettingsHere() {
   let touch = null;
   if (info && unlocked(info.id)) try { touch = await api("touchidinfo", { folder: info.id }); } catch {}
   let me = null;
-  try { const n = (await api("myname")).name; me = { name: n, set: async (v) => { try { return (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); return n; } } }; } catch {}
+  try {
+    let n = (await api("myname")).name;
+    me = { name: n, set: async (v) => { try { n = (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); } return n; } };
+  } catch {}
   openSettings(info && unlocked(info.id) ? {
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
       const password = v ? await askPassword("Your password, once, to unlock with Touch ID from now on", "Turn on") : "";

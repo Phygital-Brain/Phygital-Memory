@@ -864,7 +864,7 @@ async def api(request: Request) -> Response:
         if action == "myname":   # the name others see when you share or join
             if "name" in body:
                 return _ok({"name": await asyncio.to_thread(sharing.set_my_name, str(body["name"]))})
-            return _ok({"name": await asyncio.to_thread(sharing.my_name)})
+            return _ok({"name": await asyncio.to_thread(sharing.saved_name), "suggest": await asyncio.to_thread(sharing.my_name)})
         if action == "pickfolder":   # the Mac's own folder chooser
             start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
             # Otherwise the Mac reopens wherever the last pick was (often inside a cloud): start at home instead.
@@ -873,6 +873,8 @@ async def api(request: Request) -> Response:
             return _ok({"path": path})
         if action == "joinshared":   # an invite: find the shared files (a folder here, or a memory already added from
             link = str(body.get("link", ""))   # WebDAV), then leave a request there for the owner to say yes to
+            if not sharing.saved_name():
+                return _ok({"error": "Add your name first.", "needName": True}, 400)
             inv = sharing.parse_link(link)
             q = parse_qs(urlparse(link).query)
             if q.get("d") and body.get("where") != "mac" and not body.get("folder"):   # Syncthing: the files come straight
@@ -1205,6 +1207,8 @@ async def api(request: Request) -> Response:
             if sharing.is_shared(f.path) and sharing.my_role(f.path, m.key_raw) != "owner":
                 return _ok({"error": "Only the memory's owner can do that."}, 403)
             if action == "shareinvite":
+                if not sharing.saved_name():
+                    return _ok({"error": "Add your name first.", "needName": True}, 400)
                 link = sharing.invite(f.path, m.key_raw, str(body.get("role", "edit")), f.name)
                 code = sharing.parse_link(link)["code"]
                 if not f.cloud_at:   # Syncthing, straight between Macs: no cloud and no accounts needed
