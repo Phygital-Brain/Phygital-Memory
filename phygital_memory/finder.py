@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import subprocess
 from pathlib import Path
 
 from . import finder_mount
@@ -154,8 +155,21 @@ def _ours(link: Path) -> bool:
         return False
 
 
+def _finder_shows_drives() -> bool:
+    """Finder's own "Connected servers" on the Desktop: then the drive itself is there already, with the memory's
+    name, and a shortcut would be a second copy."""
+    if os.environ.get("PHYGITAL_MEMORY_DESKTOP"):   # tests and the dev copy use their own Desktop
+        return False
+    try:
+        out = subprocess.run(["defaults", "read", "com.apple.finder", "ShowMountedServersOnDesktop"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return out == "1"
+
+
 def _add_desktop_link(name: str, where: str) -> Path | None:
-    if not where or not DESKTOP.is_dir():
+    if not where or not DESKTOP.is_dir() or _finder_shows_drives():
         return None
     for label in (name, f"{name} (Phygital Memory)"):
         link = DESKTOP / label.replace("/", "-")
