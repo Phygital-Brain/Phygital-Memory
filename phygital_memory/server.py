@@ -405,7 +405,8 @@ async def api(request: Request) -> Response:
             return _ok({"folders": folders.list()})
         if action == "pickfolder":   # the Mac's own folder chooser
             start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
-            start = start if any(p["path"] == start for p in cloud_places()) else None
+            # Otherwise the Mac reopens wherever the last pick was (often inside a cloud): start at home instead.
+            start = start if any(p["path"] == start for p in cloud_places()) else str(Path.home())
             path = await asyncio.to_thread(pick_folder, body.get("prompt") or "Choose a folder", start)
             return _ok({"path": path})
         if action == "addfolder":
@@ -440,7 +441,7 @@ async def api(request: Request) -> Response:
         if action == "githubaccount":   # only when the person presses Connect GitHub
             return _ok({"account": await asyncio.to_thread(gitsync.signed_in)})
         if action == "fromgithub":   # another Mac: bring a private Phygital Memory repo down and add it
-            parent = await asyncio.to_thread(pick_folder, "Choose where to keep it on this Mac")
+            parent = await asyncio.to_thread(pick_folder, "Choose where to keep it on this Mac", str(Path.home()))
             if not parent:
                 return _ok({"cancelled": True})
             return _ok({"folder": await asyncio.to_thread(folders.from_github, str(body.get("repo", "")), Path(parent))})
@@ -541,7 +542,7 @@ async def api(request: Request) -> Response:
             if action == "importfiles":
                 picked = await asyncio.to_thread(pick_files, "Choose files to import")
             else:
-                one = await asyncio.to_thread(pick_folder, "Choose a folder to import")
+                one = await asyncio.to_thread(pick_folder, "Choose a folder to import", str(Path.home()))
                 picked = [one] if one else []
             if not picked:
                 return _ok({"imported": [], "skipped": 0, "cancelled": True})
@@ -550,7 +551,7 @@ async def api(request: Request) -> Response:
             rel = str(body["path"])
             name = rel.rstrip("/").split("/")[-1]
             folder_ = any(x["path"] == rel and x["kind"] == "folder" for x in m.list_files())
-            dest = await asyncio.to_thread(pick_folder, f'Export "{name}" into') if folder_ \
+            dest = await asyncio.to_thread(pick_folder, f'Export "{name}" into', str(Path.home())) if folder_ \
                 else await asyncio.to_thread(pick_save, f'Export "{name}"', name)
             if not dest:
                 return _ok({"cancelled": True})
