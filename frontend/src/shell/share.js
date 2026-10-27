@@ -7,7 +7,7 @@ const ROLE = { owner: "Owner", edit: "Can edit", view: "Can view" };
 
 // ctx: {name, part (one folder or file, not the whole memory), load() -> shareinfo, invite(role) -> {link, place},
 //       answer(id, allow), role(id, role), remove(id), openPart(path), stopPart(share, path), people() -> {people},
-//       add(id, role), history() -> {history}, storage()}
+//       add(id, role), forget(id, name), history() -> {history}, storage()}
 const WHEN = (t) => new Date(t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 export function openShare(ctx) {
   return modal((done) => {
@@ -62,7 +62,8 @@ export function openShare(ctx) {
               el("button", { class: "seg-b" + (addRole[p.id] === k ? " on" : ""), type: "button", onclick: () => { addRole[p.id] = k; drawSeg(); } }, t)));
             drawSeg();
             return el("div", { class: "todo-row share-row" }, el("div", { class: "act-main" }, el("div", { class: "act-line" }, p.name)),
-              el("span", { class: "set-btns" }, seg, btn("Add", () => act(() => ctx.add(p.id, addRole[p.id])), "primary")));
+              el("span", { class: "set-btns" }, seg, btn("Add", () => act(() => ctx.add(p.id, addRole[p.id])), "primary"),
+                btn("Forget", () => act(() => ctx.forget(p.id, p.name)))));
           })),
           el("div", { class: "mf-hint" }, "No invite needed: you checked their code the first time. It shows up in their app by itself.")] : []),
         ...(owner ? [

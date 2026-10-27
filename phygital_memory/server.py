@@ -759,6 +759,7 @@ def _st_watch() -> None:
                 _st_take_offers()
                 _st_drop_removed()
                 _st_finish_unshares()
+                _st_reshare_due()
                 for code, i in inv.items():   # a request came in: put it where the owner's app looks
                     try:
                         r = json.loads((ST_REQUESTS / i["q"] / "request.json").read_text())
@@ -789,16 +790,48 @@ def _st_done_with(qid: str | None, device: str | None = None, keep_device: bool 
 ST_GONE = STATE / "syncthing-gone.json"   # shares stopped here: offers of them from others are never taken in
 
 
-def _st_gone() -> set:
+def _st_gone_all() -> dict:
     try:
-        return set(json.loads(ST_GONE.read_text()))
+        d = json.loads(ST_GONE.read_text())
+        return d if isinstance(d, dict) else {x: "own" for x in d}
     except (OSError, ValueError):
-        return set()
+        return {}
 
 
-def _st_gone_add(fid: str) -> None:
+def _st_gone() -> set:
+    return set(_st_gone_all())
+
+
+def _st_gone_add(fid: str, why="own") -> None:
+    """"own": a share stopped here, never taken back in. A time: removed from it there; only an offer made after
+    that (they shared it again) comes back in."""
     STATE.mkdir(parents=True, exist_ok=True)
-    ST_GONE.write_text(json.dumps(sorted(_st_gone() | {fid})))
+    ST_GONE.write_text(json.dumps({**_st_gone_all(), fid: why}))
+
+
+ST_GENS = STATE / "syncthing-gens.json"   # which round of each share this Mac took in
+
+
+def _gen_of(label: str) -> tuple[str, int]:
+    """A share's label is "Name#gN": N goes up each time the owner shares it again, so a new round is told apart
+    from the old offer of someone just removed."""
+    m = re.match(r"^(.*)#g(\d+)$", label or "")
+    return (m.group(1), int(m.group(2))) if m else (label or "", 0)
+
+
+def _gens() -> dict:
+    try:
+        return json.loads(ST_GENS.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _st_next_round(fid: str) -> None:
+    """Owner: this share is offered again (someone added back): its label's round goes up."""
+    f = st.rest("GET", f"/rest/config/folders/{fid}")
+    name, n = _gen_of(f.get("label", ""))
+    f["label"] = f"{name[:50]}#g{n + 1}"
+    st.rest("PUT", f"/rest/config/folders/{fid}", f)
 
 
 ST_UNSHARE = STATE / "syncthing-unshare.json"   # removed people: stop sending once their app saw it (and deleted)
@@ -816,6 +849,44 @@ def _st_unshare_later(fid: str, device: str, forget: str | None = None) -> None:
     STATE.mkdir(parents=True, exist_ok=True)
     ST_UNSHARE.write_text(json.dumps(_st_unshares() + [{"folder": fid, "device": device, "since": time.time(),
                                                          **({"forget": forget} if forget else {})}]))
+
+
+ST_RESHARE = STATE / "syncthing-reshare.json"   # offered again a little later, so their app sees a fresh offer
+
+
+def _st_reshare(fid: str, device: str) -> bool:
+    """Someone removed a moment ago is added back: stop offering now and offer again shortly. Their app only takes
+    an item back in once the old offer is gone. True when that was needed."""
+    todo = _st_unshares()
+    if not any(u["folder"] == fid and u["device"] == device for u in todo):
+        return False
+    ST_UNSHARE.write_text(json.dumps([u for u in todo if not (u["folder"] == fid and u["device"] == device)]))
+    st.unshare_folder(fid, device)
+    try:
+        later = json.loads(ST_RESHARE.read_text())
+    except (OSError, ValueError):
+        later = []
+    ST_RESHARE.write_text(json.dumps(later + [{"folder": fid, "device": device, "at": time.time() + 20}]))
+    return True
+
+
+def _st_reshare_due() -> None:
+    try:
+        later = json.loads(ST_RESHARE.read_text())
+    except (OSError, ValueError):
+        return
+    if not later:
+        return
+    left = []
+    for r in later:
+        if r["at"] > time.time():
+            left.append(r)
+            continue
+        try:
+            st.share_folder(r["folder"], r["device"])
+        except Exception:
+            left.append(r)
+    ST_RESHARE.write_text(json.dumps(left))
 
 
 def _st_finish_unshares() -> None:
@@ -859,7 +930,7 @@ def _st_drop_removed() -> None:
         except Exception:
             pass
         st.remove_folder(x.syncthing)
-        _st_gone_add(x.syncthing)   # never taken back in, even while the owner's Mac still offers it
+        _st_gone_add(x.syncthing, _gens().get(x.syncthing, 0))   # this round is never taken back in; a later one is
         with folders._lock:
             folders.items.pop(x.id, None)
             folders._save()
@@ -868,9 +939,48 @@ def _st_drop_removed() -> None:
         approvals.add("Removed by the owner: copy deleted", x.name, "owner")
 
 
+PEOPLE = STATE / "people.json"   # everyone ever let in (names, public keys, computers; nothing secret)
+
+
+def _remember(people: list[dict]) -> None:
+    try:
+        known = json.loads(PEOPLE.read_text())
+    except (OSError, ValueError):
+        known = {}
+    new = {**known, **{p["id"]: {k: v for k, v in p.items() if k in ("id", "name", "pub", "device")} for p in people}}
+    if new != known:
+        STATE.mkdir(parents=True, exist_ok=True)
+        PEOPLE.write_text(json.dumps(new))
+        os.chmod(PEOPLE, 0o600)
+
+
+def _forget_person(pid: str) -> None:
+    """Removed from every share and every open shared memory (their app deletes its copies), then forgotten."""
+    places = [(shares.path_of(x["id"]), shares.key_of(x["id"]), "pm-" + sharing._vault_id(shares.path_of(x["id"])))
+              for x in shares.of_all() if not x.get("stopping")]
+    places += [(x.path, x.memory.key_raw, x.syncthing) for x in folders.items.values()
+               if not x.joined and x.memory.is_open and sharing.is_shared(x.path)]
+    for path, raw, fid in places:
+        if any(p["id"] == pid for p in sharing.members(path, raw)):
+            gone = sharing.remove(path, raw, pid)
+            if gone.get("device") and fid:
+                _st_unshare_later(fid, gone["device"])
+    try:
+        known = json.loads(PEOPLE.read_text())
+        known.pop(pid, None)
+        PEOPLE.write_text(json.dumps(known))
+    except (OSError, ValueError):
+        pass
+
+
 def _people() -> list[dict]:
-    """Everyone let in to any of your memories or shared parts before (their key was checked then), not you."""
+    """Everyone let in to any of your memories or shared parts before (their key was checked then), not you.
+    Remembered after they're removed, so you can share with them again with no new invite."""
     me, out = sharing.my_id(), {}
+    try:
+        out = {k: v for k, v in json.loads(PEOPLE.read_text()).items() if k != me}
+    except (OSError, ValueError):
+        pass
     places = [(shares.path_of(x["id"]), lambda x=x: shares.key_of(x["id"])) for x in shares.of_all()]
     places += [(x.path, lambda x=x: x.memory.key_raw) for x in folders.items.values()
                if not x.joined and x.memory.is_open and sharing.is_shared(x.path)]
@@ -881,17 +991,24 @@ def _people() -> list[dict]:
                     out[p["id"]] = {**out.get(p["id"], {}), **{k: v for k, v in p.items() if k in ("id", "name", "pub", "device")}}
         except Exception:
             pass
+    _remember(list(out.values()))
     return sorted(out.values(), key=lambda p: p["name"].lower())
 
 
 def _st_offer(fid: str, person: dict) -> None:
     """Their Mac gets this share now. Its files hold their own key, so their app opens it with no invite."""
     st.start()
+    _st_next_round(fid)
+    if _st_reshare(fid, person["device"]):
+        return
     try:
         st.rest("GET", f"/rest/config/devices/{person['device']}")
     except Exception:
         st.add_device(person["device"], person["name"], "dynamic")
     st.share_folder(fid, person["device"])
+
+
+ST_TRUSTED = STATE / "syncthing-trusted.json"   # computers of people who shared with you before
 
 
 def _st_take_offers() -> None:
@@ -904,19 +1021,32 @@ def _st_take_offers() -> None:
             except Exception:
                 pass
     trusted.discard(me)
-    gone = _st_gone()
-    for fid, info in (st.pending_folders() or {}).items():
+    try:   # owners you joined before stay trusted after they removed you from everything, so they can reshare
+        known = set(json.loads(ST_TRUSTED.read_text()))
+    except (OSError, ValueError):
+        known = set()
+    if trusted - known:
+        ST_TRUSTED.write_text(json.dumps(sorted(trusted | known)))
+    trusted |= known
+    pending = st.pending_folders() or {}
+    gone = _st_gone_all()
+    for fid, info in pending.items():
         by = info.get("offeredBy") or {}
         dev = next((d for d in by if d in trusted), None)
-        if not fid.startswith("pm-") or fid in gone or not dev or st.has_folder(fid):
+        if not fid.startswith("pm-") or not dev or st.has_folder(fid):
             continue
-        label = re.sub(r'[/\\:*?"<>|]', "-", str(by[dev].get("label") or "Shared")).strip()[:60] or "Shared"
+        name, rnd = _gen_of(str(by[dev].get("label") or ""))
+        if fid in gone and (gone[fid] == "own" or rnd <= int(gone[fid])):
+            continue   # stopped here, or the same round they removed us from
+        label = re.sub(r'[/\\:*?"<>|]', "-", name or "Shared").strip()[:60] or "Shared"
         parent = STATE / "Shared with me"
         target, n = parent / label, 1
         while target.exists():
             n += 1
             target = parent / f"{label} {n}"
         st.add_folder(fid, target, label, [dev])
+        STATE.mkdir(parents=True, exist_ok=True)
+        ST_GENS.write_text(json.dumps({**_gens(), fid: rnd}))
         with folders._lock:
             j = folders._add(target, label)
         j.joined, j.syncthing = True, fid
@@ -1406,7 +1536,7 @@ async def api(request: Request) -> Response:
             return _ok({"on": True})
         # ---- working together (the owner's side; the memory is open, so its key is at hand) ----
         if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop",
-                      "sharepeople", "shareadd", "sharehistory"):
+                      "sharepeople", "shareadd", "sharehistory", "shareforget"):
             vid = sharing._vault_id(f.path)
             owner = not f.joined and (not sharing.is_shared(f.path) or sharing.my_role(f.path, m.key_raw) == "owner")
             part = shares.get(str(body["share"])) if body.get("share") else None
@@ -1455,6 +1585,13 @@ async def api(request: Request) -> Response:
                 inside = {x["id"] for x in sharing.members(tpath, traw)} if part or sharing.is_shared(tpath) else set()
                 return _ok({"people": [{k: p[k] for k in ("id", "name")} for p in await asyncio.to_thread(_people)
                                        if p["id"] not in inside]})
+            if action == "shareforget":   # off everything you share (their copies go) and off your list
+                who = next((p for p in await asyncio.to_thread(_people) if p["id"] == body.get("id")), None)
+                if not who:
+                    return _ok({"error": "That person isn't on your list."}, 404)
+                await asyncio.to_thread(_forget_person, who["id"])
+                approvals.add(f"Forgot {who['name']}", f.name, "click")
+                return _ok({"ok": True})
             if action == "shareadd":   # share with someone already let in: no invite, no code (checked the first time)
                 person = next((p for p in await asyncio.to_thread(_people) if p["id"] == body.get("id")), None)
                 if not person:
@@ -1506,6 +1643,8 @@ async def api(request: Request) -> Response:
                 who = next((x["name"] for x in sharing.requests(tpath, traw) if x["id"] == body.get("id")), "someone")
                 allow = bool(body.get("allow"))
                 sharing.answer(tpath, traw, str(body.get("id")), allow, body.get("role"))
+                if allow:
+                    await asyncio.to_thread(_people)   # remembered, to share with them again later
                 if r.get("device") and fid and st.running():
                     if allow:   # only now do their Mac get the files (and, inside them, their own key)
                         await asyncio.to_thread(st.share_folder, fid, r["device"])

@@ -74,6 +74,16 @@ try:
     check(wait(lambda: not any(x["name"] == "Ideas" for x in api(B, "folders")["folders"]), 60),
           "removed from Ideas: it leaves Ana's list")
     check(not ideas_dir.exists(), "and her copy is deleted from her Mac", ideas_dir)
+    again = api(A, "shareadd", {"path": "Ideas", "id": people[0]["id"] if people else "", "role": "view", "folder": fa}, pa)
+    check(again.get("share") == add.get("share"), "Max shares Ideas with Ana again, no invite", again)
+    fi2 = {}
+    check(wait(lambda: fi2.update(next((x for x in api(B, "folders")["folders"] if x["name"].startswith("Ideas")), {})) or fi2, 90),
+          "Ideas comes back to Ana's list")
+    gi2 = {}
+    check(wait(lambda: gi2.update(api(B, "keyunlock", {"folder": fi2.get("id")})) or gi2.get("pass"), 90),
+          "and she opens it with her own key", gi2)
+    api(A, "shareremove", {"share": add.get("share"), "id": people[0]["id"] if people else "", "folder": fa}, pa)
+    check(wait(lambda: not any(x["name"].startswith("Ideas") for x in api(B, "folders")["folders"]), 60), "removed again: gone again")
 
     sf, ff, pf = join("People/Tom-Becker.md", "view", "Tom-Becker.md")
     check(wait(lambda: files(B, ff, pf) == {"Tom-Becker.md"}, 60), "one file shared: only that file reaches Ana")

@@ -338,6 +338,10 @@ async function openShareHere(path = null) {
     remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await api("shareremove", { id, ...at }); },
     openPart: (p) => openShareHere(p),
     people: () => api("sharepeople", at), add: (id, role) => api("shareadd", { id, role, ...at }),
+    forget: async (id, name) => {
+      if (await confirmDialog(`Forget ${name}?`, "Forget", true, "They're removed from everything you share, their app deletes its copies, and they leave this list. To share with them again, send a new invite."))
+        await api("shareforget", { id });
+    },
     history: () => api("sharehistory", at),
     stopPart: async (share, p) => {
       if (await confirmDialog(`Stop sharing "${p}"?`, "Stop sharing", true, "Nobody gets changes to it any more. Copies they already have stay with them.")) await api("sharestop", { share });
