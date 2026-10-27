@@ -34,7 +34,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
 from . import activity
-from .folders import Folders, cloud_places, is_vault, pick_folder, write_guides
+from .folders import Folders, cloud_places, is_vault, pick_files, pick_folder, pick_save, write_guides
 from .memory import Locked, Memory, _clean_path
 from .vault.keys import WrongPassword
 
@@ -484,6 +484,25 @@ async def api(request: Request) -> Response:
         if action == "aitodoremove":
             m.todo_remove(body["id"])
             return _ok({"todo": m.todo()})
+        if action in ("importfiles", "importfolder"):   # the Mac's own picker chooses what comes in, never the page
+            into = str(body.get("into") or "")
+            if action == "importfiles":
+                picked = await asyncio.to_thread(pick_files, "Choose files to import")
+            else:
+                one = await asyncio.to_thread(pick_folder, "Choose a folder to import")
+                picked = [one] if one else []
+            if not picked:
+                return _ok({"imported": [], "skipped": 0, "cancelled": True})
+            return _ok(await asyncio.to_thread(m.import_paths, into, picked))
+        if action == "export":   # a decrypted copy, to a place the person picks in the Mac's own box
+            rel = str(body["path"])
+            name = rel.rstrip("/").split("/")[-1]
+            folder_ = any(x["path"] == rel and x["kind"] == "folder" for x in m.list_files())
+            dest = await asyncio.to_thread(pick_folder, f'Export "{name}" into') if folder_ \
+                else await asyncio.to_thread(pick_save, f'Export "{name}"', name)
+            if not dest:
+                return _ok({"cancelled": True})
+            return _ok({"count": await asyncio.to_thread(m.export, rel, dest)})
         if action == "files":
             return _ok({"files": m.list_files(), "conflicts": m.clashes[-20:]})
         if action == "readfile":   # images and other files, as base64 (the page makes a blob URL from it)

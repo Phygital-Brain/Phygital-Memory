@@ -485,6 +485,78 @@ class Memory:
             self._writer.write_file(parent, name, data)
             return "/".join(rel.split("/")[:-1] + [name])
 
+    def import_paths(self, into: str, sources: list[str]) -> dict:
+        """Copy files and folders from the Mac into this folder, encrypted. Never replaces anything: a name that is
+        taken gets " 2". Hidden files, links and files over 25 MB are skipped. Returns what came in."""
+        into = _clean_path(into, md=False) if into else ""
+        done, skipped = [], 0
+        with self._lock:
+            self._need_open()
+            for src in map(Path, sources):
+                if src.name.startswith(".") or src.is_symlink():
+                    skipped += 1
+                    continue
+                if src.is_dir():
+                    top = self._free_folder(f"{into}/{src.name}".lstrip("/"))
+                    for f in sorted(src.rglob("*")):
+                        rel = f.relative_to(src)
+                        if any(p.startswith(".") for p in rel.parts) or f.is_symlink():
+                            skipped += f.is_file()
+                            continue
+                        if f.is_dir():
+                            self.make_folder(f"{top}/{rel.as_posix()}")
+                        elif f.stat().st_size > MAX_FILE_BYTES or len(done) >= MAX_IMPORT:
+                            skipped += 1
+                        else:
+                            done.append(self.save_bytes(f"{top}/{rel.as_posix()}", f.read_bytes()))
+                elif src.is_file():
+                    if src.stat().st_size > MAX_FILE_BYTES or len(done) >= MAX_IMPORT:
+                        skipped += 1
+                    else:
+                        done.append(self.save_bytes(f"{into}/{src.name}".lstrip("/"), src.read_bytes()))
+            self._synced = 0   # index the new notes now
+            self._sync()
+        return {"imported": done, "skipped": skipped}
+
+    def _free_folder(self, rel: str) -> str:
+        rel = _clean_path(rel, md=False)
+        parent, name = self._make_parents(rel)
+        taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
+        base, n = name, 1
+        while name in taken:
+            n += 1
+            name = f"{base} {n}"
+        return self.make_folder("/".join(rel.split("/")[:-1] + [name]))
+
+    def export(self, rel: str, dest: str) -> int:
+        """Write a decrypted copy of a note, file or folder to a place the person chose on the Mac. A folder goes in
+        as a new folder inside dest (" 2" if the name is taken). Returns how many files were written."""
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            entry = self._tree.resolve(rel)
+            if entry.kind == "file":
+                Path(dest).write_bytes(self._tree.read_file(entry))
+                return 1
+            out, n = Path(dest) / entry.name, 1
+            while out.exists():
+                n += 1
+                out = Path(dest) / f"{entry.name} {n}"
+            count = 0
+            for path, e in self._tree.walk():
+                p = path.lstrip("/")
+                if not p.startswith(rel + "/"):
+                    continue
+                target = out / p[len(rel) + 1:]
+                if e.kind == "dir":
+                    target.mkdir(parents=True, exist_ok=True)
+                elif e.kind == "file":
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(self._tree.read_file(e))
+                    count += 1
+            out.mkdir(parents=True, exist_ok=True)   # an empty folder still comes out as a folder
+            return count
+
     def make_folder(self, rel: str) -> str:
         rel = _clean_path(rel, md=False)
         with self._lock:
@@ -799,6 +871,7 @@ VERSION_EVERY = 5 * 60
 VERSION_KEEP = 50
 SYNC_EVERY = 5
 MAX_FILE_BYTES = 25_000_000
+MAX_IMPORT = 5000   # files in one import
 
 
 def merge3(base: str, mine: str, theirs: str) -> str | None:

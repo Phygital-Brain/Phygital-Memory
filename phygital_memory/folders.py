@@ -241,6 +241,24 @@ def move_folder_on_disk(src: Path, parent: Path) -> Path:
     return dest
 
 
+def pick_files(prompt: str) -> list[str]:
+    """The Mac's own file picker, several files at once (the person chooses; nothing is read from the page)."""
+    script = [f'set picked to choose file with prompt "{prompt.replace(chr(34), "")}" with multiple selections allowed',
+              'set out to ""', "repeat with f in picked", "set out to out & POSIX path of f & linefeed", "end repeat",
+              "return out"]
+    out = subprocess.run(["osascript", *sum((["-e", line] for line in script), [])], capture_output=True, text=True,
+                         timeout=600)
+    return [p for p in out.stdout.splitlines() if p] if out.returncode == 0 else []
+
+
+def pick_save(prompt: str, name: str) -> str | None:
+    """The Mac's own "save as" box: where to put an exported file. It asks itself before replacing one."""
+    script = (f'POSIX path of (choose file name with prompt "{prompt.replace(chr(34), "")}" '
+              f'default name "{name.replace(chr(34), "")}")')
+    out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
+    return out.stdout.strip() or None if out.returncode == 0 else None
+
+
 def pick_folder(prompt: str) -> str | None:
     """The Mac's own folder picker (the person chooses; nothing is read from the page)."""
     script = f'POSIX path of (choose folder with prompt "{prompt.replace(chr(34), "")}")'

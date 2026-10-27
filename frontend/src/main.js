@@ -828,7 +828,7 @@ function rowFor(n, depth) {
   const open = state.open.has(n.path);
   const ic = folder ? icon("folder", 16) : icon(isImg(n.name) ? "image" : "file", 16);
   if (folder) ic.style.color = folderColor(n.path);
-  const pinned = !folder && getPref("pins", []).includes(n.path);
+  const pinned = getPref("pins", []).includes(n.path);
   const more = el("button", { class: "row-more", title: "More", "aria-label": "More", onclick: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); rowMenu(n, r.left, r.bottom + 4); } }, icon("more", 15));
   const row = el("div", {
     class: "row" + (cur ? " active" : "") + (state.sel.has(n.path) ? " sel" : ""), role: "treeitem", draggable: true, style: `padding-left:${8 + depth * 14}px`,
@@ -885,34 +885,67 @@ function clearDropMarks() { document.querySelectorAll(".row.drop,.row.drop-befor
 // context menus
 function rowMenu(n, x, y) {
   const folder = n.kind === "folder";
-  const pins = getPref("pins", []);
+  const pinned = getPref("pins", []).includes(n.path);
   const items = [];
+  if (folder) {
+    items.push(
+      { label: "New note", fn: () => newNote(n.path) },
+      { label: "New folder", fn: () => newFolder(n.path) },
+      { label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) },
+      { sep: true },
+      { label: "Import files…", fn: () => importInto(n.path, false) },
+      { label: "Import folder…", fn: () => importInto(n.path, true) });
+  } else {
+    items.push({ label: "Open in new tab", fn: () => openPath(n.path) });
+    items.push({ label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) });
+    if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
+    items.push({ sep: true });
+  }
+  items.push(
+    { label: "Export…", fn: () => exportPath(n.path) },
+    { label: "Show in Finder", fn: () => revealInFinder(n.path) },
+    { label: "Rename", fn: () => renameDialog(n) });
   if (folder) {
     const swatches = el("div", { class: "swatches" }, ...PALETTE.map((c) =>
       el("button", { class: "swatch" + (colorsPref()[n.path] === c ? " on" : ""), style: `background:${c}`, title: c, "aria-label": "Colour " + c,
         onclick: () => { closeMenu(); setMapPref("colors", n.path, c); renderTree(); } })));
     const mode = folderMode(n.path), own = getPref("folderSort", {})[n.path], manual = (getPref("order", {})[n.path] || []).length;
     items.push(
-      { label: "New note here", fn: () => newNote(n.path) },
-      { label: "New folder here", fn: () => newFolder(n.path) },
       { sep: true },
-      { label: "Rename", fn: () => renameDialog(n) },
-      { label: "Colour", sub: [{ node: swatches }, { label: "Default colour", fn: () => { setMapPref("colors", n.path, null); renderTree(); } }] },
-      { label: "Sort this folder", sub: [
+      { label: "Sort by", value: own ? SORTS.find(([k]) => k === own)?.[1] : "Default", sub: [
         ...SORTS.map(([k, t, hint]) => ({ label: t, hint, check: mode === k, fn: () => { setMapPref("folderSort", n.path, k); setMapPref("order", n.path, null); renderTree(); } })),
         ...(own ? [{ sep: true }, { label: "Use the default sort", fn: () => { setMapPref("folderSort", n.path, null); renderTree(); } }] : []),
         ...(manual ? [{ sep: true }, { label: "Reset dragged order", fn: () => { setMapPref("order", n.path, null); renderTree(); } }] : []),
       ] },
-      { sep: true });
-  } else {
-    items.push({ label: "Open in new tab", fn: () => openPath(n.path) });
-    items.push({ label: pins.includes(n.path) ? "Unpin" : "Pin", fn: () => togglePin(n.path) });
-    if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
-    items.push({ sep: true }, { label: "Rename", fn: () => renameDialog(n) });
+      { sep: true },
+      { label: "Colour", value: colorsPref()[n.path] ? "" : "Auto", dot: folderColor(n.path), sub: [
+        { node: swatches }, { label: "Auto colour", check: !colorsPref()[n.path], fn: () => { setMapPref("colors", n.path, null); renderTree(); } }] });
   }
-  items.push({ label: "Show in Finder", fn: () => revealInFinder(n.path) });
   items.push({ label: "Move to trash", cls: "danger", fn: () => trashDialog(n) });
   showMenu(items, x, y);
+}
+
+// Bring files or a whole folder from the Mac into this folder, encrypted. The Mac's own picker chooses them.
+async function importInto(dir, wholeFolder) {
+  try {
+    const j = await api(wholeFolder ? "importfolder" : "importfiles", { into: dir });
+    if (j.cancelled) return;
+    if (dir) state.open.add(dir);
+    await loadFiles();
+    const n = j.imported.length;
+    if (n) toastOk(`Imported ${n} file${n === 1 ? "" : "s"}, encrypted.` + (j.skipped ? ` Skipped ${j.skipped} (hidden or over 25 MB).` : ""));
+    else toastErr(j.skipped ? `Nothing imported: ${j.skipped} skipped (hidden or over 25 MB).` : "Nothing to import there.");
+  } catch (e) { toastErr(e.message); }
+}
+
+// A readable (not encrypted) copy of a note, file or folder, to a place picked in the Mac's own box.
+async function exportPath(path) {
+  await Promise.all(state.tabs.map((t) => saveNow(t)));   // export what's on screen, not an older save
+  try {
+    const j = await api("export", { path });
+    if (j.cancelled) return;
+    toastOk(`Exported "${label(path)}". That copy is not encrypted.`);
+  } catch (e) { toastErr(e.message); }
 }
 
 function togglePin(path) {
@@ -1213,6 +1246,7 @@ function saveFileNow(tab) {
         tab.err = null;
       } catch (e) { tab.err = e.message; Object.assign(tab.changes, { ...changes, ...tab.changes }); }
       tab.saving = false;
+      if (!tab.err && !tab.dirty) tab.savedAt = Date.now();
       renderStatus(); renderTabs();
       return;
     }
@@ -1230,6 +1264,7 @@ function saveFileNow(tab) {
       tab.err = null;
     } catch (e) { tab.err = e.message; }
     tab.saving = false;
+    if (!tab.err && !tab.dirty) tab.savedAt = Date.now();
     renderStatus(); renderTabs();
   });
   return tab.chain;
@@ -1400,6 +1435,7 @@ function saveNow(tab) {
       scheduleLinksRefresh();
     } catch (e) { tab.err = e.message; }
     tab.saving = false;
+    if (!tab.err && !tab.dirty) tab.savedAt = Date.now();
     renderStatus(); renderTabs();
   });
   return tab.chain;
@@ -1413,6 +1449,8 @@ function flashStatus(text, tone = "") {
   setTimeout(renderStatus, 2300);
 }
 
+const SAVED_SHOWS = 1500;
+let savedTimer = null;
 function renderStatus() {
   if (!statusEl) return;
   const t = state.active;
@@ -1422,7 +1460,12 @@ function renderStatus() {
     else if (statusFlash && statusFlash.tab === t && Date.now() < statusFlash.until) { s = statusFlash.text; cls = statusFlash.tone; }
     else if (t.saving) s = "Saving…";
     else if (t.dirty) s = "Unsaved";
-    else s = "Saved";
+    else {   // "Saved" shows for a moment in green after a save, then fades away
+      s = "Saved";
+      const left = (t.savedAt || 0) + SAVED_SHOWS - Date.now();
+      cls = left > 0 ? "ok" : "gone";
+      if (left > 0) { clearTimeout(savedTimer); savedTimer = setTimeout(renderStatus, left + 20); }
+    }
   }
   statusEl.textContent = s;
   statusEl.className = "status " + cls;
@@ -1565,11 +1608,18 @@ function openHomeTab() {
   activate(tab);
 }
 
+// A pinned folder on Home: open it (and the folders around it) in the sidebar.
+function showFolder(path) {
+  const parts = path.split("/");
+  parts.forEach((_, i) => state.open.add(parts.slice(0, i + 1).join("/")));
+  renderTree();
+}
+
 function refreshHome() { const t = state.tabs.find((k) => k.kind === "home"); if (t) renderHome(t); }
 
 function renderHome(tab) {
   const notes = state.files.filter((f) => f.kind === "file" && isMd(f.path));
-  const item = (f) => el("button", { class: "home-item", onclick: () => openPath(f.path) }, icon("file", 15),
+  const item = (f) => el("button", { class: "home-item", onclick: () => f.kind === "folder" ? showFolder(f.path) : openPath(f.path) }, icon(f.kind === "folder" ? "folder" : "file", 15),
     el("span", { class: "hi-name" }, label(f.path)), dirOf(f.path) ? el("span", { class: "hi-dir" }, dirOf(f.path)) : null,
     f.mtime ? el("span", { class: "hi-time" }, whenDate(new Date(f.mtime * 1000))) : null);
   const recent = [...notes].sort((a, b) => (b.mtime || 0) - (a.mtime || 0)).slice(0, 8);
@@ -1579,7 +1629,7 @@ function renderHome(tab) {
     el("h2", { class: "home-h" }, "Recent notes"),
     recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write the first one."),
     el("h2", { class: "home-h" }, "Pinned"),
-    pinned.length ? el("div", { class: "home-list" }, ...pinned.map(item)) : el("div", { class: "home-none" }, "Nothing pinned. Open a note's menu and choose Pin."),
+    pinned.length ? el("div", { class: "home-list" }, ...pinned.map(item)) : el("div", { class: "home-none" }, "Nothing pinned. Right-click a note or folder and choose Pin."),
     el("div", { class: "home-hint" }, icon("home", 14), "Want your own Home page? Open a note's menu and choose Set as Home."));
 }
 
