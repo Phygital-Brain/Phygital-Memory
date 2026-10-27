@@ -44,7 +44,7 @@
   async function answer(keep) {
     clearInterval(timer);
     try {
-      await fetch("/api/closeanswer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keep }) });
+      await fetch("/api/closeanswer", { method: "POST", headers: { "Content-Type": "application/json", ...(window.__PM_SHELL ? { "X-Shell-Token": window.__PM_SHELL } : {}) }, body: JSON.stringify({ keep }) });
     } catch {}
   }
   window.startAsk = (mode) => {   // mode "quit": Keep open cancels the quit

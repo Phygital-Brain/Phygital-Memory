@@ -161,6 +161,7 @@ section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
   function api(action, body) {
     var h = { "Content-Type": "application/json" };
+    if (window.__PM_SHELL) h["X-Shell-Token"] = window.__PM_SHELL;
     if (pass) h["X-App-Pass"] = pass;
     return fetch("/api/" + action, { method: "POST", headers: h, body: JSON.stringify(body || {}) })
       .then(function (r) {

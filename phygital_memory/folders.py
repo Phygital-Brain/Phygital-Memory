@@ -823,27 +823,34 @@ def move_folder_on_disk(src: Path, parent: Path) -> Path:
     return dest
 
 
+def _osascript(lines: list[str], *args: str) -> subprocess.CompletedProcess:
+    """Run AppleScript with names passed as arguments (item 1 of argv...), never written into the script itself, so
+    a folder or note name can't break out of its quotes."""
+    script = ["on run argv", *lines, "end run"]
+    return subprocess.run(["osascript", *sum((["-e", line] for line in script), []), *args], capture_output=True,
+                          text=True, timeout=600)
+
+
 def pick_files(prompt: str) -> list[str]:
     """The Mac's own file picker, several files at once (the person chooses; nothing is read from the page)."""
-    script = [f'set picked to choose file with prompt "{prompt.replace(chr(34), "")}" with multiple selections allowed',
-              'set out to ""', "repeat with f in picked", "set out to out & POSIX path of f & linefeed", "end repeat",
-              "return out"]
-    out = subprocess.run(["osascript", *sum((["-e", line] for line in script), [])], capture_output=True, text=True,
-                         timeout=600)
+    out = _osascript(["set picked to choose file with prompt (item 1 of argv) with multiple selections allowed",
+                      'set out to ""', "repeat with f in picked", "set out to out & POSIX path of f & linefeed",
+                      "end repeat", "return out"], prompt)
     return [p for p in out.stdout.splitlines() if p] if out.returncode == 0 else []
 
 
 def pick_save(prompt: str, name: str) -> str | None:
     """The Mac's own "save as" box: where to put an exported file. It asks itself before replacing one."""
-    script = (f'POSIX path of (choose file name with prompt "{prompt.replace(chr(34), "")}" '
-              f'default name "{name.replace(chr(34), "")}")')
-    out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
+    out = _osascript(["return POSIX path of (choose file name with prompt (item 1 of argv) default name (item 2 of argv))"],
+                     prompt, name)
     return out.stdout.strip() or None if out.returncode == 0 else None
 
 
 def pick_folder(prompt: str, start: str | None = None) -> str | None:
     """The Mac's own folder picker (the person chooses; nothing is read from the page). start: where it opens."""
-    where = f' default location (POSIX file "{start.replace(chr(34), "")}")' if start and Path(start).is_dir() else ""
-    script = f'POSIX path of (choose folder with prompt "{prompt.replace(chr(34), "")}"{where})'
-    out = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
+    if start and Path(start).is_dir():
+        out = _osascript(["return POSIX path of (choose folder with prompt (item 1 of argv) default location (POSIX file (item 2 of argv)))"],
+                         prompt, start)
+    else:
+        out = _osascript(["return POSIX path of (choose folder with prompt (item 1 of argv))"], prompt)
     return out.stdout.strip() or None if out.returncode == 0 else None

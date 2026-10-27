@@ -4,6 +4,9 @@ const passes = new Map();   // folder id -> pass
 let current = null;         // the folder id every call is about, unless the call names another
 const lockedListeners = new Set();
 
+// The Mac app gives its own windows a secret at start (window.__PM_SHELL); the server wants it on every call.
+const shellHeader = () => (window.__PM_SHELL ? { "X-Shell-Token": window.__PM_SHELL } : {});
+
 export function setFolder(id) { current = id || null; }
 export function currentFolder() { return current; }
 export function setPass(p, folderId = current) { if (p) passes.set(folderId, p); else passes.delete(folderId); }
@@ -13,7 +16,7 @@ export function onLocked(fn) { lockedListeners.add(fn); }   // fn(folderId)
 
 export async function api(action, body = {}) {
   const folder = body.folder || current;
-  const headers = { "Content-Type": "application/json" };
+  const headers = { "Content-Type": "application/json", ...shellHeader() };
   const pass = passes.get(folder);
   if (pass) headers["X-App-Pass"] = pass;
   const r = await fetch("/api/" + action, { method: "POST", headers, body: JSON.stringify(folder && !body.folder ? { ...body, folder } : body) });
@@ -57,7 +60,7 @@ export function forgetFiles() {   // on lock or folder switch: drop every decryp
 
 // A file dropped into the app, sent as it is and encrypted as it arrives: any size.
 export async function uploadStream(path, file, folder = current) {
-  const headers = { "Content-Type": "application/octet-stream" };
+  const headers = { "Content-Type": "application/octet-stream", ...shellHeader() };
   const pass = passes.get(folder);
   if (pass) headers["X-App-Pass"] = pass;
   const r = await fetch(`/upload?folder=${encodeURIComponent(folder)}&path=${encodeURIComponent(path)}`, { method: "POST", headers, body: file });

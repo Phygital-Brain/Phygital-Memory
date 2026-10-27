@@ -279,7 +279,9 @@ def make_folder(conn: dict, path: str) -> None:
     parent, _, name = path.strip("/").rpartition("/")
     try:
         names = _run(conn, "lsf", "--max-depth", "1", _remote(parent), timeout=60).splitlines()
-    except CloudError:
+    except CloudError as e:
+        if "isn't in the cloud" not in str(e):
+            raise   # couldn't look: never risk treating an existing folder as new (a failed upload removes it)
         names = []   # the parent doesn't exist yet: mkdir makes it
     if name + "/" in names or name in names:
         raise CloudError(f'There is already a "{name}" in that place in the cloud.')

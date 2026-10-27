@@ -14,6 +14,7 @@ import shutil
 import sqlite3
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 from . import docx
@@ -990,10 +991,11 @@ class Memory:
                 return []
 
     def is_ai_private(self, rel: str) -> bool:
-        rel = str(rel).strip("/").lower()
+        # the same spelling the vault resolves to: "\\" as "/", NFC, no empty parts (else "Private\\x.md" slips by)
+        rel = "/".join(p for p in unicodedata.normalize("NFC", str(rel)).replace("\\", "/").split("/") if p).lower()
         if any(p.startswith(".") for p in rel.split("/")):   # hidden files (.env keys and the like) are private always
             return True
-        return any(rel == p.lower() or rel.startswith(p.lower() + "/") for p in self.ai_private())
+        return any(rel == q or rel.startswith(q + "/") for q in (unicodedata.normalize("NFC", p).lower() for p in self.ai_private()))
 
     def set_ai_private(self, rel: str, on: bool) -> list[str]:
         rel = _clean_path(rel, md=False)

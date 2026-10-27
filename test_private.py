@@ -93,6 +93,18 @@ check(out[0].startswith("ERROR"), "still refused")
 out = run(("append_to_note", {"id": rid, "text": "Asked for by the person.", "private": True}))
 check(not out[0].startswith("ERROR"), "and allowed with private=true", out[0])
 
+# other spellings of the same private path: "\\" for "/", and the decomposed (NFD) form of a name
+import unicodedata
+out = run(("read_file_text", {"path": "People\\Tom-Becker.md"}), ("read_file_text", {"path": "/People//Tom-Becker.md"}),
+          ("move_note", {"path": "People\\Tom-Becker.md", "new_path": "Tom.md"}))
+check(all(o.startswith("ERROR") and "private" in o for o in out), "other spellings of a private path are caught too", out)
+api("make_folder" if False else "mkdir", {"path": "Café"}, P, fid)
+api("save", {"path": "Café/x.md", "text": "# x\nbrioche\n", "new": True}, P, fid)
+api("aiprivate", {"path": "Café", "on": True}, P, fid)
+out = run(("read_file_text", {"path": unicodedata.normalize("NFD", "Café") + "/x.md"}))
+check(out[0].startswith("ERROR"), "a decomposed spelling of a private name is caught", out)
+api("aiprivate", {"path": "Café", "on": False}, P, fid)
+
 code, j = api("move", {"from": "People", "to": "Contacts"}, P, fid)
 check(api("aiprivate", {}, P, fid)[1]["paths"] == ["Contacts"], "renamed, it stays private")
 out = run(("list_notes", {}), ("read_file_text", {"path": "Contacts/Tom-Becker.md"}))
