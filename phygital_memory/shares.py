@@ -162,6 +162,16 @@ def _copy_name(rel: str) -> str:
     return f"{stem} (shared copy){dot}{ext}"
 
 
+SMALL = 2_000_000   # notes and small files go through put_file (versions, search); bigger ones are copied in parts
+
+
+def _copy(src: Memory, srel: str, dst: Memory, drel: str, size: int) -> None:
+    if drel.lower().endswith(".md") or size <= SMALL:
+        dst.put_file(drel, src.get_file(srel))
+    else:
+        src.stream_to(srel, dst, drel)
+
+
 def sync(sid: str, a: Memory) -> int:
     """One pass: copy what changed between the memory (a) and its share. Returns how many files were copied."""
     s = get(sid)
@@ -196,8 +206,7 @@ def sync(sid: str, a: Memory) -> int:
         i = 0 if side is a else 2
         if old and old[i] == list(sig):
             return old[i + 1]
-        data = (a.get_file(to_a(r)) if side is a else b.get_file(r))
-        return hashlib.sha256(data).hexdigest()
+        return a.file_hash(to_a(r)) if side is a else b.file_hash(r)
 
     copied, changed, fresh = 0, False, set()
     for r in sorted(set(asig) | set(bsig) | set(base)):
@@ -209,7 +218,7 @@ def sync(sid: str, a: Memory) -> int:
             if ah is None:
                 b.trash(r)
             else:
-                b.put_file(r, a.get_file(to_a(r)))
+                _copy(a, to_a(r), b, r, asig[r][1])
             if was != ah:   # the owner's own change: into the history, as theirs
                 try:
                     sharing.log_change(path_of(sid), raw, "deleted" if ah is None else "added" if was is None else "edited", r)
@@ -220,17 +229,17 @@ def sync(sid: str, a: Memory) -> int:
             if bh is None:
                 a.trash(to_a(r))
             else:
-                a.put_file(to_a(r), b.get_file(r))
+                _copy(b, r, a, to_a(r), bsig[r][1])
             ah = bh
         elif ah is None:                         # both changed, one side deleted it: the file stays
-            a.put_file(to_a(r), b.get_file(r))
+            _copy(b, r, a, to_a(r), bsig[r][1])
             ah = bh
         elif bh is None:
-            b.put_file(r, a.get_file(to_a(r)))
+            _copy(a, to_a(r), b, r, asig[r][1])
             bh = ah
         else:                                    # both changed: the owner's stays in place, theirs goes next to it
-            a.put_file(a.free_path(_copy_name(to_a(r))), b.get_file(r))
-            b.put_file(r, a.get_file(to_a(r)))
+            _copy(b, r, a, a.free_path(_copy_name(to_a(r))), bsig[r][1])
+            _copy(a, to_a(r), b, r, asig[r][1])
             bh = ah
         if (ah, bh) != (ah0, bh0):
             copied += 1

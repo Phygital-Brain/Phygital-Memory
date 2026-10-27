@@ -585,6 +585,59 @@ class Memory:
             self._gen += 1
             return rel
 
+    def file_hash(self, rel: str) -> str:
+        """A file's fingerprint (SHA-256 of what's inside), read a part at a time: any size, little memory."""
+        h = hashlib.sha256()
+        with self._lock:
+            self._need_open()
+            entry = self._tree.resolve(_clean_path(rel, md=False))
+        self._tree.read_file_to(entry, _HashSink(h))
+        return h.hexdigest()
+
+    def stream_to(self, rel: str, other: "Memory", rel2: str) -> str:
+        """Copy one file into another memory a part at a time: any size, little memory, nothing readable on disk."""
+        with self._lock:
+            self._need_open()
+            entry = self._tree.resolve(_clean_path(rel, md=False))
+        pipe = _Pipe()
+
+        def feed():
+            try:
+                self._tree.read_file_to(entry, pipe)
+            except BaseException as e:
+                pipe.error = e
+            finally:
+                pipe.close()
+        t = threading.Thread(target=feed, name="copy in parts", daemon=True)
+        t.start()
+        try:
+            return other.put_stream(rel2, pipe)
+        finally:
+            pipe.abort()
+            t.join()
+
+    def put_stream(self, rel: str, reader) -> str:
+        """Write a file at exactly this path from read(n), replacing it, encrypted a part at a time."""
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            writer = self._writer
+        tmp = writer.encrypt_to_temp(reader)
+        try:
+            if getattr(reader, "error", None):   # the other side stopped part way: keep nothing
+                raise reader.error
+            with self._lock:
+                self._need_open()
+                parent, name = self._make_parents(rel)
+                existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+                if existing:
+                    self._writer.remove(existing)
+                self._writer.place_temp(parent, name, tmp)
+                self._gen += 1
+                return rel
+        finally:
+            tmp.unlink(missing_ok=True)
+
     def free_path(self, rel: str) -> str:
         """rel, or "name 2.ext" (3, 4...) if that's taken."""
         with self._lock:
@@ -1171,6 +1224,54 @@ def _clean_path(rel: str, md: bool = True) -> str:
     if any(re.search(r'[<>:"|?*\x00-\x1f]', p) for p in parts):
         raise ValueError("That name has characters a note name can't use.")
     return "/".join(parts)
+
+
+class _HashSink:
+    def __init__(self, h):
+        self.h = h
+
+    def write(self, b) -> None:
+        self.h.update(b)
+
+
+class _Pipe:
+    """One thread decrypts into write(), another encrypts from read(n): a few parts in memory at a time."""
+
+    def __init__(self):
+        import queue
+        self.q = queue.Queue(maxsize=16)
+        self.buf = b""
+        self.done = self.aborted = False
+        self.error = None
+
+    def write(self, b) -> None:
+        if self.aborted:
+            raise OSError("The copy was stopped.")
+        self.q.put(bytes(b))
+
+    def close(self) -> None:
+        self.q.put(None)
+
+    def abort(self) -> None:
+        self.aborted = True
+        try:
+            while True:
+                self.q.get_nowait()
+        except Exception:
+            pass
+
+    def read(self, n: int = -1) -> bytes:
+        while not self.done and (n < 0 or len(self.buf) < n):
+            part = self.q.get()
+            if part is None:
+                self.done = True
+            else:
+                self.buf += part
+        if n < 0:
+            out, self.buf = self.buf, b""
+        else:
+            out, self.buf = self.buf[:n], self.buf[n:]
+        return out
 
 
 class _NoWrites:
