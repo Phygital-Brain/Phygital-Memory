@@ -6,7 +6,9 @@ import { info } from "./panels.js";
 const ROLE = { owner: "Owner", edit: "Can edit", view: "Can view" };
 
 // ctx: {name, part (one folder or file, not the whole memory), load() -> shareinfo, invite(role) -> {link, place},
-//       answer(id, allow), role(id, role), remove(id), openPart(path), stopPart(share, path), storage()}
+//       answer(id, allow), role(id, role), remove(id), openPart(path), stopPart(share, path), people() -> {people},
+//       add(id, role), history() -> {history}, storage()}
+const WHEN = (t) => new Date(t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 export function openShare(ctx) {
   return modal((done) => {
     const body = el("div", { class: "cl-body" });
@@ -19,9 +21,12 @@ export function openShare(ctx) {
     let made = null;   // the invite just made, shown until the window closes
 
     const draw = async () => {
-      let s;
+      let s, people = [], hist = [];
       try { s = await ctx.load(); } catch (e) { err.textContent = e.message; return; }
       const owner = s.role === "owner";
+      try { if (owner) people = (await ctx.people()).people || []; } catch {}
+      try { hist = (await ctx.history()).history || []; } catch {}
+      const addRole = {};
       const role = el("div", { class: "seg", role: "radiogroup" });
       let pick = "edit";
       const drawRole = () => role.replaceChildren(...[["edit", "Can edit"], ["view", "Can view"]].map(([k, t]) =>
@@ -49,8 +54,19 @@ export function openShare(ctx) {
               el("div", { class: "act-folder" }, p.people.length ? "With " + p.people.join(", ") : "Invite sent, nobody in yet")),
             el("span", { class: "set-btns" }, btn("Open", () => { done(null); ctx.openPart(p.path); }),
               btn("Stop sharing", () => act(() => ctx.stopPart(p.id, p.path)), "danger")))))] : []),
+        ...(owner && people.length ? [el("div", { class: "set-section" }, "Add someone you already share with"),
+          el("div", { class: "act-list" }, ...people.map((p) => {
+            addRole[p.id] = "edit";
+            const seg = el("div", { class: "seg", role: "radiogroup" });
+            const drawSeg = () => seg.replaceChildren(...[["edit", "Can edit"], ["view", "Can view"]].map(([k, t]) =>
+              el("button", { class: "seg-b" + (addRole[p.id] === k ? " on" : ""), type: "button", onclick: () => { addRole[p.id] = k; drawSeg(); } }, t)));
+            drawSeg();
+            return el("div", { class: "todo-row share-row" }, el("div", { class: "act-main" }, el("div", { class: "act-line" }, p.name)),
+              el("span", { class: "set-btns" }, seg, btn("Add", () => act(() => ctx.add(p.id, addRole[p.id])), "primary")));
+          })),
+          el("div", { class: "mf-hint" }, "No invite needed: you checked their code the first time. It shows up in their app by itself.")] : []),
         ...(owner ? [
-          el("div", { class: "set-section" }, "Invite someone"),
+          el("div", { class: "set-section" }, people.length ? "Or invite someone new" : "Invite someone"),
           el("div", { class: "af-row" }, role, btn("Make invite", () => act(async () => { made = await ctx.invite(pick); }), "primary")),
           made ? el("div", { class: "share-invite" },
             el("code", {}, made.link),
@@ -59,7 +75,11 @@ export function openShare(ctx) {
             ? "Send it to them. It works once, for 7 days. Nothing goes to them until you press Let in. Then the files go straight from this Mac to theirs while both apps are open."
             : `Send it to them. It works once, for 7 days. They also need the files: share "${made.place}" with them there.`,
             info("The invite only proves who's asking. You let them in here, and only then does their app get their own key to this memory.")) : null] : [
-          el("div", { class: "mf-hint" }, "Only the owner can invite people or change who can edit.")])].filter((x) => x != null));
+          el("div", { class: "mf-hint" }, "Only the owner can invite people or change who can edit.")]),
+        ...(hist.length ? [el("div", { class: "set-section" }, "History"),
+          el("div", { class: "act-list share-hist" }, ...hist.slice(0, 30).map((h) => el("div", { class: "todo-row share-row" },
+            el("div", { class: "act-main" }, el("div", { class: "act-line" }, el("b", {}, h.who), ` ${h.what} ${h.path.replace(/\.md$/i, "")}`),
+              el("div", { class: "act-folder" }, WHEN(h.t))))))] : [])].filter((x) => x != null));
     };
     draw();
     return { card };

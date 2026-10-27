@@ -61,6 +61,7 @@ class Memory:
         self._synced = 0.0         # when notes changed by a cloud drive were last picked up
         self._skipped: dict[str, float] = {}
         self.clashes: list[dict] = []   # clash copies made since unlock, for the app to tell the person once
+        self.on_change: list = []       # fn(what, path) after the person (or their AI) changes something here
 
     # ---------- open and close ----------
 
@@ -285,7 +286,16 @@ class Memory:
                 self._write_note(rel, parent, name, existing, after.encode("utf-8"), keep_version)
             return before, after
 
+    def _did(self, what: str, rel: str) -> None:
+        """Tell whoever listens (a shared memory's history) what just changed. Never stops the change itself."""
+        for fn in self.on_change:
+            try:
+                fn(what, rel)
+            except Exception:
+                pass
+
     def _write_note(self, rel, parent, name, existing, data: bytes, keep_version: bool) -> None:
+        self._did("edited" if existing else "added", rel)
         if existing:
             self._keep_version(rel, existing, data, force=keep_version)
         entry = self._writer.write_file(parent, name, data, replace=existing)
@@ -321,6 +331,7 @@ class Memory:
             name = f"{stem} (conflict {time.strftime('%Y-%m-%d')} {n}){dot}{ext}"
         entry = self._writer.write_file(parent, name, data)
         copy = "/".join(rel.split("/")[:-1] + [name])
+        self._did("kept both versions in", copy)
         if copy.lower().endswith(".md") and copy.split("/")[0] not in HIDDEN:
             remove_file(self._con, copy)
             self._index_one(copy, entry)
@@ -527,6 +538,7 @@ class Memory:
                 if now != base and now != data:
                     return self._clash_copy(parent, rel, data)
             self._writer.write_file(parent, name, data, replace=existing)
+            self._did("edited" if existing else "added", rel)
             return rel
 
     # ---------- copying between a memory and a part of it shared on its own (shares.py) ----------
@@ -608,6 +620,7 @@ class Memory:
                 raise ValueError("That file is too big (25 MB at most).")
             if out != data:
                 self._writer.write_file(None, entry.name, out, replace=entry)
+                self._did("edited", rel)
             return {"base": hashlib.sha256(out).hexdigest()}
 
     def save_bytes(self, rel: str, data: bytes) -> str:
@@ -620,6 +633,7 @@ class Memory:
             parent, name = self._free_name(rel)
             self._writer.write_file(parent, name, data)
             self._gen += 1   # the graph shows every file, so it needs a fresh look
+            self._did("added", "/".join(rel.split("/")[:-1] + [name]))
             return "/".join(rel.split("/")[:-1] + [name])
 
     def _free_name(self, rel: str):
@@ -638,6 +652,7 @@ class Memory:
         parent, name = self._free_name(_clean_path(rel, md=False))
         self._writer.write_file_from(parent, name, src)
         self._gen += 1
+        self._did("added", "/".join(rel.split("/")[:-1] + [name]))
         return "/".join(rel.split("/")[:-1] + [name])
 
     def import_stream(self, rel: str, reader) -> str:
@@ -654,6 +669,7 @@ class Memory:
                 parent, name = self._free_name(rel)
                 self._writer.place_temp(parent, name, tmp)
                 self._gen += 1
+                self._did("added", "/".join(rel.split("/")[:-1] + [name]))
                 self._synced = 0
                 self._sync()
                 return "/".join(rel.split("/")[:-1] + [name])
@@ -763,6 +779,7 @@ class Memory:
                      for p in priv]
             if moved != priv:
                 self._save_ai_private(moved)
+            self._did("moved", f"{old_entry_path} → {new}")
             return new
 
     def trash(self, rel: str) -> None:
@@ -786,6 +803,7 @@ class Memory:
             where[name] = rel   # so Restore can put it back where it was
             self._put_json(TRASH_INDEX, where)
             self._reindex()
+            self._did("deleted", rel)
 
     def _empty_old_trash(self) -> None:
         """Things in the trash longer than TRASH_DAYS are removed for good (checked on unlock)."""
@@ -847,6 +865,7 @@ class Memory:
             where.pop(tid, None)
             self._put_json(TRASH_INDEX, where)
             self._reindex()
+            self._did("restored", target)
             return target
 
     def _json(self, rel: str, default):

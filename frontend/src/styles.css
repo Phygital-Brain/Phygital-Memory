@@ -655,6 +655,13 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .sel-bar .btn { white-space: nowrap; }
 .share-req { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: var(--r-s); background: var(--accent-soft); font-size: 13px; }
 .share-row { grid-template-columns: 1fr auto; align-items: center; }
+.share-hist { max-height: 220px; overflow-y: auto; }
+.menu-item.mi-accent, .menu-item.mi-accent .mi-value { color: var(--accent); }
+.row-shared { color: var(--accent); }
+.empty-search { display: flex; align-items: center; gap: 8px; width: 340px; max-width: 100%; margin: 14px auto 0; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg-2, transparent); color: var(--text-3); }
+.empty-search:focus-within { border-color: var(--accent); }
+.empty-search input { flex: 1; height: 38px; border: 0; background: none; color: var(--text); font: inherit; outline: none; }
 .share-invite { display: flex; gap: 8px; align-items: center; }
 .share-invite code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; padding: 6px 8px; border-radius: var(--r-s); background: var(--bg-app); user-select: all; }
 .share-row .act-main { flex: 1; min-width: 0; }

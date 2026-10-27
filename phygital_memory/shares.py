@@ -65,6 +65,10 @@ def get(sid: str) -> dict | None:
     return {**s, "id": sid} if s else None
 
 
+def of_all() -> list[dict]:
+    return [{**s, "id": k} for k, s in _all().items()]
+
+
 def of_memory(vault_id: str) -> list[dict]:
     return [{**s, "id": k} for k, s in _all().items() if s["memory"] == vault_id]
 
@@ -197,6 +201,11 @@ def sync(sid: str, a: Memory) -> int:
                 b.trash(r)
             else:
                 b.put_file(r, a.get_file(to_a(r)))
+            if was != ah:   # the owner's own change: into the history, as theirs
+                try:
+                    sharing.log_change(path_of(sid), raw, "deleted" if ah is None else "added" if was is None else "edited", r)
+                except Exception:
+                    pass
             bh = ah
         elif ah == was:                          # only their side changed
             if bh is None:

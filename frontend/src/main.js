@@ -78,8 +78,12 @@ let sbWidth = "";
 const curInfo = () => folderList.find((f) => f.id === currentFolder()) || null;
 const unlocked = (id) => hasPass(id) && !!(folderList.find((f) => f.id === id) || {}).open;
 
+let joinedSeen = null;   // shared-with-me items already known, to say once when a new one arrives
 async function refreshFolders() {
   try { folderList = (await api("folders")).folders || []; } catch { return folderList; }
+  const joined = folderList.filter((f) => f.joined);
+  if (joinedSeen) for (const f of joined) if (!joinedSeen.has(f.id)) toastOk(`"${f.name}" was shared with you. It's under Shared with me.`);
+  joinedSeen = new Set(joined.map((f) => f.id));
   drawSwitcher();
   watchFolders();
   return folderList;
@@ -303,7 +307,6 @@ async function ensureName() {
 async function openShareHere(path = null) {
   const info = curInfo();
   if (!info || !(await ensureName())) return;
-  if (info.joined) { toastErr("Only the owner can share it."); return; }
   const at = path ? { path } : {};
   const what = path ? (path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path) : info.name;
   openShare({
@@ -311,6 +314,8 @@ async function openShareHere(path = null) {
     answer: (id, allow) => api("shareanswer", { id, allow, ...at }), role: (id, role) => api("sharerole", { id, role, ...at }),
     remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "Their own key stops working here. A copy they already have stays with them.")) await api("shareremove", { id, ...at }); },
     openPart: (p) => openShareHere(p),
+    people: () => api("sharepeople", at), add: (id, role) => api("shareadd", { id, role, ...at }),
+    history: () => api("sharehistory", at),
     stopPart: async (share, p) => {
       if (await confirmDialog(`Stop sharing "${p}"?`, "Stop sharing", true, "Nobody gets changes to it any more. Copies they already have stay with them.")) await api("sharestop", { share });
     },
@@ -334,6 +339,7 @@ async function joinFromInvite() {
       j = await api("joinshared", { link: v.link, where: v.where });
       if (j.cancelled) return;
     }
+    joinedSeen?.add(j.folder.id);   // this one has its own message below
     await refreshFolders();
     await switchTo(j.folder.id);
     toastOk(j.syncthing ? `Asked to join "${j.folder.name}". The files come once the owner lets you in.`
@@ -560,7 +566,7 @@ async function openSwitcher() {
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
-    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, ...(curInfo()?.joined ? {} : { share: () => openShareHere() }), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 
@@ -647,6 +653,8 @@ function buildApp() {
     el("div", { class: "empty-card" }, icon("file", 28, 1.4),
       el("div", { class: "empty-title" }, "Nothing open yet"),
       el("div", { class: "empty-sub" }, "Pick a note on the left, or start a new one."),
+      el("form", { class: "empty-search", onsubmit: (e) => { e.preventDefault(); const q = e.target.q.value.trim(); if (q) { e.target.q.value = ""; openSearchView(q); } } },
+        icon("search", 15), el("input", { name: "q", placeholder: "Search your notes", spellcheck: "false", autocomplete: "off", "aria-label": "Search your notes" })),
       el("div", { class: "empty-actions" },
         el("button", { class: "btn primary", onclick: () => newNote() }, icon("plus", 14, 2), "New note"),
         el("button", { class: "btn", onclick: openSearch }, icon("search", 14), "Find a note")),
@@ -730,6 +738,7 @@ async function loadFiles() {
   state.allFiles = j.files || [];
   state.files = visibleFiles();
   try { state.aiPrivate = (await api("aiprivate")).paths || []; } catch { state.aiPrivate = []; }
+  loadShared();
   if (fid !== loadedFolder) return;
   renderTree();
   for (const c of j.conflicts || []) tellConflict(c.path, c.copy);
@@ -878,6 +887,7 @@ async function watchChanges() {
 let cloudWarned = "";
 async function refreshBar() {
   if (!openOnScreen()) return;
+  loadShared();
   watchTodo();
   if (!barEls || !barEls.cloud.isConnected) return;
   let b = null;
@@ -1317,6 +1327,7 @@ function rowFor(n, depth, where = "") {
   where ? el("span", { class: "row-where", title: where }, where) : null,
   pinned ? el("span", { class: "row-pin", title: "Pinned" }, icon("pin", 11, 2)) : null,
   (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: "Private for AI: it asks first" }, icon("lock", 11, 2)) : null,
+  state.shared?.[n.path] ? el("span", { class: "row-pin row-shared", title: "Shared with " + state.shared[n.path] }, icon("share", 11, 2)) : null,
   more);
   row._node = n;   // files dragged in from Finder find their folder through this
   row.addEventListener("dragover", (e) => {
@@ -1339,7 +1350,46 @@ function rowFor(n, depth, where = "") {
 function clearDropMarks() { document.querySelectorAll(".row.drop,.row.drop-before,.row.drop-after,.tree.drop").forEach((r) => r.classList.remove("drop", "drop-before", "drop-after")); }
 
 // context menus
-function rowMenu(n, x, y) {
+// What of this memory is shared, and with whom, for the right-click menu (owner only).
+async function sharingNow() {
+  if (curInfo()?.joined) return null;
+  try {
+    const [i, p] = await Promise.all([api("shareinfo"), api("sharepeople")]);
+    return { parts: i.parts || [], people: p.people || [] };
+  } catch { return null; }
+}
+
+function sharingItem(path, sh) {
+  const part = sh.parts.find((p) => p.path === path);
+  const who = part ? part.who : [];
+  const others = sh.people.filter((p) => !who.some((w) => w.id === p.id));
+  const done = (msg) => () => { toastOk(msg); loadShared(); };
+  const add = (p) => ({ label: `Add ${p.name}`, sub: [["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t,
+    fn: () => api("shareadd", { path, id: p.id, role: r }).then(done(`${p.name} can now ${r === "edit" ? "edit" : "view"} it. It shows up in their app by itself.`), (e) => toastErr(e.message)) })) });
+  const invite = { label: "Invite someone new…", fn: () => openShareHere(path) };
+  if (!part) return others.length ? { label: "Share", sub: [...others.map(add), { sep: true }, invite] } : { label: "Share…", fn: () => openShareHere(path) };
+  return { label: "Sharing", cls: "mi-accent", value: who.length === 1 ? "1 person" : `${who.length} people`, sub: [
+    ...who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view", sub: [
+      ...[["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t, check: p.role === r,
+        fn: () => api("sharerole", { share: part.id, id: p.id, role: r }).then(done(`${p.name}: ${t}.`), (e) => toastErr(e.message)) })),
+      { sep: true },
+      { label: "Remove", cls: "danger", fn: async () => {
+        if (await confirmDialog(`Remove ${p.name} from "${path}"?`, "Remove", true, "Their own key stops working here."))
+          api("shareremove", { share: part.id, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
+      } }] })),
+    { sep: true }, ...others.map(add), invite,
+    { label: "Sharing window…", fn: () => openShareHere(path) }] };
+}
+
+// Shared folders and files get a small symbol in the sidebar: {path: "Ana, Tom"}.
+async function loadShared() {
+  const sh = await sharingNow();
+  const next = Object.fromEntries((sh?.parts || []).filter((p) => p.who.length).map((p) => [p.path, p.who.map((w) => w.name).join(", ")]));
+  if (JSON.stringify(next) !== JSON.stringify(state.shared || {})) { state.shared = next; renderTree(); }
+}
+
+async function rowMenu(n, x, y) {
+  const sh = await sharingNow();
   const folder = n.kind === "folder";
   const pinned = getPref("pins", []).includes(n.path);
   const items = [];
@@ -1359,7 +1409,7 @@ function rowMenu(n, x, y) {
     if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
     items.push({ sep: true });
   }
-  if (!curInfo()?.joined) items.push({ label: "Share…", fn: () => openShareHere(n.path) });
+  if (sh) items.push(sharingItem(n.path, sh));
   items.push(
     { label: "Export", fn: () => exportPath(n.path) },
     { label: "Show in Finder", fn: () => revealInFinder(n.path) },

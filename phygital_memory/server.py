@@ -644,6 +644,18 @@ def _ok(data, status=200):
     return JSONResponse(data, status_code=status, headers=HEADERS)
 
 
+def _history_hook(f) -> None:
+    """While a shared memory is open here, each change this person makes goes into its history (sharing.py)."""
+    if getattr(f.memory, "_history_hooked", False):
+        return
+
+    def fn(what, rel):
+        if sharing.is_shared(f.path) and sharing.my_key(f.path) is not None:
+            sharing.log_change(f.path, f.memory.key_raw, what, rel)
+    f.memory.on_change.append(fn)
+    f.memory._history_hooked = True
+
+
 def _unlock(f, password: str, how: str = "password"):
     if time.time() < f.fails["until"]:
         return _ok({"error": "Too many wrong tries. Wait a minute."}, 429)
@@ -651,6 +663,7 @@ def _unlock(f, password: str, how: str = "password"):
         f.passes.clear()   # passes from an earlier unlock die with it
     try:
         s = f.memory.unlock(password)
+        _history_hook(f)
     except WrongPassword:
         if f.drive:   # a cloud memory: its hidden drive only stays while unlocked
             threading.Thread(target=f.drive.stop, daemon=True).start()
@@ -743,6 +756,7 @@ def _st_watch() -> None:
                             st.share_folder(qid, dev)
                             inv[code]["devs"] = sorted(set(inv[code].get("devs", [])) | {dev})
                             _st_save_invites({**_st_invites(), code: inv[code]})
+                _st_take_offers()
                 for code, i in inv.items():   # a request came in: put it where the owner's app looks
                     try:
                         r = json.loads((ST_REQUESTS / i["q"] / "request.json").read_text())
@@ -768,6 +782,76 @@ def _st_done_with(qid: str | None, device: str | None = None, keep_device: bool 
     _st_save_invites({c: i for c, i in _st_invites().items() if i.get("q") != qid})
     if device and not keep_device:
         st.remove_device(device)
+
+
+ST_GONE = STATE / "syncthing-gone.json"   # shares stopped here: offers of them from others are never taken in
+
+
+def _st_gone() -> set:
+    try:
+        return set(json.loads(ST_GONE.read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
+def _st_gone_add(fid: str) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    ST_GONE.write_text(json.dumps(sorted(_st_gone() | {fid})))
+
+
+def _people() -> list[dict]:
+    """Everyone let in to any of your memories or shared parts before (their key was checked then), not you."""
+    me, out = sharing.my_id(), {}
+    places = [(shares.path_of(x["id"]), lambda x=x: shares.key_of(x["id"])) for x in shares.of_all()]
+    places += [(x.path, lambda x=x: x.memory.key_raw) for x in folders.items.values()
+               if not x.joined and x.memory.is_open and sharing.is_shared(x.path)]
+    for path, key in places:
+        try:
+            for p in sharing.members(path, key()):
+                if p["id"] != me and p["role"] != "owner":
+                    out[p["id"]] = {**out.get(p["id"], {}), **{k: v for k, v in p.items() if k in ("id", "name", "pub", "device")}}
+        except Exception:
+            pass
+    return sorted(out.values(), key=lambda p: p["name"].lower())
+
+
+def _st_offer(fid: str, person: dict) -> None:
+    """Their Mac gets this share now. Its files hold their own key, so their app opens it with no invite."""
+    st.start()
+    try:
+        st.rest("GET", f"/rest/config/devices/{person['device']}")
+    except Exception:
+        st.add_device(person["device"], person["name"], "dynamic")
+    st.share_folder(fid, person["device"])
+
+
+def _st_take_offers() -> None:
+    """Someone who already shares with you shares something more: it's taken in, under Shared with me."""
+    me, trusted = st.device_id(), set()
+    for x in list(folders.items.values()):
+        if x.joined and x.syncthing:
+            try:
+                trusted |= {d["deviceID"] for d in st.rest("GET", f"/rest/config/folders/{x.syncthing}")["devices"]}
+            except Exception:
+                pass
+    trusted.discard(me)
+    gone = _st_gone()
+    for fid, info in (st.pending_folders() or {}).items():
+        by = info.get("offeredBy") or {}
+        dev = next((d for d in by if d in trusted), None)
+        if not fid.startswith("pm-") or fid in gone or not dev or st.has_folder(fid):
+            continue
+        label = re.sub(r'[/\\:*?"<>|]', "-", str(by[dev].get("label") or "Shared")).strip()[:60] or "Shared"
+        parent = STATE / "Shared with me"
+        target, n = parent / label, 1
+        while target.exists():
+            n += 1
+            target = parent / f"{label} {n}"
+        st.add_folder(fid, target, label, [dev])
+        with folders._lock:
+            j = folders._add(target, label)
+        j.joined, j.syncthing = True, fid
+        folders._save()
 
 
 def hmac_eq(a: str, b: str) -> bool:
@@ -831,6 +915,7 @@ def _place(f) -> str | None:
 
 def _unlock_shared(f, raw: bytes):
     """A memory shared with this person, opened with their own key: as an editor or view only, as the owner set."""
+    _history_hook(f)
     role = sharing.my_role(f.path, raw)
     if role is None:
         return _ok({"error": "You're no longer on this memory's list. Ask its owner for a new invite."}, 403)
@@ -1251,7 +1336,8 @@ async def api(request: Request) -> Response:
             approvals.add("Touch ID unlock on", f.name, "password")
             return _ok({"on": True})
         # ---- working together (the owner's side; the memory is open, so its key is at hand) ----
-        if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop"):
+        if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop",
+                      "sharepeople", "shareadd", "sharehistory"):
             vid = sharing._vault_id(f.path)
             owner = not f.joined and (not sharing.is_shared(f.path) or sharing.my_role(f.path, m.key_raw) == "owner")
             part = shares.get(str(body["share"])) if body.get("share") else None
@@ -1276,9 +1362,12 @@ async def api(request: Request) -> Response:
                        "members": sharing.members(tpath, traw) if shared else [],
                        "requests": sharing.requests(tpath, traw) if shared and role == "owner" else []}
                 if not part and owner:   # the whole memory's window also lists its shared folders and files
-                    out["parts"] = [{"id": x["id"], "path": x["path"], "kind": x["kind"],
-                                     "people": [y["name"] for y in sharing.members(shares.path_of(x["id"]), shares.key_of(x["id"]))
-                                                if y["role"] != "owner"]} for x in shares.of_memory(vid)]
+                    out["parts"] = []
+                    for x in shares.of_memory(vid):
+                        who = [{"id": y["id"], "name": y["name"], "role": y["role"]}
+                               for y in sharing.members(shares.path_of(x["id"]), shares.key_of(x["id"])) if y["role"] != "owner"]
+                        out["parts"].append({"id": x["id"], "path": x["path"], "kind": x["kind"], "who": who,
+                                             "people": [y["name"] for y in who]})
                 return _ok(out)
             if action == "sharerequests":   # polled while open: people asking to join it, or one of its shared parts
                 if not owner:
@@ -1287,8 +1376,33 @@ async def api(request: Request) -> Response:
                 for x in shares.of_memory(vid):
                     out += [{**r, "share": x["id"], "what": x["path"]} for r in sharing.requests(shares.path_of(x["id"]), shares.key_of(x["id"]))]
                 return _ok({"requests": out})
+            if action == "sharehistory":   # who changed what, newest first (anyone in it can see it)
+                if rel and not part:
+                    return _ok({"history": []})
+                return _ok({"history": await asyncio.to_thread(sharing.history, tpath, traw)})
             if not owner:
                 return _ok({"error": "Only the memory's owner can do that."}, 403)
+            if action == "sharepeople":   # people let in to anything of yours before, not in this one yet
+                inside = {x["id"] for x in sharing.members(tpath, traw)} if part or sharing.is_shared(tpath) else set()
+                return _ok({"people": [{k: p[k] for k in ("id", "name")} for p in await asyncio.to_thread(_people)
+                                       if p["id"] not in inside]})
+            if action == "shareadd":   # share with someone already let in: no invite, no code (checked the first time)
+                person = next((p for p in await asyncio.to_thread(_people) if p["id"] == body.get("id")), None)
+                if not person:
+                    return _ok({"error": "That person isn't on your list."}, 404)
+                if rel and not part:
+                    kind = m.kind_of(rel)
+                    if not kind:
+                        return _ok({"error": "That folder or file isn't there any more."}, 404)
+                    part = await asyncio.to_thread(shares.create, vid, rel, kind)
+                    tpath, traw = await asyncio.to_thread(target, part)
+                role = str(body.get("role", "edit"))
+                await asyncio.to_thread(sharing.add_member, tpath, traw, person, role)
+                if person.get("device") and (part or not f.cloud_at):   # their Mac gets it straight away
+                    fid = await asyncio.to_thread(_st_ensure_path, tpath, part["name"]) if part else await asyncio.to_thread(_st_ensure, f)
+                    await asyncio.to_thread(_st_offer, fid, person)
+                approvals.add(f"Shared with {person['name']} ({role})", f.name + (f" › {part['path']}" if part else ""), "click")
+                return _ok({"members": sharing.members(tpath, traw), "share": part and part["id"]})
             if action == "shareinvite":
                 if not sharing.saved_name():
                     return _ok({"error": "Add your name first.", "needName": True}, 400)
@@ -1337,6 +1451,7 @@ async def api(request: Request) -> Response:
                     return _ok({"error": "Remove people one by one to stop sharing the whole memory."}, 400)
                 if st.running():
                     await asyncio.to_thread(st.remove_folder, fid)
+                _st_gone_add(fid)   # their app may still offer it back: never take it in
                 await asyncio.to_thread(shares.forget, part["id"])
                 approvals.add("Stopped sharing", what, "click")
                 return _ok({"ok": True})

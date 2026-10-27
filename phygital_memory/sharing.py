@@ -246,6 +246,64 @@ def answer(folder: Path, raw_key: bytes, rid: str, allow: bool, role: str | None
     req.unlink()
 
 
+def add_member(folder: Path, raw_key: bytes, person: dict, role: str) -> None:
+    """Someone already let in elsewhere (their public key checked then): their own key file, and on the list."""
+    if role not in ROLES:
+        raise ValueError("Choose edit or view.")
+    start(folder, raw_key)
+    m = _read_members(folder, raw_key)
+    pub = _unb64(person["pub"])
+    if member_id(pub) != person["id"]:
+        raise ValueError("That person's key doesn't match.")
+    (folder / SHARE / "keys" / f"{person['id']}.key").write_bytes(lock_for(raw_key, pub))
+    m["members"] = [x for x in m["members"] if x["id"] != person["id"]] + [
+        {"id": person["id"], "name": str(person["name"])[:60], "pub": person["pub"], "role": role, "added": time.time(),
+         **({"device": str(person["device"])[:80]} if person.get("device") else {})}]
+    _write_members(folder, raw_key, m)
+
+
+# ---------- history: who changed what (each person writes only their own list, so lists never clash) ----------
+
+LOG_KEEP = 500
+
+
+def _log_key(raw_key: bytes) -> bytes:
+    return HKDF(hashes.SHA256(), 32, None, b"phygital-memory history v1").derive(raw_key)
+
+
+def _read_log(p: Path, raw_key: bytes) -> list:
+    try:
+        data = p.read_bytes()
+        return json.loads(AESGCM(_log_key(raw_key)).decrypt(data[:12], data[12:], b"history"))
+    except Exception:
+        return []
+
+
+def log_change(folder: Path, raw_key: bytes, what: str, path: str) -> None:
+    """Add one line to my own history list in this shared memory: what I did, to which file, when."""
+    d = folder / SHARE / "history"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{my_id()}.enc"
+    items = _read_log(p, raw_key)
+    if items and items[-1]["path"] == path and items[-1]["what"] == what and time.time() - items[-1]["t"] < 60:
+        items[-1]["t"] = time.time()   # typing in one note: one line a minute, not one per save
+    else:
+        items.append({"what": what, "path": path, "t": time.time()})
+    nonce = os.urandom(12)
+    tmp = d / f".{my_id()}-{secrets.token_hex(4)}.tmp"
+    tmp.write_bytes(nonce + AESGCM(_log_key(raw_key)).encrypt(nonce, json.dumps(items[-LOG_KEEP:]).encode(), b"history"))
+    os.replace(tmp, p)
+
+
+def history(folder: Path, raw_key: bytes, n: int = 100) -> list[dict]:
+    """Everyone's lines together, newest first: [{who, what, path, t}]."""
+    names = {x["id"]: x["name"] for x in members(folder, raw_key)}
+    out = []
+    for p in (folder / SHARE / "history").glob("*.enc") if (folder / SHARE / "history").is_dir() else []:
+        out += [{**x, "who": names.get(p.stem, "Someone who left")} for x in _read_log(p, raw_key)]
+    return sorted(out, key=lambda x: -x["t"])[:n]
+
+
 def set_role(folder: Path, raw_key: bytes, mid: str, role: str) -> None:
     if role not in ROLES:
         raise ValueError("Choose edit or view.")

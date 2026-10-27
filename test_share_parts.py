@@ -50,6 +50,25 @@ try:
     api(A, "save", {"path": "Work/After rename.md", "text": "# Still shared\n", "new": True, "folder": fa}, pa)
     check(wait(lambda: "After rename.md" in files(B, fp, pp), 60), "renaming the folder keeps it shared")
 
+    hist = api(A, "sharehistory", {"share": sp, "folder": fa}, pa).get("history", [])
+    check(any(h["who"] == "Ana" and h["path"] == "From Ana.md" and h["what"] == "added" for h in hist)
+          and any(h["who"] == "Max" and h["path"] == "Garden-Planner.md" and h["what"] == "edited" for h in hist),
+          "History says who changed what (Ana added, Max edited)", hist[:5])
+    check(any(h["who"] == "Max" for h in api(B, "sharehistory", {"folder": fp}, pp).get("history", [])),
+          "Ana sees the same history")
+
+    people = api(A, "sharepeople", {"path": "Ideas", "folder": fa}, pa).get("people", [])
+    check([p["name"] for p in people] == ["Ana"], "Ana is on Max's list of people he already shares with", people)
+    add = api(A, "shareadd", {"path": "Ideas", "id": people[0]["id"] if people else "", "role": "edit", "folder": fa}, pa)
+    check(add.get("share"), "Max adds Ana to Ideas with no invite", add)
+    fi = {}
+    check(wait(lambda: fi.update(next((x for x in api(B, "folders")["folders"] if x["name"] == "Ideas"), {})) or fi, 60),
+          "Ideas shows up on Ana's side by itself (Shared with me)")
+    gi = {}
+    check(wait(lambda: gi.update(api(B, "keyunlock", {"folder": fi.get("id")})) or gi.get("pass"), 90), "Ana opens Ideas with her own key", gi)
+    check(wait(lambda: "Pocket-Library.md" in files(B, fi.get("id"), gi.get("pass")), 60), "and its notes are there")
+    check(not api(A, "sharepeople", {"path": "Ideas", "folder": fa}, pa).get("people"), "once in, she's off the pick list")
+
     sf, ff, pf = join("People/Tom-Becker.md", "view", "Tom-Becker.md")
     check(wait(lambda: files(B, ff, pf) == {"Tom-Becker.md"}, 60), "one file shared: only that file reaches Ana")
     check(api(B, "save", {"path": "Tom-Becker.md", "text": "# Ana tries\n", "folder": ff}, pf).get("status") in (400, 403, 500),
@@ -59,7 +78,7 @@ try:
           "Max's change to the file reaches Ana")
 
     parts = api(A, "shareinfo", {"folder": fa}, pa).get("parts", [])
-    check({p["path"] for p in parts} == {"Work", "People/Tom-Becker.md"} and all(p["people"] == ["Ana"] for p in parts),
+    check({p["path"] for p in parts} == {"Work", "Ideas", "People/Tom-Becker.md"} and all(p["people"] == ["Ana"] for p in parts),
           "the memory's Share window lists what's shared and with whom", parts)
     api(A, "sharestop", {"share": sf, "folder": fa}, pa)
     time.sleep(3)
