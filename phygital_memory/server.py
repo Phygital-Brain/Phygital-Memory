@@ -909,9 +909,9 @@ def _claude_code_add(key: str) -> dict:
     """Run Claude Code's own "mcp add" for this Mac user, so the person doesn't have to paste a command."""
     if not re.fullmatch(r"pm_[A-Za-z0-9_-]{20,}", key):
         raise ValueError("That isn't a Phygital Memory key.")
-    home = Path.home()
-    for exe in (home / ".claude/local/claude", home / ".local/bin/claude", Path("/opt/homebrew/bin/claude"),
-                Path("/usr/local/bin/claude")):
+    home = Path.home()   # the app starts without the person's shell PATH, so look in the usual install places
+    for exe in (home / ".claude/local/claude", home / ".local/bin/claude", home / ".npm-global/bin/claude",
+                home / ".bun/bin/claude", Path("/opt/homebrew/bin/claude"), Path("/usr/local/bin/claude")):
         if exe.is_file():
             break
     else:
