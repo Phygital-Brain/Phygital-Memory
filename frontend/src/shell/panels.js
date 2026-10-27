@@ -7,92 +7,89 @@ import { shortPath } from "./folders.js";
 const ago = (s) => (s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`);
 const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-// ctx: {name, storage: {path, cloud, places:[{name, path}], home}, pick(prompt) -> path|null, move(parent) -> Promise,
-//       reveal()}
+// Where a memory is stored: this Mac only, or this Mac + cloud (a synced folder, Mac + WebDAV, WebDAV only), and a
+// GitHub backup that works with any of them.
+// ctx: {name, storage, pick(prompt, start), move(parent, label), toMac(parent, label, keepSync), toWebdav(), toCloudOnly(),
+//       stopWebdav(), toGithub(), stopGithub(repo), reveal(), download()}. Each action resolves true when done.
 export function openStorage(ctx) {
   return modal((done) => {
     const s = ctx.storage;
     const err = el("div", { class: "dlg-err" });
     const busy = (b) => card.classList.toggle("busy", b);
-    const moveTo = async (parent, label) => {
-      err.textContent = "";
-      busy(true);
-      try { if (await ctx.move(parent, label)) done("moved"); else busy(false); }
-      catch (e) { err.textContent = e.message; busy(false); }
+    const run = async (fn, result) => {
+      err.textContent = ""; busy(true);
+      try { if (await fn()) done(result); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
     };
-    const option = (key, title, text, on, body) => el("div", { class: "st-opt" + (on ? " on" : "") },
-      el("div", { class: "st-opt-head" }, el("span", { class: "st-opt-icon" }, icon(key, 16)),
-        el("div", {}, el("div", { class: "st-opt-title" }, title), el("div", { class: "st-opt-text" }, text)),
-        on ? el("span", { class: "st-opt-now" }, "Now") : null),
-      body || null);
-
-    const local = !s.cloud && !s.github && !s.cloudOnly;
-    // Every place can be reached from every other: GitHub sync stops first when leaving GitHub, and a cloud-only
-    // memory comes down to the chosen place on this Mac.
-    const leaveGithub = async () => !s.github || await ctx.stopGithub(s.github);
-    const toPlace = async (where, label) => {
-      if (s.cloudOnly) {
-        err.textContent = ""; busy(true);
-        try { if (await ctx.toMac(where, label)) done("moved"); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
-      } else if (await leaveGithub()) moveTo(where, label);
-    };
+    const btn = (label, fn, cls = "") => el("button", { class: "btn small " + cls, type: "button", onclick: fn }, label);
+    const now = (on) => on ? el("span", { class: "st-opt-now" }, "Now") : null;
     const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : `${Math.round(sec / 3600)} h ago`;
-    const gs = s.githubStatus;
-    const githubBody = s.github
-      ? el("div", { class: "st-gh" },
-          el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · synced ${ago(gs && gs.ago)}`),
-          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null,
-          el("div", {}, el("button", { class: "btn small st-stop", type: "button", onclick: async () => {
-            err.textContent = ""; busy(true);
-            try { if (await ctx.stopGithub(s.github)) done("github"); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
-          } }, "Stop GitHub sync…")))
-      : el("div", {}, el("div", { class: "st-gh-note" }, "Nothing talks to GitHub until you press the button."),
-          el("button", { class: "btn gh-btn", type: "button", onclick: async () => {
-            err.textContent = ""; busy(true);
-            try { if (await ctx.toGithub()) done("github"); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
-          } }, githubMark(), "Sign in with GitHub"));
-    const cloudCards = el("div", { class: "st-places" }, ...s.places.map((p) => {
-      const here = s.cloud && s.path.startsWith(p.path + "/");
+    const option = (ic, title, tip, on, ...body) => el("div", { class: "st-opt" + (on ? " on" : "") },
+      el("div", { class: "st-opt-head" }, el("span", { class: "st-opt-icon" }, icon(ic, 16)),
+        el("div", { class: "st-opt-title" }, title, info(tip)), now(on)),
+      ...body.filter(Boolean));
+    const sub = (label, tip, on, ...body) => el("div", { class: "st-sub" + (on ? " on" : "") },
+      el("div", { class: "st-sub-head" }, label, info(tip), now(on)), ...body.filter(Boolean));
+
+    const macOnly = !s.cloud && !s.webdav && !s.cloudOnly;
+    const folderSynced = !!s.cloud && !s.webdav;
+    // to a place on this Mac (a plain folder, or one a cloud app syncs)
+    const toPlace = (where, label) => run(() => s.cloudOnly ? ctx.toMac(where, label, false) : ctx.move(where, label), "moved");
+
+    const chips = el("div", { class: "st-places" }, ...s.places.map((p) => {
+      const here = folderSynced && s.path.startsWith(p.path + "/");
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
-                            onclick: async () => {   // the person picks where inside that cloud
-                              const where = await ctx.pick(`Choose where in ${p.name} to keep "${ctx.name}"`, p.path);
-                              if (where) toPlace(where, p.name);
-                            } },
-        icon("cloud", 15), el("span", {}, p.name), here ? el("span", { class: "st-here" }, "here") : null);
-    }));
-    if (!s.places.length) cloudCards.append(el("div", { class: "st-none" }, "No cloud apps found on this Mac (iCloud Drive, Dropbox, Google Drive, OneDrive, Nextcloud…)."));
+        onclick: async () => { const w = await ctx.pick(`Choose where in ${p.name} to keep "${ctx.name}"`, p.path); if (w) toPlace(w, p.name); } },
+        icon("cloud", 15), el("span", {}, p.name));
+    }), btn("Other folder", async () => { const w = await ctx.pick("Choose a folder your cloud app syncs"); if (w) toPlace(w, "that folder"); }));
+    if (!s.places.length) chips.prepend(el("div", { class: "st-none" }, "No cloud apps found on this Mac."));
+
+    const webdavNow = s.webdav ? `Mac + WebDAV. Synced with ${s.webdav}` : s.cloudOnly ? `WebDAV only. Opens from ${s.path}` : "";
+    const webdavBtns = el("div", { class: "set-btns" },
+      s.webdav ? null : btn("Mac + WebDAV", () => run(() => s.cloudOnly
+        ? ctx.pick("Choose a place on this Mac for the copy").then((w) => w && ctx.toMac(w, "this Mac", true))
+        : ctx.toWebdav(), s.cloudOnly ? "moved" : "changed")),
+      s.cloudOnly ? null : btn("WebDAV only", () => run(ctx.toCloudOnly, "tocloud")));
+
+    const gs = s.githubStatus;
+    const github = s.github
+      ? el("div", { class: "st-gh" },
+          el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · saved ${ago(gs && gs.ago)}`),
+          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB and stay${gs.too_big.length === 1 ? "s" : ""} out of the backup.`) : null,
+          el("div", {}, btn("Stop backup", () => run(() => ctx.stopGithub(s.github), "changed"), "st-stop")))
+      : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), "Back up to GitHub"));
 
     const card = el("div", { class: "dlg storage", role: "dialog" },
       el("div", { class: "dlg-title" }, `Where "${ctx.name}" is stored`),
-      el("div", { class: "st-where" }, icon(s.cloud || s.cloudOnly ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
-        s.cloudOnly ? null : el("button", { class: "btn small", type: "button", onclick: () => ctx.reveal() }, "Show encrypted files")),
+      el("div", { class: "st-where" }, icon(s.cloudOnly || s.cloud || s.webdav ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
+        s.cloudOnly ? null : btn("Show encrypted files", () => ctx.reveal())),
       s.offline ? el("div", { class: "st-warn" },
-        el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud, not on this Mac, so they can't open. `
-          + `In Finder, right-click the folder and choose "Keep Downloaded" (iCloud) or "Make available offline".`),
-        el("button", { class: "btn small", type: "button", onclick: () => ctx.download() }, "Download now")) : null,
-      option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
-        local ? null : s.github
-          ? el("button", { class: "btn small", type: "button", onclick: async () => { if (await leaveGithub()) done("github"); } }, "Keep only on this Mac…")
-          : el("button", { class: "btn small", type: "button", onclick: async () => {
-              const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) toPlace(p, "this Mac");
-            } }, "Move to a place on this Mac…")),
-      option("cloud", "This Mac + cloud", "On this Mac, and synced by your cloud app. The cloud only sees encrypted files.", !!s.cloud && !s.github,
-        s.cloud && !s.github ? el("div", {}, cloudCards) : el("div", {}, cloudCards,
-          el("button", { class: "btn small st-other", type: "button", onclick: async () => {
-            const p = await ctx.pick("Choose any synced folder"); if (p) toPlace(p, "that folder");
-          } }, "Other synced folder…"))),
-      option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github,
-        s.cloudOnly || (s.cloud && !s.github) ? el("div", { class: "st-gh-note" }, "Move it to a place on this Mac first, then come back here.") : githubBody),
-      option("sparkle", "Cloud only", s.cloudOnly
-        ? `Nothing on this Mac: the app opens it straight from ${s.cloudOnly}, which only gets encrypted files.`
-        : "Nothing on this Mac: the app opens the memory straight from your cloud (Nextcloud or WebDAV). The cloud only gets encrypted files.", !!s.cloudOnly,
-        s.cloudOnly ? null : el("button", { class: "btn small", type: "button", onclick: async () => { if (await leaveGithub()) done("tocloud"); } },
-          "Move to cloud…")),
-      el("div", { class: "st-note" }, "Moving locks the memory first, so only encrypted files move. Unlock it again after."),
+        el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud and can't open yet.`),
+        btn("Download now", () => ctx.download())) : null,
+      el("div", { class: "set-section" }, "Stored in"),
+      option("laptop", "This Mac only",
+        "A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup.",
+        macOnly,
+        macOnly ? null : el("div", {}, s.webdav
+          ? btn("Keep on this Mac only", () => run(ctx.stopWebdav, "changed"))
+          : btn("Move to this Mac", async () => { const w = await ctx.pick("Choose a place on this Mac"); if (w) toPlace(w, "this Mac"); }))),
+      option("cloud", "This Mac + cloud", "Your cloud only gets encrypted files. Only you can read them, with your password.",
+        !macOnly,
+        sub("Synced folder", "A folder your cloud app keeps in sync, like iCloud Drive or Dropbox.", folderSynced, chips),
+        sub("WebDAV", "A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server.",
+          !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns)),
+      el("div", { class: "set-section" }, "Backup"),
+      option("lock", "GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above.",
+        !!s.github, github),
+      el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };
   });
+}
+
+// A small ⓘ: hover (or focus) shows what the thing does.
+export function info(text) {
+  return el("span", { class: "info-i", tabindex: "0", title: text, "aria-label": text }, "i");
 }
 
 // One AI panel with two tabs: Tasks (notes given to the AI, each with what to do) and Activity (what AI apps did).
@@ -334,7 +331,8 @@ export function openCloud(ctx) {
     const body = el("div", { class: "cl-body" });
     const err = el("div", { class: "dlg-err" });
     const actions = el("div", { class: "dlg-actions" });
-    const top = ctx.move ? `Move "${ctx.move.name}" to your cloud` : "Open from cloud";
+    const keep = ctx.move && ctx.move.keepMac;   // Mac + WebDAV: a copy goes up and stays in sync, the Mac copy stays
+    const top = keep ? `Sync "${ctx.move.name}" with WebDAV` : ctx.move ? `Move "${ctx.move.name}" to WebDAV` : "Open from WebDAV";
     const title = el("div", { class: "dlg-title" }, top);
     let submit = null;
     const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
@@ -348,14 +346,14 @@ export function openCloud(ctx) {
     const pick = () => {
       title.textContent = top; err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, ctx.move
-          ? "Pick the cloud. Only encrypted files go up, and the copy on this Mac goes to the Trash once every file has arrived."
-          : "Use a memory that lives in your cloud, with nothing kept on this Mac. The cloud only ever gets encrypted files."),
+        el("div", { class: "mf-hint" }, keep ? "Pick the server. Only encrypted files go up. The copy on this Mac stays."
+          : ctx.move ? "Pick the server. Only encrypted files go up. Once all have arrived, the copy on this Mac goes to the Trash."
+          : "Open a memory that's on a WebDAV server. Nothing is kept on this Mac. The server only gets encrypted files."),
         el("div", { class: "act-list" },
           ...ctx.clouds.map((c) => row("cloud", c.where, `Connected as ${c.user}`, () => look(c))),
-          row("cloud", "Nextcloud", "Your Nextcloud server address, user name and an app password", () => login("nextcloud")),
-          row("cloud", "Other WebDAV cloud", "Any cloud with a WebDAV address (ownCloud, Synology, Koofr…)", () => login("webdav"))),
-        el("div", { class: "st-gh-note" }, "Google Drive, Dropbox and OneDrive come next. Nothing talks to a cloud until you press Connect."));
+          row("cloud", "Nextcloud", "Server address, user name and an app password", () => login("nextcloud")),
+          row("cloud", "Other WebDAV server", "ownCloud, Synology, Koofr and others", () => login("webdav"))),
+        el("div", { class: "st-gh-note" }, "Nothing connects until you press Connect."));
       actions.replaceChildren(cancel);
     };
 
@@ -406,11 +404,11 @@ export function openCloud(ctx) {
 
     const moveTo = (conn) => {
       title.textContent = top; err.textContent = "";
-      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder in the cloud (empty: the top)", "aria-label": "Folder in the cloud" });
+      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder on the server (empty: the top)", "aria-label": "Folder on the server" });
       submit = () => done({ conn, move: { parent: parent.value.trim().replace(/^\/+|\/+$/g, "") } });
       body.replaceChildren(parent,
-        el("div", { class: "st-gh-note" }, "It locks first. Uploading can take a while for a big memory. Unlock it again when it's done; the password stays the same."));
-      actions.replaceChildren(btn("Back", pick), btn("Move", submit, "primary"));
+        el("div", { class: "st-gh-note" }, keep ? "A big memory can take a while to upload." : "It locks first. A big memory can take a while to upload. Your password stays the same."));
+      actions.replaceChildren(btn("Back", pick), btn(keep ? "Sync" : "Move", submit, "primary"));
       parent.focus();
     };
 

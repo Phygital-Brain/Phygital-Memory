@@ -622,3 +622,12 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .tree-gap { height: 10px; }
 .row-where { margin-left: 6px; font-size: 11.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
 .row.hidden-group .row-name, .row.hidden-group svg { opacity: .7; }
+.info-i { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-left: 6px; border-radius: 50%; border: 1px solid var(--text-faint); color: var(--text-faint); font: 600 9px/1 -apple-system, system-ui, sans-serif; cursor: help; vertical-align: 1px; flex: none; }
+.info-i:hover, .info-i:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+.st-opt-title { display: flex; align-items: center; flex: 1; }
+.st-sub { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-s); }
+.st-sub.on { border-color: var(--accent); }
+.st-sub-head { display: flex; align-items: center; gap: 0; font-size: 12.5px; font-weight: 600; margin-bottom: 8px; }
+.st-sub-head .st-opt-now { margin-left: auto; }
+.storage .set-section { margin: 14px 0 6px; }
+.st-opt-head:last-child { margin-bottom: 0; align-items: center; }

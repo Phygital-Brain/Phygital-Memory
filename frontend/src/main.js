@@ -753,17 +753,58 @@ async function openStoragePanel() {
   if (!info || !unlocked(info.id)) return;
   let storage;
   try { storage = await api("storage"); } catch (e) { toastErr(e.message); return; }
-  const moved = await openStorage({
+  const saveAll = async () => { if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); } };
+  const result = await openStorage({
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
+    move: async (parent, label) => {
+      if (!await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then moves.`, "Move", false)) return false;
+      await saveAll();
+      if (storage.webdav) await api("stopwebdav");
+      await api("movefolder", { parent });
+      toastOk(`Moved to ${label}. Unlock it to keep working.`);
+      return true;
+    },
+    toMac: async (parent, label, keepSync) => {
+      const text = keepSync ? `Put a copy of "${info.name}" on this Mac that stays in sync with ${info.cloudOnly}?`
+                            : `Move "${info.name}" from ${info.cloudOnly} to ${label}? The copy in ${info.cloudOnly} stays until you delete it.`;
+      if (!await confirmDialog(text, keepSync ? "Put a copy here" : "Move", false)) return false;
+      await saveAll();
+      toast("Downloading the encrypted files");
+      await api("tomac", { parent, keepSync });
+      toastOk(`Done. Unlock "${info.name}" to keep working.`);
+      return true;
+    },
+    toWebdav: async () => {
+      let clouds = [];
+      try { clouds = (await api("clouds")).clouds || []; } catch {}
+      const v = await openCloud({ clouds, move: { name: info.name, keepMac: true }, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
+      if (!v) return false;
+      toast("Uploading the encrypted files");
+      await api("towebdav", { conn: v.conn, parent: v.move.parent });
+      toastOk(`"${info.name}" now stays in sync with WebDAV.`);
+      return true;
+    },
+    toCloudOnly: async () => {
+      if (storage.webdav) {   // already on the server: the Mac copy goes, after a last sync
+        if (!await confirmDialog(`Keep "${info.name}" on WebDAV only? The copy on this Mac goes to the Trash after a last sync.`, "WebDAV only", false)) return false;
+        await saveAll();
+        await api("tocloud", { conn: {}, parent: "" });
+        toastOk(`"${info.name}" now opens from WebDAV. Unlock it to keep working.`);
+        return true;
+      }
+      return "tocloud";
+    },
+    stopWebdav: async () => {
+      if (!await confirmDialog(`Stop syncing "${info.name}" with WebDAV? Your notes stay on this Mac. The copy on the server stays until you delete it.`, "Stop syncing", true)) return false;
+      await api("stopwebdav");
+      return true;
+    },
     stopGithub: async (repo) => {
-      const sure = await confirmDialog(`Stop GitHub sync for "${info.name}"? Your notes stay on this Mac, unchanged. The copy on GitHub (${repo}) stays there until you delete it yourself.`, "Stop GitHub sync", true);
-      if (!sure) return false;
+      if (!await confirmDialog(`Stop the GitHub backup? Your notes don't change. The repo ${repo} stays on GitHub until you delete it.`, "Stop backup", true)) return false;
       await api("stopgithub");
       refreshBar();
-      if (await confirmDialog(`GitHub sync stopped. "${info.name}" is now on this Mac only. Open the repo on GitHub to delete it? (Settings, at the bottom: Delete this repository.)`, "Open on GitHub", false)) {
-        await api("openrepo", { repo });
-      }
+      if (await confirmDialog("Backup stopped. Open the repo on GitHub to delete it?", "Open on GitHub", false)) await api("openrepo", { repo });
       return true;
     },
     toGithub: async () => {
@@ -772,45 +813,25 @@ async function openStoragePanel() {
         account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
         if (!account) return false;
       }
-      const sure = await confirmDialog(`Save "${info.name}" in a new private repo on GitHub (${account})? Only encrypted files go up. The repo stays private.`, "Use private GitHub", false);
-      if (!sure) return false;
-      toast("Making the private repo and uploading the encrypted files…");
+      if (!await confirmDialog(`Back up "${info.name}" to a new private repo on GitHub (${account})? Only encrypted files go up.`, "Back up", false)) return false;
+      toast("Making the private repo and uploading");
       const j = await api("togithub");
-      if (j.existing) {   // connected before, then stopped: that repo is still on GitHub
-        const again = await confirmDialog(`"${info.name}" already has a repo on GitHub: ${j.existing}. Use it again? Nothing is lost: if a note differs between this Mac and GitHub, both versions are kept.`, "Use it again", false);
-        if (!again) return false;
-        toast("Connecting to the repo and syncing…");
+      if (j.existing) {   // backed up before, then stopped: that repo is still on GitHub
+        if (!await confirmDialog(`"${info.name}" already has a repo on GitHub: ${j.existing}. Use it again? If a note differs, both versions are kept.`, "Use it again", false)) return false;
         await api("togithub", { reuse: j.existing });
       }
-      toastOk("Saved in your private GitHub repo. Changes upload a few seconds after you make them.");
+      toastOk("Backed up to GitHub. It updates a few seconds after each change.");
       refreshBar();
       return true;
     },
-    toMac: async (parent, label) => {
-      const sure = await confirmDialog(`Move "${info.name}" from ${info.cloudOnly} to ${label}? It locks first, so only encrypted files come down. The copy in ${info.cloudOnly} stays there until you delete it.`, `Move to ${label}`, false);
-      if (!sure) return false;
-      if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-      toast("Bringing the encrypted files down…");
-      await api("tomac", { parent });
-      toastOk(`Moved to ${label}. Unlock it again to keep working.`);
-      return true;
-    },
-    download: async () => { const j = await api("download"); toastOk(`Asked your cloud app for ${j.asked} file${j.asked === 1 ? "" : "s"}. They download in the background.`); },
+    download: async () => { const j = await api("download"); toastOk(`Downloading ${j.asked} file${j.asked === 1 ? "" : "s"}.`); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
-    move: async (parent, label) => {
-      const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, so only encrypted files move. Unlock it again after.`, `Move to ${label}`, false);
-      if (!sure) return false;
-      if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-      await api("movefolder", { parent });
-      toastOk(`Moved to ${label}. Unlock it again to keep working.`);
-      return true;
-    },
   });
-  if (moved === "tocloud") {   // the panel closes first, then the cloud steps
+  if (result === "tocloud") {   // the panel closes first, then the cloud steps
     try { if (await moveToCloud(info)) { lockedLocally(info.id); await refreshFolders(); showUnlock(); } }
     catch (e) { toastErr(e.message); }
-  } else if (moved === "moved") { lockedLocally(info.id); await refreshFolders(); showUnlock(); }   // a move locks it
-  else if (moved) { await refreshFolders(); refreshBar(); }   // GitHub on or off: it stays open
+  } else if (result === "moved") { lockedLocally(info.id); await refreshFolders(); showUnlock(); }   // a move locks it
+  else if (result) { await refreshFolders(); refreshBar(); }
 }
 
 async function openTrashPanel() {

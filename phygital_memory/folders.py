@@ -97,9 +97,12 @@ class Folder:
         self.ai_hidden = False   # "AI can't see this": no AI app reaches it, whatever its key says
         self.gitdir = GITDIRS / fid
         self.memory.lost_store = self.gitdir / "phygital-lost-folders.json"
-        if github and not cloud_at and (self.path / ".git").is_dir() and not self.gitdir.exists():
+        inside = self.path / ".git"
+        if github and not cloud_at and inside.is_dir() and not self.gitdir.exists():
             self.gitdir.parent.mkdir(parents=True, exist_ok=True)   # the older way kept it inside: move it out
-            shutil.move(str(self.path / ".git"), str(self.gitdir))
+            shutil.move(str(inside), str(self.gitdir))
+        elif github and not cloud_at and inside.is_dir() and not (inside / "HEAD").exists() and self.gitdir.exists():
+            shutil.rmtree(inside, ignore_errors=True)   # an empty leftover an older build made after the move
         if github and not cloud_at and (self.gitdir / "HEAD").exists():
             self.start_sync()
         # mirror_at: {kind, url, user, path} for Mac + WebDAV: on this Mac, kept in step with that WebDAV folder

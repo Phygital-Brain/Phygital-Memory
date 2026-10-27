@@ -779,11 +779,13 @@ async def api(request: Request) -> Response:
                 return _ok({"open": False, "warning": f"{f.drive.left} save{'s' if f.drive.left > 1 else ''} couldn't "
                             f"reach {cloud.label(f.cloud_at)} yet. They're kept on this Mac and go up the next time you unlock."})
             return _ok({"open": False})
-        if action == "storage" and f.cloud_at:   # cloud only: nothing on this Mac to look at or move
-            return _ok({"path": f.info()["path"], "cloud": None, "cloudOnly": cloud.label(f.cloud_at), "places": [],
-                        "home": str(Path.home()), "offline": 0, "github": None, "githubStatus": None})
+        if action == "storage" and f.cloud_at:   # cloud only: nothing on this Mac to look at
+            return _ok({"path": f.info()["path"], "cloud": None, "cloudOnly": cloud.label(f.cloud_at), "webdav": None,
+                        "places": cloud_places(), "home": str(Path.home()), "offline": 0,
+                        "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
+                        "webdav": f.info()["webdav"], "webdavStatus": f.mirror.status() if f.mirror else None,
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "stopgithub":   # Mac only from now on; the repo on GitHub stays until the person deletes it there
@@ -812,8 +814,6 @@ async def api(request: Request) -> Response:
                                                           str(body.get("parent", "")))})
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
-        if action == "movefolder" and f.github:
-            return _ok({"error": "This folder is kept in GitHub, so it stays where it is."}, 400)
         if action == "movefolder":   # move it (locked) to another place; the page then asks for the password again
             return _ok({"folder": await asyncio.to_thread(folders.relocate, f.id, body["parent"])})
         if action == "renamefolder":
