@@ -75,6 +75,16 @@ fs.items.pop(r.id)
 info = fs.open_backup(str(tmp / "Restored" / "Work" / "masterkey.cryptomator"), None)
 check(Path(fs.get(info["id"]).path) == tmp / "Restored" / "Work", "a masterkey.cryptomator file opens its folder where it is")
 
+# a copy of a memory already in the list, opened from this Mac: refused
+import shutil
+shutil.copytree(tmp / "Restored" / "Work", tmp / "Copy" / "Work")
+try:
+    fs.add_existing(str(tmp / "Copy" / "Work"))
+    check(False, "a copy of a memory already here is refused (From this Mac)")
+except ValueError as e:
+    check("copy of" in str(e), "a copy of a memory already here is refused (From this Mac)", e)
+check(fs.add_existing(str(tmp / "Restored" / "Work"))["id"] == info["id"], "opening the same folder again just returns it")
+
 # the recovery key
 m = fs.get(info["id"]).memory
 m.unlock("password-1")

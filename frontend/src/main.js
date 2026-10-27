@@ -194,6 +194,13 @@ async function pickFolder(prompt, start) {
 }
 
 // Another Mac: bring a private "…-Phygital-Memory" repo down from GitHub, then unlock it with its password.
+// The ways to open a memory, the same everywhere (the memory menu's submenu, the unlock screen).
+function openMenuItems() {
+  return [{ label: "From this Mac", fn: openOtherFolder }, { label: "From GitHub", fn: openFromGithub },
+    { label: "From WebDAV", fn: openFromCloud }, { label: "From Amazon S3 or Cloudflare R2", fn: openFromS3 },
+    { label: "From a backup file", fn: openFromBackup }];
+}
+
 // A backup back in: a zip the app saved, or a memory's masterkey.cryptomator file. The Mac's chooser picks it.
 async function openFromBackup() {
   try {
@@ -407,9 +414,11 @@ function drawUnlock() {
     const b = folderList.find((f) => f.id === backId);
     if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, `Back to ${b.name}`));
   }
-  links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open memory"),
-    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New memory"),
-    el("button", { class: "link-btn", type: "button", onclick: openFromCloud }, "Open from WebDAV"));
+  links.push(el("button", { class: "link-btn", type: "button", onclick: (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      showMenu(openMenuItems(), r.left, r.bottom + 4);
+    } }, "Open memory"),
+    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New memory"));
   kids.push(el("div", { class: "unlock-links" }, ...links));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(unlockDrag, form);
@@ -2042,11 +2051,9 @@ function renderHome(tab) {
   const pinned = getPref("pins", []).map((p) => state.files.find((f) => f.path === p)).filter(Boolean);
   tab.body.replaceChildren(
     el("h1", { class: "home-title" }, "Home"),
+    ...(pinned.length ? [el("h2", { class: "home-h" }, "Pinned"), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
     el("h2", { class: "home-h" }, "Recent notes"),
-    recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write the first one."),
-    el("h2", { class: "home-h" }, "Pinned"),
-    pinned.length ? el("div", { class: "home-list" }, ...pinned.map(item)) : el("div", { class: "home-none" }, "Nothing pinned. Right-click a note or folder and choose Pin."),
-    el("div", { class: "home-hint" }, icon("home", 14), "Want your own Home page? Open a note's menu and choose Set as Home."));
+    recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write one."));
 }
 
 // ---------- Graph ----------

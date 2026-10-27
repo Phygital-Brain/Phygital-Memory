@@ -256,8 +256,11 @@ class Folders:
             raise ValueError("That folder isn't a locked Phygital Memory folder.")
         with self._lock:
             for f in self.items.values():
-                if f.path == p:
+                if not f.cloud_at and Path(f.path).resolve() == p:
                     return f.info()
+            same = self._same(p)   # a copy of a memory already here (two would fight over one backup)
+            if same:
+                raise ValueError(f'That\'s a copy of "{same.name}", which is already here. Open that one instead.')
             return self._add(p, p.name).info()
 
     def create(self, parent: str, name: str, password: str) -> dict:
