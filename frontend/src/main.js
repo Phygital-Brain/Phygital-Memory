@@ -1763,7 +1763,8 @@ function openGraph() {
 }
 
 function makeGraphPane(tab) {
-  const g = createGraph({ onOpen: (p) => openPath(p), colorFor: nodeColor, labelFor: label });
+  const g = createGraph({ onOpen: (p) => state.files.some((f) => f.path === p && f.kind === "folder") ? showFolder(p) : openPath(p),
+                          colorFor: nodeColor, labelFor: label });
   tab.pane = el("div", { class: "pane graph-pane hidden" }, g.root);
   paneHost.append(tab.pane);
   tab.graph = g; tab.sig = ""; tab.onClose = () => g.destroy();
@@ -1775,8 +1776,8 @@ async function loadGraph(tab) {
     const j = await api("links");
     if (fid !== loadedFolder || !tab.graph) return;
     state.tags = j.tags || state.tags;
-    const sig = JSON.stringify([j.nodes, j.edges, colorsPref()]);
-    if (sig !== tab.sig) { tab.sig = sig; tab.graph.load({ nodes: j.nodes || [], edges: j.edges || [] }, state.lastNote); }
+    const sig = JSON.stringify([j.nodes, j.files, j.folders, j.edges, colorsPref()]);
+    if (sig !== tab.sig) { tab.sig = sig; tab.graph.load({ nodes: j.nodes || [], files: j.files || [], folders: j.folders || [], edges: j.edges || [] }, state.lastNote); }
     else tab.graph.setCurrent(state.lastNote);
   } catch (e) { toastErr(e.message); }
 }

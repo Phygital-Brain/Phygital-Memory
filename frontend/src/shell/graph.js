@@ -5,7 +5,7 @@ import { el } from "./dom.js";
 
 const SETTINGS_KEY = "pm.graph.settings.v1";
 const DEFAULTS = { repel: -220, linkDistance: 70, linkStrength: 0.35, gravity: 0.6, nodeSize: 1, lineWidth: 1,
-                   labels: 1, colorBy: "links", hideOrphans: false };
+                   labels: 1, colorBy: "links", hideOrphans: false, showFiles: true, showFolders: false };
 const RANGES = {
   repel: ["Repel force", -1200, -10, 10], linkDistance: ["Link distance", 10, 300, 5], linkStrength: ["Link force", 0, 1, 0.05],
   gravity: ["Centre force", 0, 2, 0.05], nodeSize: ["Node size", 0.4, 3, 0.1], lineWidth: ["Line thickness", 0.3, 3, 0.1],
@@ -53,7 +53,7 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
   const root = el("div", { class: "graph" }, host, bar, panel, empty);
 
   let s = loadSettings();
-  let data = { nodes: [], edges: [] }, current = null, alive = true;
+  let data = { nodes: [], files: [], folders: [], edges: [] }, current = null, alive = true;
   let L = null, graph = null, renderer = null, worker = null, ids = [], idx = new Map();
   const pos = new Map();
   let hovered = null, hood = null, query = "", dragged = null, dragMoved = false, settled = false;
@@ -75,11 +75,15 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
       el("option", { value: "links" }, "Colour by links"), el("option", { value: "folder" }, "Colour by folder"));
     colorSel.value = s.colorBy;
     colorSel.addEventListener("change", () => { s.colorBy = colorSel.value; saveSettings(s); restyle(); });
-    const orphans = el("input", { type: "checkbox" }); orphans.checked = s.hideOrphans;
-    orphans.addEventListener("change", () => { s.hideOrphans = orphans.checked; saveSettings(s); rebuild(); });
+    const tick = (key, text) => {
+      const box = el("input", { type: "checkbox" }); box.checked = s[key];
+      box.addEventListener("change", () => { s[key] = box.checked; saveSettings(s); rebuild(); });
+      return el("label", { class: "set-check" }, box, text);
+    };
     const reset = el("button", { class: "btn small", onclick: () => { s = { ...DEFAULTS }; saveSettings(s); buildPanel(); worker?.postMessage({ type: "settings", settings: s }); restyle(); } }, "Reset");
     panel.replaceChildren(el("div", { class: "graph-panel-title" }, "Graph"), colorSel,
-      el("label", { class: "set-check" }, orphans, "Hide notes without links"), ...rows, reset);
+      tick("showFiles", "Show other files"), tick("showFolders", "Show folders"), tick("hideOrphans", "Hide items without links"),
+      ...rows, reset);
   }
 
   function readTheme() {
@@ -91,18 +95,30 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
 
   // ---------- data -> graph ----------
   function nodeColor(p, deg, maxDeg) {
+    if (kinds.get(p) === "folder") return colorFor(p + "/_");   // a folder in its own colour
+    if (kinds.get(p) === "file") return s.colorBy === "folder" ? colorFor(p) : theme.dim;
     if (s.colorBy === "folder") return colorFor(p);
     const t = maxDeg ? Math.pow(deg / maxDeg, 0.55) : 0;
     return hex(mix(theme.low, theme.accent, t));
   }
 
+  // What's in the graph: notes always, other files and folders when ticked. A folder is joined to what's in it.
+  let kinds = new Map();
   function build() {
     const { Graph } = L;
-    const all = new Set(data.nodes);
+    kinds = new Map(data.nodes.map((p) => [p, "note"]));
+    if (s.showFiles) for (const p of data.files || []) kinds.set(p, "file");
+    if (s.showFolders) for (const p of data.folders || []) kinds.set(p, "folder");
+    const nodes = [...kinds.keys()];
+    const all = new Set(nodes);
     const edges = data.edges.filter(([a, b]) => all.has(a) && all.has(b) && a !== b);
-    const nb = new Map(data.nodes.map((p) => [p, new Set()]));
+    if (s.showFolders) for (const p of nodes) {
+      const dir = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
+      if (dir && all.has(dir)) edges.push([p, dir]);
+    }
+    const nb = new Map(nodes.map((p) => [p, new Set()]));
     for (const [a, b] of edges) { nb.get(a).add(b); nb.get(b).add(a); }
-    let keep = data.nodes;
+    let keep = nodes;
     if (localBox.checked && current && all.has(current)) {
       const seen = new Set([current]); let frontier = [current];
       for (let k = 0; k < 2; k++) {
@@ -123,7 +139,9 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
     for (const [a, b] of edges) if (keepSet.has(a) && keepSet.has(b) && !graph.hasEdge(a, b)) graph.addEdge(a, b, { size: 1 });
     ids = graph.nodes(); idx = new Map(ids.map((n, i) => [n, i]));
     applySizes();
-    info.textContent = `${graph.order} notes · ${graph.size} links`;
+    const count = (k) => ids.filter((n) => kinds.get(n) === k).length;
+    info.textContent = [`${count("note")} notes`, s.showFiles && `${count("file")} files`, s.showFolders && `${count("folder")} folders`,
+      `${graph.size} links`].filter(Boolean).join(" · ");
     empty.classList.toggle("hidden", graph.order > 0);
     return { fresh: ids.filter((n) => pos.has(n)).length < ids.length * 0.8 };
   }

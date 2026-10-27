@@ -479,6 +479,7 @@ class Memory:
             self._need_open()
             parent, name = self._free_name(rel)
             self._writer.write_file(parent, name, data)
+            self._gen += 1   # the graph shows every file, so it needs a fresh look
             return "/".join(rel.split("/")[:-1] + [name])
 
     def _free_name(self, rel: str):
@@ -496,6 +497,7 @@ class Memory:
         """A file from the Mac, encrypted straight from disk a part at a time: any size."""
         parent, name = self._free_name(_clean_path(rel, md=False))
         self._writer.write_file_from(parent, name, src)
+        self._gen += 1
         return "/".join(rel.split("/")[:-1] + [name])
 
     def import_paths(self, into: str, sources: list[str]) -> dict:
@@ -580,6 +582,7 @@ class Memory:
             parent, name = self._make_parents(rel)
             if not any(e.name == name for e in self._tree.list_dir(parent.dir_id)):
                 self._writer.make_dir(parent, name)
+                self._gen += 1
             return rel
 
     def move(self, old: str, new: str) -> str:
@@ -736,18 +739,29 @@ class Memory:
     # ---------- links between notes (for backlinks and the graph) ----------
 
     def links(self) -> dict:
-        """Every [[link]] between notes: {"nodes": [paths], "edges": [[from, to], ...], "missing": {from: [names]}}."""
+        """Every [[link]] between notes, and from notes to other files: {"nodes": [note paths], "files": [other file
+        paths], "folders": [folder paths], "edges": [[from, to], ...], "missing": {from: [names]}}."""
         with self._lock:
             self._need_open()
             if self._links_cache and self._links_cache[0] == self._gen:
                 return self._links_cache[1]
             notes = [r[0] for r in self._con.execute("SELECT path FROM files ORDER BY path")]
             wanted = set(notes)
-            texts = {}   # one walk over the folder: each folder's names are decrypted once, not once per note
+            texts, files, dirs = {}, [], []   # one walk: each folder's names are decrypted once, not once per note
             for path, entry in self._tree.walk():
                 rel = path.lstrip("/")
+                if rel.split("/")[0] in HIDDEN or any(part.startswith(".") for part in rel.split("/")):
+                    continue
                 if entry.kind == "file" and rel in wanted:
                     texts[rel] = self._tree.read_file(entry).decode("utf-8", "replace")
+                elif entry.kind == "file" and not rel.lower().endswith(".md"):
+                    files.append(rel)
+                elif entry.kind == "dir":
+                    dirs.append(rel)
+            file_by_path = {f.lower(): f for f in files}
+            file_by_name: dict[str, str] = {}
+            for f in files:
+                file_by_name.setdefault(Path(f).name.lower(), f)
             by_path = {p[:-3].lower(): p for p in notes}
             by_name: dict[str, str] = {}
             for p in notes:
@@ -766,14 +780,21 @@ class Memory:
                             t = t.strip().lstrip("-").strip().strip("'\"").lstrip("#")
                             if t:
                                 tags[t] = tags.get(t, 0) + 1
+                for m in re.finditer(r"\]\((?!https?:|mailto:)([^)\s]+)\)", text):   # [text](file.pdf), ![](photo.png)
+                    name = m.group(1).replace("%20", " ").lstrip("./").lower()
+                    target = file_by_path.get(name) or file_by_name.get(name.split("/")[-1])
+                    if target:
+                        edges.add((p, target))
                 for m in re.finditer(r"!?\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]", text):
-                    name = m.group(1).strip().lower().removesuffix(".md")
-                    target = by_path.get(name) or by_name.get(name.split("/")[-1])
+                    raw = m.group(1).strip().lower()
+                    name = raw.removesuffix(".md")
+                    target = (by_path.get(name) or by_name.get(name.split("/")[-1])
+                              or file_by_path.get(raw) or file_by_name.get(raw.split("/")[-1]))
                     if target and target != p:
                         edges.add((p, target))
                     elif not target and not re.search(r"\.\w{2,5}$", name):
                         missing.setdefault(p, []).append(m.group(1).strip())
-            out = {"nodes": notes, "edges": sorted(edges), "missing": missing,
+            out = {"nodes": notes, "files": sorted(files), "folders": sorted(dirs), "edges": sorted(edges), "missing": missing,
                    "tags": sorted(tags.items(), key=lambda kv: (-kv[1], kv[0]))}
             self._links_cache = (self._gen, out)
             return out
