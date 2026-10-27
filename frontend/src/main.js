@@ -15,7 +15,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo, openCloud } from "./shell/panels.js";
+import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo, openCloud, openS3 } from "./shell/panels.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
@@ -202,6 +202,20 @@ async function openFromBackup() {
     if (j.cancelled) return;
     await refreshFolders();
     toastOk(`"${j.folder.name}" is back. Unlock it with its password or recovery key.`);
+    await switchTo(j.folder.id);
+  } catch (e) { toastErr(e.message); }
+}
+
+// A memory back from its S3 / R2 backup, into a place on this Mac.
+async function openFromS3() {
+  const v = await openS3({ restore: true, test: (f) => api("s3test", f), memories: (f) => api("s3memories", f) });
+  if (!v) return;
+  try {
+    toast("Choose where to put it, then it downloads");
+    const j = await api("froms3", v);
+    if (j.cancelled) return;
+    await refreshFolders();
+    toastOk(`"${j.folder.name}" is back. Unlock it with its password.`);
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -427,7 +441,7 @@ async function openSwitcher() {
   await refreshFolders();
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
-  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup,
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
     ...(unlocked(currentFolder()) ? { storage: openStoragePanel, ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
@@ -861,6 +875,19 @@ async function openStoragePanel() {
       }
       toastOk("Backed up to GitHub. It updates a few seconds after each change.");
       refreshBar();
+      return true;
+    },
+    toS3: async () => {
+      const v = await openS3({ test: (f) => api("s3test", f), connect: (f) => api("s3connect", f) });
+      if (!v) return false;
+      toast("Uploading the encrypted files");
+      await api("tos3", { conn: v.conn, bucket: v.bucket });
+      toastOk("Backed up. It updates a few seconds after each change.");
+      return true;
+    },
+    stopS3: async () => {
+      if (!await confirmDialog("Stop the S3 / R2 backup?", "Stop backup", true, "Your notes don't change. What's in the bucket stays until you delete it there.")) return false;
+      await api("stops3");
       return true;
     },
     saveBackup: async () => {

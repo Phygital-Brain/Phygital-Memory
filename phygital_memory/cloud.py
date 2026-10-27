@@ -30,7 +30,8 @@ from urllib.parse import quote, urlparse
 
 KEYCHAIN = os.environ.get("PHYGITAL_MEMORY_CLOUD_KEYCHAIN", "Phygital Memory cloud")   # tests use their own
 REMOTE = "PMCLOUD"
-KINDS = {"nextcloud": "Nextcloud", "webdav": "WebDAV"}
+KINDS = {"nextcloud": "Nextcloud", "webdav": "WebDAV", "s3": "Amazon S3", "r2": "Cloudflare R2"}
+S3_KINDS = ("s3", "r2")   # backups only: {kind, url (endpoint), user (access key ID), region}; the secret in the Keychain
 
 
 class CloudError(Exception):
@@ -67,6 +68,35 @@ def make_conn(kind: str, server: str, user: str) -> dict:
     return {"kind": kind, "url": url, "user": user}
 
 
+def make_s3_conn(kind: str, key_id: str, where_: str, endpoint: str = "") -> dict:
+    """Amazon S3: the access key ID and the region (like eu-west-1). Cloudflare R2: the access key ID and the
+    account ID. endpoint: any other S3-compatible address (tests use a stand-in on this Mac)."""
+    key_id, where_ = key_id.strip(), where_.strip().lower()
+    if kind not in S3_KINDS:
+        raise CloudError("That storage isn't supported yet.")
+    if not key_id:
+        raise CloudError("Type the access key ID.")
+    if endpoint:
+        u = urlparse(endpoint)
+        if u.scheme not in ("https", "http") or (u.scheme == "http" and u.hostname not in ("127.0.0.1", "localhost")):
+            raise CloudError("The address must use https.")
+        return {"kind": kind, "url": endpoint.rstrip("/"), "user": key_id, "region": where_ or "auto"}
+    if kind == "r2":
+        if not re.fullmatch(r"[0-9a-f]{32}", where_):
+            raise CloudError("Type the account ID: 32 letters and numbers, from the R2 page in Cloudflare.")
+        return {"kind": "r2", "url": f"https://{where_}.r2.cloudflarestorage.com", "user": key_id, "region": "auto"}
+    if not re.fullmatch(r"[a-z]{2}(-[a-z]+)+-\d", where_):
+        raise CloudError("Type the region, like eu-west-1.")
+    return {"kind": "s3", "url": f"https://s3.{where_}.amazonaws.com", "user": key_id, "region": where_}
+
+
+def check_bucket(conn: dict, bucket: str, secret: str | None = None) -> None:
+    """The keys work and the bucket is there (the app never makes or deletes buckets)."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", bucket.strip()):
+        raise CloudError("Type the bucket name, like my-notes-backup.")
+    _run(conn, "lsf", "--max-depth", "1", _remote(bucket.strip()), password=secret, timeout=60)
+
+
 def find_conn(server: str, user: str, password: str) -> dict:
     """One form for every WebDAV server: a full WebDAV address is used as given; a plain address (like
     cloud.example.com) is tried the Nextcloud way first, then as it is. Returns the one that logs in."""
@@ -88,7 +118,9 @@ def label(conn: dict) -> str:
 
 
 def where(conn: dict, path: str) -> str:
-    """What the person sees for the place: "Nextcloud · cloud.example.com / Notes/Work"."""
+    """What the person sees for the place: "Nextcloud · cloud.example.com / Notes/Work", "Amazon S3 · bucket/Work"."""
+    if conn.get("kind") in S3_KINDS:
+        return f"{label(conn)} · {path}"
     return f"{label(conn)} · {urlparse(conn['url']).hostname} / {path}"
 
 
@@ -102,7 +134,8 @@ def _obscure(password: str) -> str:
 
 
 def save_password(conn: dict, password: str) -> None:
-    password = _obscure(password)   # once: rclone names its cache after the connection, password included
+    if conn.get("kind") not in S3_KINDS:   # S3 wants its secret as it is; WebDAV's is kept obscured
+        password = _obscure(password)   # once: rclone names its cache after the connection, password included
     # shortcut: the password is passed to `security` as an argument (seen only by this Mac user, for a moment), as
     # with the GitHub key. A small Keychain helper in the Mac app would avoid even that; worth doing before release.
     subprocess.run(["security", "add-generic-password", "-U", "-a", _account(conn), "-s", KEYCHAIN, "-w", password],
@@ -124,10 +157,18 @@ def _password(conn: dict) -> str | None:
 
 
 def _env(conn: dict, password: str | None = None) -> dict:
+    p = f"RCLONE_CONFIG_{REMOTE}_"
+    if conn.get("kind") in S3_KINDS:
+        secret = password if password is not None else _password(conn)
+        if secret is None:
+            raise CloudError(f"Connect to {label(conn)} again: its secret key isn't on this Mac any more.")
+        provider = "Cloudflare" if conn["kind"] == "r2" else "AWS" if conn["url"].endswith(".amazonaws.com") else "Other"
+        return {**os.environ, p + "TYPE": "s3", p + "PROVIDER": provider, p + "ACCESS_KEY_ID": conn["user"],
+                p + "SECRET_ACCESS_KEY": secret, p + "ENDPOINT": conn["url"], p + "REGION": conn.get("region") or "auto",
+                p + "NO_CHECK_BUCKET": "true", p + "FORCE_PATH_STYLE": "true", "RCLONE_CONFIG": "/dev/null"}
     obscured = _obscure(password) if password is not None else _password(conn)
     if obscured is None:
         raise CloudError(f"Connect to {label(conn)} again: its password isn't on this Mac any more.")
-    p = f"RCLONE_CONFIG_{REMOTE}_"
     return {**os.environ, p + "TYPE": "webdav", p + "URL": conn["url"], p + "USER": conn["user"], p + "PASS": obscured,
             p + "VENDOR": "nextcloud" if conn["kind"] == "nextcloud" else "other",
             "RCLONE_CONFIG": "/dev/null"}   # never read or write a config file
@@ -150,6 +191,10 @@ def _run(conn: dict, *args: str, password: str | None = None, timeout: int = 120
 
 def _plain(err: str, conn: dict) -> str:
     e = err.lower()
+    if "signaturedoesnotmatch" in e or "invalidaccesskeyid" in e or "accessdenied" in e:
+        return "The keys don't work. Check the access key ID and the secret access key."
+    if "nosuchbucket" in e or "bucket does not exist" in e or "directory not found" in e and conn.get("kind") in S3_KINDS:
+        return "That bucket isn't there. Check its name (the app never makes buckets)."
     if "507" in e or "insufficient storage" in e or "quota" in e:
         return f"Your {label(conn)} is full."
     if "401" in e or "unauthorized" in e:
@@ -167,14 +212,15 @@ def connect(conn: dict, password: str) -> None:
     save_password(conn, password)
 
 
-def find_memories(conn: dict, depth: int = 4) -> list[dict]:
+def find_memories(conn: dict, depth: int = 4, base: str = "") -> list[dict]:
     """The memories in this cloud: folders holding a masterkey.cryptomator and a vault.cryptomator, a few levels
-    down at most. [{path, name}], by name."""
+    down at most. [{path, name}], by name. base: look only inside it (an S3 / R2 bucket)."""
     out = _run(conn, "lsf", "-R", "--files-only", "--max-depth", str(depth),
-               "--include", "masterkey.cryptomator", "--include", "vault.cryptomator", _remote(""), timeout=180)
+               "--include", "masterkey.cryptomator", "--include", "vault.cryptomator", _remote(base), timeout=180)
     seen: dict[str, set] = {}
     for line in out.splitlines():
         parent, _, name = line.rpartition("/")
+        parent = f"{base.strip('/')}/{parent}".strip("/") if base else parent
         seen.setdefault(parent, set()).add(name)
     return sorted(({"path": p, "name": p.rsplit("/", 1)[-1] or label(conn)} for p, names in seen.items()
                    if names == {"masterkey.cryptomator", "vault.cryptomator"}), key=lambda m: m["name"].lower())
@@ -420,3 +466,20 @@ class Mirror:
 
     def status(self) -> dict:
         return {**self.state, "ago": int(time.time() - self.state["last"]) if self.state["last"] else None}
+
+
+class S3Backup(Mirror):
+    """An encrypted copy of a memory in an S3 or R2 bucket, kept up to date a few seconds after each change. One way
+    only (a backup): the copy is at BUCKET/NAME/current, and every file it replaces or removes is kept under
+    BUCKET/NAME/history/DATE, so older versions can be brought back. Any file size works."""
+
+    def __init__(self, conn: dict, path: str, folder: Path, watch=None):
+        super().__init__(conn, path.strip("/"), folder, Path(), watch)
+
+    def sync_once(self) -> None:
+        with self._lock:
+            _run(self.conn, "sync", str(self.folder), _remote(f"{self.path}/current"),
+                 "--backup-dir", _remote(f"{self.path}/history/{time.strftime('%Y-%m-%d %H.%M.%S')}"),
+                 *SKIP, "--exclude", ".github/**", "--exclude", ".gitignore", "--exclude", ".gitattributes",
+                 "--exclude", ".encryptor-*", "--transfers", "4", timeout=24 * 3600)
+            self.state.update(last=time.time(), error="")

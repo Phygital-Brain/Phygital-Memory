@@ -80,7 +80,7 @@ CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (
 
 class Folder:
     def __init__(self, fid: str, name: str, path: Path, github: str | None = None, cloud_at: dict | None = None,
-                 mirror_at: dict | None = None):
+                 mirror_at: dict | None = None, s3_at: dict | None = None):
         # cloud_at: {kind, url, user, path} for a memory that lives only in the cloud; its files appear at
         # path (a hidden drive) only while it's unlocked
         self.cloud_at = cloud_at
@@ -110,6 +110,24 @@ class Folder:
         self.mirror_at, self.mirror = (None if cloud_at else mirror_at), None
         if self.mirror_at:
             self.start_mirror()
+        # s3_at: {kind, url, user, region, path} for a backup in an S3 or R2 bucket (path: BUCKET/NAME)
+        self.s3_at, self.s3 = s3_at, None
+        if s3_at and not cloud_at:
+            self.start_s3()
+
+    def start_s3(self) -> None:
+        conn = {k: self.s3_at[k] for k in ("kind", "url", "user", "region")}
+        self.s3 = cloud.S3Backup(conn, self.s3_at["path"], self.path, watch=lambda: self.memory._gen)
+        self.s3.start()
+
+    def pause_s3(self) -> None:
+        if self.s3:
+            try:
+                self.s3.sync_once()
+            except Exception:
+                pass
+            self.s3.stop()
+            self.s3 = None
 
     def start_mirror(self) -> None:
         conn = {k: self.mirror_at[k] for k in ("kind", "url", "user")}
@@ -141,6 +159,7 @@ class Folder:
                 "exists": True if self.cloud_at else is_vault(self.path), "finder": bool(self.finder.where()),
                 "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None,
                 "webdav": cloud.where(self.mirror_at, self.mirror_at["path"]) if self.mirror_at else None,
+                "s3": cloud.where(self.s3_at, self.s3_at["path"]) if self.s3_at else None,
                 "aiHidden": self.ai_hidden}
 
     def ready(self) -> None:
@@ -152,6 +171,8 @@ class Folder:
                 raise ValueError(f"This memory isn't in {cloud.label(self.cloud_at)} any more, at {self.cloud_at['path']}.")
             if self.github and not self.sync and (self.gitdir / "HEAD").exists():
                 self.start_sync()   # a cloud-only memory backs up to GitHub while it's unlocked
+            if self.s3_at and not self.s3:
+                self.start_s3()     # and to S3 / R2
 
     def lock(self) -> None:
         activity.forget(self.id)   # the AI's activity lines for this folder go with the lock
@@ -160,6 +181,7 @@ class Folder:
         self.passes.clear()
         if self.drive:
             self.pause_backup()     # a cloud-only memory: last backup to GitHub before its drive goes away
+            self.pause_s3()
             self.drive.stop()       # waits until every save has reached the cloud
 
     def pause_backup(self) -> None:
@@ -185,7 +207,7 @@ class Folders:
         for e in entries:
             if isinstance(e, dict) and e.get("id") and e.get("path"):
                 self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
-                                             e.get("github"), e.get("cloud"), e.get("mirror"))
+                                             e.get("github"), e.get("cloud"), e.get("mirror"), e.get("s3"))
                 self.items[e["id"]].ai_hidden = bool(e.get("aiHidden"))
         for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
@@ -199,6 +221,7 @@ class Folders:
         STATE.mkdir(parents=True, exist_ok=True)
         data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {}),
                              **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"mirror": f.mirror_at} if f.mirror_at else {}),
+                             **({"s3": f.s3_at} if f.s3_at else {}),
                              **({"aiHidden": True} if f.ai_hidden else {})}
                             for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
@@ -310,6 +333,7 @@ class Folders:
             raise ValueError(f"Connect to {cloud.label(conn)} first.")
         f.lock()
         f.pause_backup()
+        f.pause_s3()
         if f.mirror_at and all(f.mirror_at[k] == conn[k] for k in ("kind", "url", "user")):
             m = f.mirror or cloud.Mirror(conn, f.mirror_at["path"], f.path, MIRRORS / f.id)
             m.stop()
@@ -338,7 +362,7 @@ class Folders:
         shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
         shutil.rmtree(MIRRORS / f.id, ignore_errors=True)
         with self._lock:
-            moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path})
+            moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path}, None, f.s3_at)
             moved.ai_hidden = f.ai_hidden
             self.items[f.id] = moved
             self._save()
@@ -368,7 +392,7 @@ class Folders:
             shutil.rmtree(dest, ignore_errors=True)   # only the half-copied folder this move just made
             raise
         with self._lock:
-            moved = Folder(f.id, f.name, dest, f.github, None, f.cloud_at if keep_sync else None)
+            moved = Folder(f.id, f.name, dest, f.github, None, f.cloud_at if keep_sync else None, f.s3_at)
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()
@@ -418,6 +442,65 @@ class Folders:
             f.mirror_at = None
             self._save()
         return where
+
+    # ---------- a backup in S3 or R2 ----------
+
+    def to_s3(self, fid: str, conn: dict, bucket: str) -> dict:
+        """Back this memory up to BUCKET/NAME in S3 or R2: the first copy goes up now, then a few seconds after each
+        change. The keys are already in the Keychain (connect first)."""
+        f = self.get(fid)
+        if f.s3_at:
+            raise ValueError(f"This memory is already backed up to {cloud.label(f.s3_at)}.")
+        if f.cloud_at and not f.memory.is_open:
+            raise ValueError("Unlock it first.")
+        conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user", "region")}
+        cloud.check_bucket(conn, bucket)
+        top = re.sub(r'[^A-Za-z0-9 ._-]', "-", f.name).strip() or "Memory"
+        path = f"{bucket.strip()}/{top}"
+        b = cloud.S3Backup(conn, path, f.path)
+        b.sync_once()   # the first copy, before saying it's on
+        with self._lock:
+            f.s3_at = {**conn, "path": path}
+            self._save()
+        if not f.cloud_at or f.memory.is_open:
+            f.start_s3()
+            f.s3.state.update(last=b.state["last"])
+        return f.info()
+
+    def stop_s3(self, fid: str) -> str:
+        """No more backups to S3 / R2. What's in the bucket stays, for the person to delete there."""
+        f = self.get(fid)
+        if not f.s3_at:
+            raise ValueError("This memory isn't backed up to S3 or R2.")
+        f.pause_s3()
+        where = cloud.where(f.s3_at, f.s3_at["path"])
+        with self._lock:
+            f.s3_at = None
+            self._save()
+        return where
+
+    def from_s3(self, conn: dict, path: str, parent: str) -> dict:
+        """A memory back from its S3 / R2 backup (BUCKET/NAME/current) into parent on this Mac. Refused if that
+        memory is already here."""
+        conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user", "region")}
+        path = path.strip("/")
+        name = path.split("/")[-2] if path.endswith("/current") else path.split("/")[-1]
+        dest = Path(parent).expanduser() / name
+        if dest.exists():
+            raise ValueError(f'There\'s already a "{name}" there. Choose another place.')
+        dest.mkdir(parents=True)
+        try:
+            cloud.download(conn, path, dest)
+            if not is_vault(dest):
+                raise ValueError("What came down isn't a whole memory.")
+            same = self._same(dest)
+            if same:
+                raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
+        except Exception:
+            shutil.rmtree(dest, ignore_errors=True)
+            raise
+        with self._lock:
+            return self._add(dest, name).info()
 
     # ---------- a backup file (zip) ----------
 
@@ -611,8 +694,9 @@ class Folders:
             f.lock()
             f.pause_backup()
             f.pause_mirror()
+            f.pause_s3()
             new_path = move_folder_on_disk(f.path, Path(parent))
-            moved = Folder(f.id, f.name, new_path, f.github, None, f.mirror_at)
+            moved = Folder(f.id, f.name, new_path, f.github, None, f.mirror_at, f.s3_at)
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()

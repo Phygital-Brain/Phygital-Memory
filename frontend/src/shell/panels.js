@@ -81,6 +81,11 @@ export function openStorage(ctx) {
       el("div", { class: "set-section" }, "Backup"),
       option("lock", "GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB.",
         !!s.github, el("div", { class: "st-gh-note" }, "Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup."), github),
+      option("cloud", "S3 or R2", "An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size.",
+        !!s.s3, s.s3
+          ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
+              el("div", {}, btn("Stop backup", () => run(ctx.stopS3, "changed"), "st-stop")))
+          : el("div", {}, btn("Back up to S3 or R2", () => run(ctx.toS3, "changed")))),
       option("file", "Backup file", "One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file.",
         false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null)))),
       el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
@@ -466,5 +471,58 @@ export function openCloud(ctx) {
 
     pick();
     return { card, submit: () => submit && submit() };
+  });
+}
+
+// S3 or R2: the keys and the bucket, for a backup (restore: false) or to bring a memory back (restore: true).
+// ctx: {restore, test(fields), connect(fields) -> {conn, bucket}, memories(fields) -> {conn, memories}}
+// Resolves {conn, bucket} (backup), {conn, path} (restore), or null.
+export function openS3(ctx) {
+  return modal((done) => {
+    let kind = "s3";
+    const err = el("div", { class: "dlg-err" });
+    const body = el("div", { class: "cl-body" });
+    const title = el("div", { class: "dlg-title" }, ctx.restore ? "Open from S3 or R2" : "Back up to S3 or R2");
+    const actions = el("div", { class: "dlg-actions" });
+    const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
+    const busy = (b) => card.classList.toggle("busy", b);
+    const btn = (label, fn, cls) => el("button", { class: "btn " + (cls || ""), type: "button", onclick: fn }, label);
+    const input = (ph, label, type = "text") => el("input", { class: "dlg-input", type, spellcheck: "false", autocomplete: "off", placeholder: ph, "aria-label": label });
+    const bucket = input("Bucket name, like my-notes-backup", "Bucket");
+    const keyId = input("Access key ID", "Access key ID");
+    const secret = input("Secret access key", "Secret access key", "password");
+    const where = input("Region, like eu-west-1", "Region");
+    const tabs = el("div", { class: "seg", role: "radiogroup" });
+    const drawTabs = () => tabs.replaceChildren(...[["s3", "Amazon S3"], ["r2", "Cloudflare R2"]].map(([k, t]) =>
+      el("button", { class: "seg-b" + (kind === k ? " on" : ""), type: "button", onclick: () => {
+        kind = k; drawTabs(); where.placeholder = k === "r2" ? "Account ID (32 letters and numbers)" : "Region, like eu-west-1";
+        where.setAttribute("aria-label", k === "r2" ? "Account ID" : "Region"); } }, t)));
+    drawTabs();
+    const fields = () => {
+      if (![bucket, keyId, secret, where].every((i) => i.value.trim())) { err.classList.remove("ok"); err.textContent = "Fill in all four."; return null; }
+      return { kind, bucket: bucket.value.trim(), keyId: keyId.value.trim(), secret: secret.value, where: where.value.trim() };
+    };
+    const go = async (fn) => {
+      const f = fields(); if (!f) return;
+      err.classList.remove("ok"); err.textContent = ""; busy(true);
+      try { await fn(f); } catch (e) { err.textContent = e.message; }
+      busy(false);
+    };
+    const test = () => go(async (f) => { const j = await ctx.test(f); err.classList.add("ok"); err.textContent = `Connected to ${j.where}.`; });
+    const next = () => go(async (f) => {
+      if (!ctx.restore) { const j = await ctx.connect(f); secret.value = ""; done({ conn: j.conn, bucket: j.bucket }); return; }
+      const j = await ctx.memories(f);
+      secret.value = "";
+      title.textContent = "Backups in this bucket";
+      body.replaceChildren(el("div", { class: "act-list" }, ...(j.memories.length ? j.memories.map((m) =>
+        el("button", { class: "todo-row repo-row", type: "button", onclick: () => done({ conn: j.conn, path: m.path }) },
+          el("span", { class: "trash-ic" }, icon("lock", 16)), el("div", { class: "act-main" }, el("div", { class: "act-line" }, m.name),
+            el("div", { class: "act-folder" }, m.path)))) : [el("div", { class: "act-empty" }, "No backups found in this bucket.")])));
+      actions.replaceChildren(btn("Cancel", () => done(null)));
+    });
+    body.replaceChildren(tabs, bucket, keyId, secret, where,
+      el("div", { class: "st-gh-note" }, "The app never makes or deletes buckets. The secret key stays in this Mac's Keychain."));
+    actions.replaceChildren(btn("Cancel", () => done(null)), btn("Test connection", test), btn(ctx.restore ? "Find backups" : "Back up", next, "primary"));
+    return { card, focus: bucket, submit: next };
   });
 }

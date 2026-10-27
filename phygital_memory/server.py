@@ -800,6 +800,28 @@ async def api(request: Request) -> Response:
         # ---- Cloud only (only when the person presses a button; nothing talks to a cloud before) ----
         if action == "clouds":   # the clouds this Mac is already connected to
             return _ok({"clouds": folders.clouds()})
+        if action in ("s3test", "s3connect", "s3memories"):   # S3 / R2: keys and a bucket (backups only)
+            conn = cloud.make_s3_conn(str(body.get("kind", "")), str(body.get("keyId", "")), str(body.get("where", "")),
+                                      str(body.get("endpoint", "")))
+            secret, bucket = str(body.get("secret", "")), str(body.get("bucket", "")).strip()
+            if secret:
+                await asyncio.to_thread(cloud.check_bucket, conn, bucket, secret)
+            elif not cloud.has_password(conn):
+                return _ok({"error": "Type the secret access key."}, 400)
+            if action == "s3test":
+                return _ok({"ok": True, "where": f"{cloud.label(conn)} · {bucket}"})
+            if secret:
+                await asyncio.to_thread(cloud.save_password, conn, secret)
+            if action == "s3connect":
+                return _ok({"conn": conn, "bucket": bucket})
+            found = await asyncio.to_thread(cloud.find_memories, conn, 4, bucket)
+            return _ok({"conn": conn, "memories": [{"path": m["path"], "name": m["path"].split("/")[-2]}
+                                                   for m in found if m["path"].endswith("/current")]})
+        if action == "froms3":   # a memory back from its S3 / R2 backup, into a place the person picks
+            parent = await asyncio.to_thread(pick_folder, "Choose where to put the memory", str(Path.home()))
+            if not parent:
+                return _ok({"cancelled": True})
+            return _ok({"folder": await asyncio.to_thread(folders.from_s3, body.get("conn") or {}, str(body.get("path", "")), parent)})
         if action == "cloudtest":   # Test connection: only checks the login, keeps nothing
             conn = await asyncio.to_thread(cloud.find_conn, str(body.get("server", "")), str(body.get("user", "")),
                                            str(body.get("password", "")))
@@ -875,11 +897,13 @@ async def api(request: Request) -> Response:
             return _ok({"open": False})
         if action == "storage" and f.cloud_at:   # cloud only: nothing on this Mac to look at
             return _ok({"path": f.info()["path"], "cloud": None, "cloudOnly": cloud.label(f.cloud_at), "webdav": None,
+                        "s3": f.info()["s3"], "s3Status": f.s3.status() if f.s3 else None,
                         "places": cloud_places(), "home": str(Path.home()), "offline": 0,
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
                         "webdav": f.info()["webdav"], "webdavStatus": f.mirror.status() if f.mirror else None,
+                        "s3": f.info()["s3"], "s3Status": f.s3.status() if f.s3 else None,
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "stopgithub":   # Mac only from now on; the repo on GitHub stays until the person deletes it there
@@ -901,6 +925,14 @@ async def api(request: Request) -> Response:
         if action == "towebdav":   # Mac + WebDAV: keep this Mac memory in step with a WebDAV folder
             return _ok({"folder": await asyncio.to_thread(folders.to_webdav, f.id, body.get("conn") or {},
                                                           str(body.get("parent", "")))})
+        if action == "tos3":   # back this memory up to S3 / R2 (connected first)
+            info = await asyncio.to_thread(folders.to_s3, f.id, body.get("conn") or {}, str(body.get("bucket", "")))
+            approvals.add(f"Backup to {cloud.label(body.get('conn') or {})} on", f.name, "click")
+            return _ok({"folder": info})
+        if action == "stops3":
+            where = await asyncio.to_thread(folders.stop_s3, f.id)
+            approvals.add("Backup to S3 / R2 off", f.name, "click")
+            return _ok({"where": where})
         if action == "stopwebdav":
             return _ok({"where": await asyncio.to_thread(folders.stop_webdav, f.id)})
         if action == "tocloud":   # move it from this Mac into the cloud (locks first; the page asks for the password again)
