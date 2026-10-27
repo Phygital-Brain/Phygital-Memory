@@ -12,6 +12,8 @@ use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 struct Server(Mutex<Option<CommandChild>>);
 // A secret only this app and the program it starts share, for the /shell/* calls (closing the window).
 struct ShellToken(String);
+// What the server must answer at /shell/hello: proves 8790 is really ours before the window goes there.
+struct ServerProof(String);
 static CLOSING: AtomicBool = AtomicBool::new(false);
 static MAY_EXIT: AtomicBool = AtomicBool::new(false);
 static SERVER_ENDED: AtomicBool = AtomicBool::new(false);   // the server stopped (it couldn't start, say)
@@ -36,6 +38,7 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     let cmd = app.shell().command(exe)
         .env("PHYGITAL_MEMORY_FOLDER", folder()).env("PHYGITAL_MEMORY_PORT", "8790")
         .env("PHYGITAL_MEMORY_SHELL_TOKEN", token)
+        .env("PHYGITAL_MEMORY_SERVER_PROOF", app.state::<ServerProof>().0.clone())
         .env("PHYGITAL_MEMORY_APP_PID", std::process::id().to_string());
     let (mut rx, child) = cmd.spawn().map_err(|e| e.to_string())?;
     tauri::async_runtime::spawn(async move {
@@ -46,7 +49,15 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     *app.state::<Server>().0.lock().unwrap() = Some(child);
     for _ in 0..150 {
         if TcpStream::connect_timeout(&"127.0.0.1:8790".parse().unwrap(), Duration::from_millis(200)).is_ok() {
-            return Ok(());
+            // Something answers on 8790: it must be our own server, which alone knows the proof we gave it.
+            // Another program sitting on the port could show a fake unlock page or catch AI keys.
+            let proof = app.state::<ServerProof>().0.clone();
+            if shell(app, "hello").map_or(false, |b| b.contains(&proof)) {
+                return Ok(());
+            }
+            if SERVER_ENDED.load(Ordering::SeqCst) {
+                return Err("Another program is using this app's port (8790). Quit it, then open Phygital Memory again.".into());
+            }
         }
         if SERVER_ENDED.load(Ordering::SeqCst) {   // no point waiting: say so at once
             return Err("Its notes service stopped while starting.".into());
@@ -161,7 +172,13 @@ fn ask_window(app: &tauri::AppHandle) {
         .closable(false).always_on_top(true).visible(false).center()
         .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
         .on_navigation(|url| own_page(url))
+        .initialization_script(&page_secret(app))
         .build();
+}
+
+// The page's own secret for /api: only our windows get it, so another program on this Mac can't drive the app.
+fn page_secret(app: &tauri::AppHandle) -> String {
+    format!("window.__PM_SHELL = {:?};", app.state::<ShellToken>().0)
 }
 
 // The window may only ever show our own local page. A note, a link or injected HTML that tries to send it
@@ -183,6 +200,7 @@ fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
         .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0))
         .on_navigation(|url| own_page(url) || starting_page(url))
         .disable_drag_drop_handler()   // files dragged in from Finder reach the page (it adds them, encrypted)
+        .initialization_script(&page_secret(app))
         .build().map_err(|e| e.to_string())?;
     fit_to_screen(&win);
     Ok(())
@@ -214,6 +232,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .manage(Server(Mutex::new(None)))
         .manage(ShellToken(random_token()))
+        .manage(ServerProof(random_token()))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" && !MAY_EXIT.load(Ordering::SeqCst) {
