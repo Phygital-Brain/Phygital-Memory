@@ -82,8 +82,13 @@ def make_s3_conn(kind: str, key_id: str, where_: str, endpoint: str = "") -> dic
             raise CloudError("The address must use https.")
         return {"kind": kind, "url": endpoint.rstrip("/"), "user": key_id, "region": where_ or "auto"}
     if kind == "r2":
+        # Cloudflare shows the endpoint ("https://ACCOUNT.r2.cloudflarestorage.com", or with .eu. for EU buckets);
+        # the account ID alone works too
+        m = re.search(r"([0-9a-f]{32})(\.(eu|fedramp))?\.r2\.cloudflarestorage\.com", where_)
+        if m:
+            return {"kind": "r2", "url": f"https://{m.group(0)}", "user": key_id, "region": "auto"}
         if not re.fullmatch(r"[0-9a-f]{32}", where_):
-            raise CloudError("Type the account ID: 32 letters and numbers, from the R2 page in Cloudflare.")
+            raise CloudError("Paste the S3 endpoint Cloudflare shows, like https://….r2.cloudflarestorage.com.")
         return {"kind": "r2", "url": f"https://{where_}.r2.cloudflarestorage.com", "user": key_id, "region": "auto"}
     if not re.fullmatch(r"[a-z]{2}(-[a-z]+)+-\d", where_):
         raise CloudError("Type the region, like eu-west-1.")

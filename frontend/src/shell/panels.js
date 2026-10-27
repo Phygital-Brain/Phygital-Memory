@@ -489,14 +489,19 @@ export function openS3(ctx) {
     const btn = (label, fn, cls) => el("button", { class: "btn " + (cls || ""), type: "button", onclick: fn }, label);
     const input = (ph, label, type = "text") => el("input", { class: "dlg-input", type, spellcheck: "false", autocomplete: "off", placeholder: ph, "aria-label": label });
     const bucket = input("Bucket name, like my-notes-backup", "Bucket");
-    const keyId = input("Access key ID", "Access key ID");
-    const secret = input("Secret access key", "Secret access key", "password");
+    const keyId = input("Access Key ID", "Access Key ID");
+    const secret = input("Secret Access Key", "Secret Access Key", "password");
     const where = input("Region, like eu-west-1", "Region");
+    const hint = el("div", { class: "st-gh-note" });
+    const drawHint = () => { hint.textContent = kind === "r2"
+      ? "Cloudflare shows three values after you make an API token. Use the Access Key ID, the Secret Access Key and the S3 endpoint. You don't need the Token value."
+      : "From your IAM user's access key in AWS. The region is where the bucket is, like eu-west-1."; };
+    drawHint();
     const tabs = el("div", { class: "seg", role: "radiogroup" });
     const drawTabs = () => tabs.replaceChildren(...[["s3", "Amazon S3"], ["r2", "Cloudflare R2"]].map(([k, t]) =>
       el("button", { class: "seg-b" + (kind === k ? " on" : ""), type: "button", onclick: () => {
-        kind = k; drawTabs(); where.placeholder = k === "r2" ? "Account ID (32 letters and numbers)" : "Region, like eu-west-1";
-        where.setAttribute("aria-label", k === "r2" ? "Account ID" : "Region"); } }, t)));
+        kind = k; drawTabs(); drawHint(); where.placeholder = k === "r2" ? "S3 endpoint, like https://….r2.cloudflarestorage.com" : "Region, like eu-west-1";
+        where.setAttribute("aria-label", k === "r2" ? "S3 endpoint" : "Region"); } }, t)));
     drawTabs();
     const fields = () => {
       if (![bucket, keyId, secret, where].every((i) => i.value.trim())) { err.classList.remove("ok"); err.textContent = "Fill in all four."; return null; }
@@ -520,7 +525,7 @@ export function openS3(ctx) {
             el("div", { class: "act-folder" }, m.path)))) : [el("div", { class: "act-empty" }, "No backups found in this bucket.")])));
       actions.replaceChildren(btn("Cancel", () => done(null)));
     });
-    body.replaceChildren(tabs, bucket, keyId, secret, where,
+    body.replaceChildren(tabs, bucket, keyId, secret, where, hint,
       el("div", { class: "st-gh-note" }, "The app never makes or deletes buckets. The secret key stays in this Mac's Keychain."));
     actions.replaceChildren(btn("Cancel", () => done(null)), btn("Test connection", test), btn(ctx.restore ? "Find backups" : "Back up", next, "primary"));
     return { card, focus: bucket, submit: next };
