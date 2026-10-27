@@ -108,9 +108,10 @@ class Finder:
         return finder_mount.Mounts.available(self)   # macOS with mount_webdav
 
     def where(self) -> str:
-        return self.mounts.where(self.volume) if self.mounts else ""
+        return self.mounts.where(self.session.vault.name) if self.mounts else ""   # the name it was mounted under
 
-    def show(self) -> str:
+    def show(self, open_window: bool = True) -> str:
+        """Mount the Finder view and put its icon on the Desktop. open_window=False: just the icon, no window."""
         if not self.memory.is_open:
             raise ValueError("Unlock first.")
         if self.mounts is None:
@@ -119,9 +120,16 @@ class Finder:
             journal = _Journal(self.memory)
             BASE.mkdir(parents=True, exist_ok=True)
             self.mounts = finder_mount.Mounts(manager, lambda _s: journal, BASE)
-        where = self.mounts.mount(self.session)
+        where = self.mounts.mount(self.session, open_window)
         self.link = _add_desktop_link(self.volume, where)
         return where
+
+    def renamed(self, name: str) -> None:
+        """The memory got a new name: so does its Desktop icon."""
+        self.volume = name
+        if self.link is not None and self.mounts is not None:
+            _remove_desktop_link(self.link)
+            self.link = _add_desktop_link(name, self.where())
 
     def hide(self) -> None:
         _remove_desktop_link(self.link)

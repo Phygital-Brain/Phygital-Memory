@@ -454,11 +454,8 @@ async function enterApp() {
   await loadFiles();
   renderTabs();
   loadLinks();
-  checkFinder(true).then(() => {   // "Open in Finder when unlocked" (on by default, in Settings)
-    if (settings().finderOnUnlock && finder.available && !finder.shown && loadedFolder === currentFolder()) {
-      finder.confirmed = true;
-      toggleFinder();
-    }
+  checkFinder(true).then(() => {   // "Desktop icon when unlocked" (on by default, in Settings): no Finder window
+    if (settings().desktopIcon && finder.available && !finder.shown && loadedFolder === currentFolder()) desktopIcon();
   });
   goHome();
   refreshFolders();
@@ -684,6 +681,17 @@ async function toggleFinder() {
   finderBtn.disabled = false;
   drawFinder();
   refreshFolders();
+}
+// Mount the Finder view quietly: only its icon on the Desktop, no window and no messages.
+async function desktopIcon() {
+  const fid = loadedFolder;
+  try {
+    const s = await api("finder", { do: "show", window: false });
+    if (fid !== loadedFolder) return;
+    finder.shown = !!s.shown; finder.where = s.where || ""; finder.confirmed = true;
+    drawFinder();
+    refreshFolders();
+  } catch {}
 }
 async function hideFinder() {
   try { await api("finder", { do: "hide" }); } catch (e) { toastErr(e.message); }

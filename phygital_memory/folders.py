@@ -162,6 +162,7 @@ class Folders:
         with self._lock:
             f = self.get(fid)
             f.name = name
+            f.finder.renamed(name)
             self._save()
             return f.info()
 

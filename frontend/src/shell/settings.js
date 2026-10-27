@@ -1,9 +1,9 @@
-// Per-device settings (theme, editor font size, properties on/off, open in Finder when unlocked). The editor always uses the full width. They live in localStorage, because they
+// Per-device settings (theme, editor font size, properties on/off, Desktop icon when unlocked). The editor always uses the full width. They live in localStorage, because they
 // belong to this computer, not to the notes.
 import { el, icon } from "./dom.js";
 
 const KEY = "phygital-memory-settings";
-const DEFAULTS = { theme: "system", size: 16, props: true, finderOnUnlock: true };
+const DEFAULTS = { theme: "system", size: 16, props: true, desktopIcon: true };
 let cur = { ...DEFAULTS };
 const listeners = new Set();
 
@@ -51,8 +51,8 @@ export function openSettings(folderOpts) {
 
   const props = el("input", { type: "checkbox", checked: cur.props, "aria-label": "Show properties" });
   props.addEventListener("change", () => update({ props: props.checked }));
-  const onUnlock = el("input", { type: "checkbox", checked: cur.finderOnUnlock, "aria-label": "Open in Finder when unlocked" });
-  onUnlock.addEventListener("change", () => update({ finderOnUnlock: onUnlock.checked }));
+  const onUnlock = el("input", { type: "checkbox", checked: cur.desktopIcon, "aria-label": "Desktop icon when unlocked" });
+  onUnlock.addEventListener("change", () => update({ desktopIcon: onUnlock.checked }));
 
   const close = () => { back.remove(); document.removeEventListener("keydown", onKey, true); open = null; prev && prev.focus && prev.focus(); };
   const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
@@ -63,7 +63,7 @@ export function openSettings(folderOpts) {
     row("Theme", "System follows your Mac.", seg([["system", "System"], ["light", "Light"], ["dark", "Dark"]], () => cur.theme, (v) => update({ theme: v }))),
     row("Font size", null, el("div", { class: "set-range" }, size, sizeVal)),
     row("Show properties", "The fields under a note's title.", el("label", { class: "switch" }, props, el("span", { class: "switch-t" }))),
-    row("Open in Finder when unlocked", "While a folder is open in Finder, any app on this Mac can read its notes. It closes when you lock.",
+    row("Desktop icon when unlocked", "A folder icon on the Desktop, with your memory's name, to open your notes in Finder. While it's there, any app on this Mac can read them. It goes away when you lock.",
       el("label", { class: "switch" }, onUnlock, el("span", { class: "switch-t" }))),
     ...folderSection());
   function folderSection() {

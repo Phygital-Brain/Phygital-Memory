@@ -563,7 +563,7 @@ async def api(request: Request) -> Response:
         if action == "finder":   # the person asked to see the unlocked notes as a normal folder in Finder
             do = body.get("do", "status")
             if do == "show":
-                where = await asyncio.to_thread(f.finder.show)
+                where = await asyncio.to_thread(f.finder.show, body.get("window", True) is not False)
                 return _ok({"shown": True, "where": where})
             if do == "revealvault":   # the encrypted folder itself (scrambled files only), in Finder
                 await asyncio.to_thread(subprocess.run, ["open", "-R", str(f.path)], timeout=30)

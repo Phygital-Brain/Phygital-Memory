@@ -500,7 +500,7 @@ class Mounts:
         m = self.active.get(vault.casefold())
         return m.where if m else ""
 
-    def mount(self, session) -> str:
+    def mount(self, session, open_window: bool = True) -> str:
         if not self.available():
             raise RuntimeError("Showing the vault in Finder works on a Mac only, for now.")
         with self.mutex:
@@ -519,7 +519,8 @@ class Mounts:
                     raise RuntimeError("macOS didn't mount the vault. Try again, or use Browse files.")
                 self.active[session.vault.name.casefold()] = m
                 self.manager._event(session.vault.name, f"shown in Finder at {m.where}")
-        self.run(["open", m.where], capture_output=True, timeout=30)
+        if open_window:
+            self.run(["open", m.where], capture_output=True, timeout=30)
         return m.where
 
     def _find(self, port: int) -> str:
