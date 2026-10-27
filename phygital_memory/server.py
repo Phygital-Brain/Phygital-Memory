@@ -935,10 +935,8 @@ async def api(request: Request) -> Response:
             inv = sharing.parse_link(link)
             q = parse_qs(urlparse(link).query)
             if q.get("d") and body.get("where") != "mac" and not body.get("folder"):   # Syncthing: the files come straight
-                parent = body.get("parent") or await asyncio.to_thread(   # from the owner's Mac into a new folder here
-                    pick_folder, "Choose where to keep the shared memory", str(Path.home()))
-                if not parent:
-                    return _ok({"cancelled": True})
+                parent = body.get("parent") or STATE / "Shared with me"   # from the owner's Mac into the app's own folder:
+                Path(parent).mkdir(parents=True, exist_ok=True)             # nothing to choose, it's all locked anyway
                 name = re.sub(r'[/\\:*?"<>|]', "-", inv["name"]).strip() or "Shared memory"
                 target, n = Path(parent) / name, 1
                 while target.exists():

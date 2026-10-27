@@ -330,7 +330,7 @@ async function joinFromInvite() {
       if (!fid) return;
       j = await api("joinshared", { link: v.link, folder: fid });
     } else {
-      toast(v.where === "syncthing" ? "Choose where to keep it on this Mac" : "Choose the shared memory's folder");
+      if (v.where !== "syncthing") toast("Choose the shared memory's folder");
       j = await api("joinshared", { link: v.link, where: v.where });
       if (j.cancelled) return;
     }
@@ -447,7 +447,7 @@ function drawUnlock() {
   const links = [];
   if (info) {
     const pw = el("input", { type: "password", placeholder: "Password", autocomplete: "off", "aria-label": "Password" });
-    const err = el("div", { class: "unlock-err" }, info.exists ? "" : "Can't find this memory. It may have moved, or its drive isn't connected.");
+    const err = el("div", { class: "unlock-err" }, info.exists || (info.joined && info.syncthing) ? "" : "Can't find this memory. It may have moved, or its drive isn't connected.");
     const btn = el("button", { class: "btn primary", type: "submit" }, "Unlock");
     if (folderList.length > 1) {
       const sel = el("select", { class: "unlock-pick", "aria-label": "Folder" },
@@ -459,12 +459,15 @@ function drawUnlock() {
     if (info.joined) {   // shared with this person: it opens with their own key, no password
       const open = el("button", { class: "btn primary", type: "submit" }, "Open");
       kids.push(el("div", { class: "unlock-sub" }, "Shared with you. It opens with your own key."), open, err);
-      unlockEl._submit = async (e) => {
-        e.preventDefault();
-        err.textContent = ""; err.classList.remove("hint"); open.disabled = true;
+      const tryOpen = async (e) => {
+        e?.preventDefault();
+        if (!e && (!document.body.contains(open) || currentFolder() !== info.id)) return;   // this screen is gone
+        if (e) { err.textContent = ""; err.classList.remove("hint"); }
+        open.disabled = true;
         try {
           const j = await api("keyunlock", { folder: info.id });
           if (j.waiting) {
+            if (info.syncthing && !e) setTimeout(tryOpen, 4000);   // keeps checking: it opens by itself once let in
             err.classList.add("hint");
             err.textContent = j.files || j.safety
               ? `Waiting for the owner to let you in. Your safety code is "${j.safety}". It should match what they see. Keep both apps open.`
@@ -479,6 +482,8 @@ function drawUnlock() {
         } catch (x) { err.textContent = x.message; }
         open.disabled = false;
       };
+      unlockEl._submit = tryOpen;
+      if (info.syncthing) setTimeout(tryOpen, 300);   // once on screen: shows the safety code while waiting
       unlockEl._focus = () => open.focus();
     } else {
       const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), "Unlock with Touch ID");
@@ -541,7 +546,7 @@ function drawSwitcher() {
   if (!sbName) return;
   const info = curInfo();
   sbName.textContent = info ? info.name : "Phygital Memory";
-  sbPath.textContent = info ? shortPath(info.path) : "No folder yet";
+  sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : "No folder yet";
   sbPath.title = info ? info.path : "";
   sbTile.replaceChildren(folderTile(info || {}, !!(info && unlocked(info.id)), 34));
   refreshBar();
@@ -555,7 +560,7 @@ async function openSwitcher() {
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite,
     createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
-    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, ...(curInfo()?.joined ? {} : { share: () => openShareHere() }), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 

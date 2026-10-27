@@ -27,7 +27,7 @@ export function openShare(ctx) {
       const drawRole = () => role.replaceChildren(...[["edit", "Can edit"], ["view", "Can view"]].map(([k, t]) =>
         el("button", { class: "seg-b" + (pick === k ? " on" : ""), type: "button", onclick: () => { pick = k; drawRole(); } }, t)));
       drawRole();
-      body.replaceChildren(
+      body.replaceChildren(...[
         el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, ctx.part
           ? "Only this goes to them, in its own locked copy with its own key. The rest of your memory stays with you."
           : "Everyone opens it with their own key. Your password is never shared.")),
@@ -59,7 +59,7 @@ export function openShare(ctx) {
             ? "Send it to them. It works once, for 7 days. Nothing goes to them until you press Let in. Then the files go straight from this Mac to theirs while both apps are open."
             : `Send it to them. It works once, for 7 days. They also need the files: share "${made.place}" with them there.`,
             info("The invite only proves who's asking. You let them in here, and only then does their app get their own key to this memory.")) : null] : [
-          el("div", { class: "mf-hint" }, "Only the owner can invite people or change who can edit.")]));
+          el("div", { class: "mf-hint" }, "Only the owner can invite people or change who can edit.")])].filter((x) => x != null));
     };
     draw();
     return { card };
