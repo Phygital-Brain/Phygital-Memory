@@ -72,6 +72,7 @@ def write_guides(path: Path) -> None:
             pass   # a read-only place: the folder still works without them
 
 
+GITDIRS = STATE / "git"   # GitHub backup: git's own files, one folder per memory, never inside the memory itself
 CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (hidden drives), and their caches
 
 
@@ -90,13 +91,18 @@ class Folder:
         self.finder = Finder(self.memory, volume=name)
         self.passes: set[str] = set()
         self.fails = {"n": 0, "until": 0.0}
-        self.github, self.sync = github, None   # "owner/repo" when kept in a private GitHub repo
+        self.github, self.sync = github, None   # "owner/repo" when backed up to a private GitHub repo
         self.ai_hidden = False   # "AI can't see this": no AI app reaches it, whatever its key says
-        if github and (self.path / ".git").is_dir():
+        self.gitdir = GITDIRS / fid
+        self.memory.lost_store = self.gitdir / "phygital-lost-folders.json"
+        if github and not cloud_at and (self.path / ".git").is_dir() and not self.gitdir.exists():
+            self.gitdir.parent.mkdir(parents=True, exist_ok=True)   # the older way kept it inside: move it out
+            shutil.move(str(self.path / ".git"), str(self.gitdir))
+        if github and not cloud_at and (self.gitdir / "HEAD").exists():
             self.start_sync()
 
     def start_sync(self) -> None:
-        self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen)
+        self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen, git_dir=self.gitdir)
         try:
             self.sync.update_readme(self.name)   # an older README from the app goes up to date with the next sync
         except OSError:
@@ -117,6 +123,8 @@ class Folder:
             if not is_vault(self.path):
                 self.drive.stop()
                 raise ValueError(f"This memory isn't in {cloud.label(self.cloud_at)} any more, at {self.cloud_at['path']}.")
+            if self.github and not self.sync and (self.gitdir / "HEAD").exists():
+                self.start_sync()   # a cloud-only memory backs up to GitHub while it's unlocked
 
     def lock(self) -> None:
         activity.forget(self.id)   # the AI's activity lines for this folder go with the lock
@@ -124,7 +132,18 @@ class Folder:
         self.memory.lock()
         self.passes.clear()
         if self.drive:
+            self.pause_backup()     # a cloud-only memory: last backup to GitHub before its drive goes away
             self.drive.stop()       # waits until every save has reached the cloud
+
+    def pause_backup(self) -> None:
+        """Send the last changes to GitHub, then stop (before the folder moves or its drive goes away)."""
+        if self.sync:
+            try:
+                self.sync.sync_once()
+            except Exception:
+                pass
+            self.sync.stop()
+            self.sync = None
 
 
 class Folders:
@@ -256,12 +275,11 @@ class Folders:
         f = self.get(fid)
         if f.cloud_at:
             raise ValueError("This memory is already in the cloud.")
-        if f.github:
-            raise ValueError("Stop GitHub sync first: a memory shouldn't be in GitHub and a cloud at once.")
         conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
         if not cloud.has_password(conn):
             raise ValueError(f"Connect to {cloud.label(conn)} first.")
         f.lock()
+        f.pause_backup()
         size = sum(p.stat().st_size for p in f.path.rglob("*") if p.is_file() and p.name != ".DS_Store")
         free = cloud.free_space(conn)
         if free is not None and size > free:
@@ -277,7 +295,7 @@ class Folders:
         trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
         shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
         with self._lock:
-            moved = Folder(f.id, f.name, Path(), None, {**conn, "path": path})
+            moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path})
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()
@@ -307,7 +325,7 @@ class Folders:
             shutil.rmtree(dest, ignore_errors=True)   # only the half-copied folder this move just made
             raise
         with self._lock:
-            moved = Folder(f.id, f.name, dest)
+            moved = Folder(f.id, f.name, dest, f.github)
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()
@@ -319,12 +337,12 @@ class Folders:
         """Keep this folder in step with a new private GitHub repo named "FOLDER-Phygital-Memory"."""
         f = self.get(fid)
         if f.github:
-            raise ValueError("This folder is already kept in GitHub.")
-        if f.cloud_at:
-            raise ValueError(f"This memory lives in {cloud.label(f.cloud_at)}, so it can't go to GitHub too.")
-        if any(str(f.path).startswith(p["path"] + "/") for p in cloud_places()):
-            raise ValueError("Move it to a place on this Mac first: a folder shouldn't be in a cloud and GitHub at once.")
-        f.github = GitSync(f.path, repo_name(f.name)).create(reuse)
+            raise ValueError("This memory is already backed up to GitHub.")
+        if f.cloud_at and not f.memory.is_open:
+            raise ValueError("Unlock it first.")
+        if f.gitdir.exists():   # left from an earlier backup that was stopped
+            shutil.rmtree(f.gitdir)
+        f.github = GitSync(f.path, repo_name(f.name), git_dir=f.gitdir).create(reuse)
         with self._lock:
             self._save()
         f.start_sync()
@@ -343,6 +361,8 @@ class Folders:
             f.sync = None
         trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
         stamp = time.strftime("%Y-%m-%d %H.%M.%S")
+        if f.gitdir.exists():
+            shutil.move(str(f.gitdir), str(trash / f"{f.name} .git (GitHub backup, {stamp})"))
         for name in (".git", ".gitignore", ".gitattributes", ".github", "README.md"):
             p = f.path / name
             readme = p / "README.md" if name == ".github" else p
@@ -365,11 +385,12 @@ class Folders:
         dest = Path(parent).expanduser() / name
         if dest.exists():
             raise ValueError(f'There is already a "{name}" in that place.')
-        GitSync.clone(repo, dest)
+        fid = secrets.token_hex(4)
+        GitSync.clone(repo, dest, git_dir=GITDIRS / fid)
         if not is_vault(dest):
             raise ValueError("That repo isn't a Phygital Memory folder.")
         with self._lock:
-            f = Folder(secrets.token_hex(4), name, dest, repo)
+            f = Folder(fid, name, dest, repo)
             self.items[f.id] = f
             self._save()
         return f.info()
@@ -412,8 +433,9 @@ class Folders:
             if f.cloud_at:
                 raise ValueError(f"This memory lives in {cloud.label(f.cloud_at)}, so it stays there.")
             f.lock()
+            f.pause_backup()
             new_path = move_folder_on_disk(f.path, Path(parent))
-            moved = Folder(f.id, f.name, new_path)
+            moved = Folder(f.id, f.name, new_path, f.github)
             moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()

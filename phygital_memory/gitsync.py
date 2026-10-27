@@ -203,17 +203,24 @@ def rename_repo(repo: str, new_name: str) -> str:
 
 
 class GitSync:
-    def __init__(self, folder: Path, repo: str, branch: str = "main", watch=None):
-        """watch: returns a number that changes when a note changes here (Memory's gen), to send changes up soon."""
+    def __init__(self, folder: Path, repo: str, branch: str = "main", watch=None, git_dir: Path | None = None):
+        """watch: returns a number that changes when a note changes here (Memory's gen), to send changes up soon.
+        git_dir: where git keeps its own files. Outside the memory folder, so a cloud app syncing that folder (or a
+        cloud-only memory's drive) never sees them. None: the older way, a .git inside the folder."""
         self.folder, self.repo, self.branch, self.watch = Path(folder), repo, branch, watch
+        self.gitdir = Path(git_dir) if git_dir else self.folder / ".git"
+        self._outside = git_dir is not None
         self.state = {"repo": repo, "last": None, "error": "", "too_big": [], "stopped": False}
         self._wake = threading.Event()
         self._lock = threading.Lock()
         self._thread = None
 
     # ---------- git with GitHub's sign-in, nothing stored by us ----------
+    def _where(self) -> list[str]:
+        return ["--git-dir", str(self.gitdir), "--work-tree", str(self.folder)] if self._outside else []
+
     def git(self, *args, ok=(0,), timeout=120):
-        return _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={credential_helper()}",
+        return _run(["git", *self._where(), "-c", "credential.helper=", "-c", f"credential.helper={credential_helper()}",
                      "-c", "user.name=Phygital Memory", "-c", "user.email=sync@phygital.memory", *args],
                     cwd=self.folder, ok=ok, timeout=timeout)
 
@@ -224,7 +231,7 @@ class GitSync:
         If the name is taken by this same memory's repo (connected before, then stopped), SameMemoryRepo is raised so
         the person can choose to use it again: then call create(reuse='owner/name'). A name taken by anything else
         gets "-2", "-3"."""
-        if (self.folder / ".git").exists():
+        if (self.gitdir / "HEAD").exists() or (self.folder / ".git").exists():
             raise RuntimeError("This folder is already a git repo.")
         me = signed_in()
         if me is None:
@@ -245,7 +252,9 @@ class GitSync:
         if not is_private(owner_repo):
             raise RuntimeError("GitHub didn't make the repo private, so nothing was sent.")
         self.prepare(self.folder.name)
-        self.git("init", "-b", self.branch)
+        if self._outside:
+            self.gitdir.parent.mkdir(parents=True, exist_ok=True)
+        self.git("init", "-q", "-b", self.branch)
         self.git("remote", "add", "origin", f"https://github.com/{owner_repo}.git")
         if reuse:
             self._start_from_where_we_left()
@@ -338,26 +347,35 @@ class GitSync:
             p.write_text(README.format(name=name, repo=self.repo))
 
     @staticmethod
-    def clone(repo: str, dest: Path, branch: str = "main") -> "GitSync":
+    def clone(repo: str, dest: Path, branch: str = "main", git_dir: Path | None = None) -> "GitSync":
         """Another Mac: bring the private repo down into dest (a new folder), then keep it in step."""
         if not is_private(repo):
             raise RuntimeError("That repo isn't private, so it isn't used.")
-        _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={credential_helper()}", "clone", "-q", "-b", branch,
-              f"https://github.com/{repo}.git", str(dest)], timeout=600)
-        return GitSync(dest, repo, branch)
+        if git_dir is None:
+            _run(["git", "-c", "credential.helper=", "-c", f"credential.helper={credential_helper()}", "clone", "-q", "-b", branch,
+                  f"https://github.com/{repo}.git", str(dest)], timeout=600)
+            return GitSync(dest, repo, branch)
+        dest.mkdir(parents=True, exist_ok=True)
+        Path(git_dir).parent.mkdir(parents=True, exist_ok=True)
+        g = GitSync(dest, repo, branch, git_dir=git_dir)
+        g.git("init", "-q", "-b", branch)
+        g.git("remote", "add", "origin", f"https://github.com/{repo}.git")
+        g.git("fetch", "-q", "origin", timeout=600)
+        g.git("checkout", "-q", "-f", "-B", branch, f"origin/{branch}")
+        return g
 
     # ---------- keeping in step ----------
     def _skip_big(self) -> None:
         big = []
         for p in self.folder.rglob("*"):
-            if ".git" in p.parts or not p.is_file():
+            if ".git" in p.relative_to(self.folder).parts or not p.is_file():
                 continue
             try:
                 if p.stat().st_size > MAX_UP:
                     big.append(str(p.relative_to(self.folder)))
             except OSError:
                 pass
-        exclude = self.folder / ".git" / "info" / "exclude"
+        exclude = self.gitdir / "info" / "exclude"
         exclude.parent.mkdir(parents=True, exist_ok=True)
         exclude.write_text("# too big for GitHub: kept on this Mac only\n" + "\n".join("/" + b for b in big) + "\n")
         self.state["too_big"] = big
@@ -379,8 +397,8 @@ class GitSync:
         lost = []
         for rel in clashed:
             path = self.folder / rel
-            ours = subprocess.run(["git", "show", f":2:{rel}"], cwd=self.folder, capture_output=True, env=_env())
-            theirs = subprocess.run(["git", "show", f":3:{rel}"], cwd=self.folder, capture_output=True, env=_env())
+            ours = subprocess.run(["git", *self._where(), "show", f":2:{rel}"], cwd=self.folder, capture_output=True, env=_env())
+            theirs = subprocess.run(["git", *self._where(), "show", f":3:{rel}"], cwd=self.folder, capture_output=True, env=_env())
             if theirs.returncode == 0:
                 path.write_bytes(theirs.stdout)
             if path.name == "dir.c9r":
@@ -399,7 +417,7 @@ class GitSync:
                 copy.write_bytes(ours.stdout)
         self.git("add", "-A")   # every clash is settled in the files above: mark them resolved
         if lost:
-            store = self.folder / ".git" / LOST
+            store = self.gitdir / LOST
             old = json.loads(store.read_text()) if store.exists() else []
             store.write_text(json.dumps(old + lost))
         self.git("commit", "-q", "--no-edit")

@@ -362,7 +362,7 @@ class Memory:
     def _adopt_lost_folders(self) -> None:
         """GitHub sync: two Macs made the same folder, each with its own ID, and git kept one. What's inside the
         other one is moved into the kept folder, so nothing is lost (see gitsync.py)."""
-        store = self.folder / ".git" / "phygital-lost-folders.json"
+        store = getattr(self, "lost_store", None) or self.folder / ".git" / "phygital-lost-folders.json"
         if not store.exists():
             return
         try:
