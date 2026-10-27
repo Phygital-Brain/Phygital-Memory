@@ -923,9 +923,9 @@ const SORTS = [
   ["za", "Name Z–A", "Reverse alphabetical"],
 ];
 
-function buildTree() {
+function buildTree(files = state.files.filter((f) => !isDot(f.path))) {   // hidden files live in Hidden Notes
   const root = { children: new Map(), path: "", mtime: 0 };
-  for (const f of state.files) {
+  for (const f of files) {
     const parts = f.path.split("/");
     let node = root;
     const m = f.mtime || 0;
@@ -974,15 +974,31 @@ function renderTree() {
   const rows = [];
   state.visible = [];
   const walk = (node, depth) => {
-    let gap = false;
     for (const n of sortKids(node.children.values(), node.path)) {
-      if (!gap && n.name.startsWith(".")) { gap = true; if (rows.length) rows.push(el("div", { class: "tree-gap", "aria-hidden": "true" })); }
       rows.push(rowFor(n, depth));
       state.visible.push(n.path);
       if (n.kind === "folder" && state.open.has(n.path)) walk(n, depth + 1);
     }
   };
   walk(buildTree(), 0);
+  // Hidden Notes: every hidden file and folder, wherever it lives, in one closed group at the bottom. Only a view:
+  // on disk (and in Finder) each one stays in its own place.
+  const roots = [];
+  const find = (node) => { for (const n of node.children.values()) n.name.startsWith(".") ? roots.push(n) : find(n); };
+  if (getPref("showHidden", false)) find(buildTree(state.files.filter((f) => isDot(f.path))));
+  if (roots.length) {
+    const open = state.open.has(HIDDEN_GROUP);
+    rows.push(el("div", { class: "tree-gap", "aria-hidden": "true" }),
+      el("div", { class: "row hidden-group", role: "treeitem", style: "padding-left:8px", title: "Hidden files from anywhere in this memory. They stay in their own places.",
+                  onclick: () => { open ? state.open.delete(HIDDEN_GROUP) : state.open.add(HIDDEN_GROUP); renderTree(); } },
+        el("span", { class: "chev" + (open ? " open" : "") }, icon("chevron", 12, 2)), icon("folder", 18),
+        el("span", { class: "row-name" }, "Hidden Notes"), el("span", { class: "row-where" }, String(roots.length))));
+    if (open) for (const n of sortKids(roots, "")) {
+      rows.push(rowFor(n, 1, dirOf(n.path)));
+      state.visible.push(n.path);
+      if (n.kind === "folder" && state.open.has(n.path)) walk(n, 2);
+    }
+  }
   for (const p of [...state.sel]) if (!exists(p)) state.sel.delete(p);
   treeEl.replaceChildren(...rows);
   drawSelBar();
@@ -1025,7 +1041,8 @@ function reorder(dragged, target, after) {
   renderTree();
 }
 
-function rowFor(n, depth) {
+const HIDDEN_GROUP = "\u0000hidden";
+function rowFor(n, depth, where = "") {
   const folder = n.kind === "folder";
   const cur = state.active && state.active.path === n.path;
   const open = state.open.has(n.path);
@@ -1064,6 +1081,7 @@ function rowFor(n, depth) {
   el("span", { class: "chev" + (folder ? (open ? " open" : "") : " none") }, icon("chevron", 12, 2)),
   ic,
   el("span", { class: "row-name" }, folder || !isMd(n.name) ? n.name : label(n.name)),
+  where ? el("span", { class: "row-where", title: where }, where) : null,
   pinned ? el("span", { class: "row-pin", title: "Pinned" }, icon("pin", 11, 2)) : null,
   (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: "Private for AI: it asks first" }, icon("lock", 11, 2)) : null,
   more);
