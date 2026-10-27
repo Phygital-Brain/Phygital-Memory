@@ -3,8 +3,9 @@
 import * as esbuild from "esbuild";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const OUT = new URL("../phygital_memory/web/", import.meta.url).pathname;
+const OUT = fileURLToPath(new URL("../phygital_memory/web/", import.meta.url));   // works with spaces in the path
 rmSync(join(OUT, "assets"), { recursive: true, force: true });   // no old chunks left behind
 mkdirSync(join(OUT, "assets"), { recursive: true });
 

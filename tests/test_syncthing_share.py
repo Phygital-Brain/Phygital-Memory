@@ -17,7 +17,7 @@ import urllib.request
 from pathlib import Path
 
 tmp = Path(tempfile.mkdtemp(prefix="pm-st-"))
-ROOT = Path(__file__).parent
+ROOT = Path(__file__).resolve().parent.parent   # core: the servers run from there
 ok = []
 
 
@@ -70,7 +70,7 @@ A, B = 8796, 8799
 
 
 def servers():
-    procs = [server(A, tmp / "max", ROOT.parent / "locked-notes", "A"), server(B, tmp / "ana", tmp / "none", "B")]
+    procs = [server(A, tmp / "max", Path(__file__).resolve().parent / "locked-notes", "A"), server(B, tmp / "ana", tmp / "none", "B")]
     for port in (A, B):
         wait(lambda: urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1), 30)
     api(A, "approversetup", {"kind": "password", "password": APPROVER_PW})

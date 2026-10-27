@@ -11,7 +11,7 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 BASE = "http://127.0.0.1:" + __import__("os").environ.get("PM_TEST_PORT", "8790")
-VAULT = Path(__file__).resolve().parent.parent / "locked-notes"
+VAULT = Path(__file__).resolve().parent / "locked-notes"
 
 
 def api(action, body=None, app_pass=None, host=None):

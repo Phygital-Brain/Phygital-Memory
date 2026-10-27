@@ -7,3 +7,4 @@ packaging/dist/
 frontend/node_modules/
 phygital_memory/web/
 .state-dev/
+tests/locked-notes/

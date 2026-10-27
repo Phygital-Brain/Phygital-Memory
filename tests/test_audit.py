@@ -75,7 +75,7 @@ for x in mem["members"]:
     if x["role"] == "view": x["role"] = "edit"
 sharing._write_members(d, raw, mem)
 m.lock()
-"""], capture_output=True, text=True, cwd=Path(__file__).parent)
+"""], capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent)
     time.sleep(25)
     mine = files(A, fa, pa)
     check("Ideas/Sneaky.md" not in mine and "Ideas/Pocket-Library.md" in mine,
@@ -152,7 +152,7 @@ with mock.patch.object(sharing, "_vault_id", return_value="v1"), mock.patch.obje
     check(sharing.am_removed(d, pub), "the owner's signed note counts")
 
 # 7. approval words: access first, names can't fake other words
-src = (Path(__file__).parent / "phygital_memory" / "server.py").read_text()
+src = (Path(__file__).resolve().parent.parent / "phygital_memory" / "server.py").read_text()
 import re  # noqa: E402
 plain = eval(compile("lambda name: re.sub(r\"[()\\[\\]{}<>\\n\\r\\t]\", \"\", str(name)).strip()[:40] or \"someone\"", "x", "eval"))
 check(plain("Eve (can view)\nok") == "Eve can viewok", "7. brackets and line breaks are taken out of names in approvals")

@@ -1,5 +1,5 @@
 """Touch ID unlock, Touch ID for an AI app's Allow, and the sealed approvals list, against a running test server
-(PM_TEST_PORT) started with PHYGITAL_MEMORY_TOUCHID=testing/fake-touchid.sh, FAKE_TOUCHID_DIR and a test
+(PM_TEST_PORT) started with PHYGITAL_MEMORY_TOUCHID=tests/fake-touchid.sh, FAKE_TOUCHID_DIR and a test
 PHYGITAL_MEMORY_SEAL_KEYCHAIN. Run make_test_vault.py --fresh first.
 
 Run: PM_TEST_PORT=8796 FAKE_TOUCHID_DIR=... PM_TEST_STATE=... uv run python test_touchid.py
