@@ -490,7 +490,10 @@ async def api(request: Request) -> Response:
             await asyncio.to_thread(subprocess.run, ["open", f"https://github.com/{repo}/settings"], timeout=30)
             return _ok({"ok": True})
         if action == "togithub":   # keep it in a new private GitHub repo (scrambled files only)
-            return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id)})
+            try:
+                return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id, body.get("reuse") or None)})
+            except gitsync.SameMemoryRepo as e:   # connected before: ask whether to use that repo again
+                return _ok({"existing": e.repo})
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
         if action == "movefolder" and f.github:

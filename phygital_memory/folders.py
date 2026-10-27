@@ -174,14 +174,14 @@ class Folders:
 
     # ---------- a private GitHub repo ----------
 
-    def to_github(self, fid: str) -> dict:
+    def to_github(self, fid: str, reuse: str | None = None) -> dict:
         """Keep this folder in step with a new private GitHub repo named "FOLDER-Phygital-Memory"."""
         f = self.get(fid)
         if f.github:
             raise ValueError("This folder is already kept in GitHub.")
         if any(str(f.path).startswith(p["path"] + "/") for p in cloud_places()):
             raise ValueError("Move it to a place on this Mac first: a folder shouldn't be in a cloud and GitHub at once.")
-        f.github = GitSync(f.path, repo_name(f.name)).create()
+        f.github = GitSync(f.path, repo_name(f.name)).create(reuse)
         with self._lock:
             self._save()
         f.start_sync()

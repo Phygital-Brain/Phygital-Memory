@@ -659,7 +659,13 @@ async function openStoragePanel() {
       const sure = await confirmDialog(`Save "${info.name}" in a new private repo on GitHub (${account})? Only encrypted files go up. The repo stays private.`, "Use private GitHub", false);
       if (!sure) return false;
       toast("Making the private repo and uploading the encrypted files…");
-      await api("togithub");
+      const j = await api("togithub");
+      if (j.existing) {   // connected before, then stopped: that repo is still on GitHub
+        const again = await confirmDialog(`"${info.name}" already has a repo on GitHub: ${j.existing}. Use it again? Nothing is lost: if a note differs between this Mac and GitHub, both versions are kept.`, "Use it again", false);
+        if (!again) return false;
+        toast("Connecting to the repo and syncing…");
+        await api("togithub", { reuse: j.existing });
+      }
       toastOk("Saved in your private GitHub repo. Changes upload a few seconds after you make them.");
       refreshBar();
       return true;

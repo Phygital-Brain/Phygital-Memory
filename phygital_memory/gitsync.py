@@ -14,6 +14,7 @@ what other devices pushed. Only the scrambled files ever leave the Mac, like any
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -147,6 +148,19 @@ def is_private(repo: str) -> bool:
 SUFFIX = "-Phygital-Memory"
 
 
+class SameMemoryRepo(RuntimeError):
+    """The repo name is taken by this same memory's repo, from an earlier connection."""
+    def __init__(self, repo: str):
+        super().__init__(f"This memory already has a repo on GitHub: {repo}.")
+        self.repo = repo
+
+
+def _exists(repo: str) -> bool:
+    if _own():
+        return github_auth.api(f"/repos/{repo}")[0] == 200
+    return subprocess.run([gh(), "api", f"repos/{repo}"], capture_output=True, env=_env(), timeout=30).returncode == 0
+
+
 def repo_name(name: str) -> str:
     """"Notes - Phygital Memory" as GitHub allows it (no spaces): "Notes-Phygital-Memory". A memory already called
     "Phygital Memory" (or "… Phygital Memory") isn't doubled: "Phygital-Memory"."""
@@ -204,12 +218,69 @@ class GitSync:
                     cwd=self.folder, ok=ok, timeout=timeout)
 
     # ---------- the first time: a private repo, and everything (scrambled) up ----------
-    def create(self) -> str:
-        """Make the private repo on GitHub and push the folder. Returns 'owner/name'."""
+    def create(self, reuse: str | None = None) -> str:
+        """Make the private repo on GitHub and push the folder. Returns 'owner/name'.
+
+        If the name is taken by this same memory's repo (connected before, then stopped), SameMemoryRepo is raised so
+        the person can choose to use it again: then call create(reuse='owner/name'). A name taken by anything else
+        gets "-2", "-3"."""
         if (self.folder / ".git").exists():
             raise RuntimeError("This folder is already a git repo.")
-        if signed_in() is None:
+        me = signed_in()
+        if me is None:
             raise RuntimeError("Sign in with GitHub first.")
+        if reuse:
+            if not is_private(reuse) or not self.same_memory(reuse):
+                raise RuntimeError("That repo isn't this memory's, or isn't private, so it isn't used.")
+            owner_repo = reuse
+        else:
+            base, n = self.repo, 1
+            while _exists(f"{me}/{self.repo}"):
+                if self.same_memory(f"{me}/{self.repo}"):
+                    raise SameMemoryRepo(f"{me}/{self.repo}")
+                n += 1
+                self.repo = f"{base}-{n}"
+            owner_repo = self._make_repo()
+        self.repo = self.state["repo"] = owner_repo
+        if not is_private(owner_repo):
+            raise RuntimeError("GitHub didn't make the repo private, so nothing was sent.")
+        self.prepare(self.folder.name)
+        self.git("init", "-b", self.branch)
+        self.git("remote", "add", "origin", f"https://github.com/{owner_repo}.git")
+        if reuse:
+            self._start_from_where_we_left()
+        self.sync_once()   # with a reused repo, this merges both sides and keeps both versions where they differ
+        return owner_repo
+
+    def _start_from_where_we_left(self) -> None:
+        """Using a repo again after a stop: the history here was put away, so find the commit on GitHub that
+        matches this Mac's files best (where the two sides went apart) and build on it. Then a note changed only
+        here, or only on GitHub, just moves across; only one changed on both sides keeps two versions."""
+        self.git("fetch", "-q", "origin")
+        local = {}
+        for p in self.folder.rglob("*"):
+            rel = p.relative_to(self.folder).as_posix()
+            if p.is_file() and not rel.startswith(".git/") and p.stat().st_size <= MAX_UP:
+                local[rel] = None
+        if not local:
+            return
+        hashes = self.git("hash-object", "--", *local.keys()).stdout.split()
+        local = dict(zip(local.keys(), hashes))
+        best, best_score = None, -1
+        for sha in self.git("rev-list", "--max-count=60", f"origin/{self.branch}").stdout.split():
+            tree = {}
+            for line in self.git("ls-tree", "-r", sha).stdout.splitlines():
+                meta, _, path = line.partition("\t")
+                tree[path] = meta.split()[2]
+            same = sum(1 for path, h in local.items() if tree.get(path) == h)
+            score = same - (len(tree) - same)   # files there that this Mac doesn't have, or has different, count against
+            if score > best_score:   # newest first, so a tie keeps the newer commit
+                best, best_score = sha, score
+        if best:
+            self.git("update-ref", f"refs/heads/{self.branch}", best)
+            self.git("read-tree", best)   # this Mac's changes since then get committed on top of it
+
+    def _make_repo(self) -> str:
         about = "Phygital Memory: an encrypted notes folder."
         if _own():
             code, made = github_auth.api("/user/repos", method="POST", body={
@@ -217,20 +288,26 @@ class GitSync:
                 "description": about})
             if code != 201:
                 raise RuntimeError(made.get("message") or "GitHub didn't make the repo.")
-            owner_repo = made["full_name"]
+            return made["full_name"]
+        r = _run([gh(), "repo", "create", self.repo, "--private", "--disable-issues", "--disable-wiki",
+                  "--description", about], timeout=60)
+        url = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else f"https://github.com/{self.repo}"
+        return "/".join(url.rstrip("/").split("/")[-2:])
+
+    def same_memory(self, repo: str) -> bool:
+        """Is that repo a copy of this very memory? Its vault.cryptomator (the memory's own ID, not secret) matches."""
+        path = f"/repos/{repo}/contents/vault.cryptomator?ref={self.branch}"
+        if _own():
+            code, info = github_auth.api(path)
+            content = info.get("content", "") if code == 200 else ""
         else:
-            r = _run([gh(), "repo", "create", self.repo, "--private", "--disable-issues", "--disable-wiki",
-                      "--description", about], timeout=60)
-            url = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else f"https://github.com/{self.repo}"
-            owner_repo = "/".join(url.rstrip("/").split("/")[-2:])
-        self.repo = self.state["repo"] = owner_repo
-        if not is_private(owner_repo):
-            raise RuntimeError("GitHub didn't make the repo private, so nothing was sent.")
-        self.prepare(self.folder.name)
-        self.git("init", "-b", self.branch)
-        self.git("remote", "add", "origin", f"https://github.com/{owner_repo}.git")
-        self.sync_once()
-        return owner_repo
+            r = subprocess.run([gh(), "api", path.lstrip("/"), "--jq", ".content"], capture_output=True, text=True,
+                               env=_env(), timeout=30)
+            content = r.stdout if r.returncode == 0 else ""
+        try:
+            return bool(content) and base64.b64decode(content) == (self.folder / "vault.cryptomator").read_bytes()
+        except (ValueError, OSError):
+            return False
 
     def prepare(self, name: str) -> None:
         """The plain files the repo needs next to the scrambled ones: what to leave out, binary only, a README."""
@@ -295,7 +372,7 @@ class GitSync:
 
     def _merge(self) -> None:
         """Bring in what other devices pushed. Same scrambled file changed on both sides: keep both."""
-        r = self.git("merge", "--no-edit", f"origin/{self.branch}", ok=(0, 1))
+        r = self.git("merge", "--no-edit", "--allow-unrelated-histories", f"origin/{self.branch}", ok=(0, 1))
         if r.returncode == 0:
             return
         clashed = [p for p in self.git("diff", "--name-only", "--diff-filter=U").stdout.splitlines() if p]
@@ -376,8 +453,13 @@ class GitSync:
         self._thread.start()
 
     def stop(self) -> None:
+        """Stop syncing, and wait for a sync that is halfway through to finish (so nothing writes here after)."""
         self.state["stopped"] = True
         self._wake.set()
+        with self._lock:
+            pass
+        if self._thread and self._thread is not threading.current_thread():
+            self._thread.join(timeout=30)
 
     def status(self) -> dict:
         return {**self.state, "ago": int(time.time() - self.state["last"]) if self.state["last"] else None}
