@@ -532,8 +532,11 @@ function drawFinder() {
 function openSettingsHere() {
   const info = curInfo();
   openSettings(info && unlocked(info.id) ? {
-    name: info.name, finderShown: finder.shown, finderAvailable: finder.available,
+    name: info.name, finderShown: finder.shown, finderAvailable: finder.available, where: shortPath(info.path),
     toggleFinder: async () => { await toggleFinder(); return finder.shown; },
+    rename: () => renameFolder(), storage: openStoragePanel, lock: () => lockFolder(),
+    lockAll: folderList.filter((f) => unlocked(f.id)).length > 1 ? lockAll : null,
+    revealVault: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
   } : null);
 }
 

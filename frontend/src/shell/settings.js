@@ -66,16 +66,26 @@ export function openSettings(folderOpts) {
     row("Desktop icon when unlocked", "A folder icon on the Desktop, with your memory's name, to open your notes in Finder. While it's there, any app on this Mac can read them. It goes away when you lock.",
       el("label", { class: "switch" }, onUnlock, el("span", { class: "switch-t" }))),
     ...folderSection());
+  // The selected memory: rename, where it's stored, its encrypted files, Finder, lock.
   function folderSection() {
-    if (!folderOpts || !folderOpts.finderAvailable) return [];
-    const fin = el("input", { type: "checkbox", checked: !!folderOpts.finderShown, "aria-label": "Show in Finder" });
-    fin.addEventListener("change", async () => {
-      const ok = await folderOpts.toggleFinder();
-      fin.checked = !!(ok ?? fin.checked);
-    });
-    return [el("div", { class: "set-section" }, `This folder: ${folderOpts.name}`),
-      row("Show in Finder", "Opens the unlocked notes as a normal folder. While it's open, any app on this Mac can read them. It closes when you lock.",
-          el("label", { class: "switch" }, fin, el("span", { class: "switch-t" })))];
+    if (!folderOpts) return [];
+    const btn = (label, fn) => el("button", { class: "btn small", type: "button", onclick: () => { close(); fn(); } }, label);
+    const rows = [el("div", { class: "set-section" }, `This memory: ${folderOpts.name}`),
+      row("Name", null, btn("Rename…", folderOpts.rename)),
+      row("Where it's stored", folderOpts.where, el("div", { class: "set-btns" },
+        btn("Encrypted files", folderOpts.revealVault), btn("Change…", folderOpts.storage)))];
+    if (folderOpts.finderAvailable) {
+      const fin = el("input", { type: "checkbox", checked: !!folderOpts.finderShown, "aria-label": "Show in Finder" });
+      fin.addEventListener("change", async () => {
+        const ok = await folderOpts.toggleFinder();
+        fin.checked = !!(ok ?? fin.checked);
+      });
+      rows.push(row("Show in Finder", "The unlocked notes as a normal folder. While it's open, any app on this Mac can read them. It closes when you lock.",
+        el("label", { class: "switch" }, fin, el("span", { class: "switch-t" }))));
+    }
+    rows.push(row("Lock", "Locks this memory now. AI apps can't reach it until you unlock it again.",
+      el("div", { class: "set-btns" }, btn("Lock", folderOpts.lock), folderOpts.lockAll ? btn("Lock all", folderOpts.lockAll) : null)));
+    return rows;
   }
   const back = el("div", { class: "overlay modal", onmousedown: (e) => { if (e.target === back) close(); } }, card);
   document.addEventListener("keydown", onKey, true);
