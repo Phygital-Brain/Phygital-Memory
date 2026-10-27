@@ -592,8 +592,12 @@ function statusBar() {
 
 // An AI app or another device changed a note: reload the open notes that have no unsaved edits.
 let genTimer = null, lastGen = null;
+// The background checks only run while a folder is open on screen. While locked they would get "locked" back, and
+// each of those redraws the unlock screen: that wiped the password as it was being typed.
+const openOnScreen = () => !!loadedFolder && hasPass(loadedFolder) && !appEl.classList.contains("hidden");
+
 async function watchChanges() {
-  if (!barEls || !barEls.cloud.isConnected) return;
+  if (!openOnScreen() || !barEls || !barEls.cloud.isConnected) return;
   let g;
   try { g = (await api("gen")).gen; } catch { return; }
   if (g == null) return;
@@ -602,6 +606,7 @@ async function watchChanges() {
 }
 
 async function refreshBar() {
+  if (!openOnScreen()) return;
   watchTodo();
   if (!barEls || !barEls.cloud.isConnected) return;
   let b = null;
@@ -670,7 +675,8 @@ async function openStoragePanel() {
       return true;
     },
   });
-  if (moved) { lockedLocally(info.id); await refreshFolders(); showUnlock(); }
+  if (moved === "moved") { lockedLocally(info.id); await refreshFolders(); showUnlock(); }   // a move locks it
+  else if (moved) { await refreshFolders(); refreshBar(); }   // GitHub on or off: it stays open
 }
 
 async function openTrashPanel() {
@@ -1799,6 +1805,7 @@ async function openAI(start, path) {
 // Tell the person when their AI ticks a note off (checked with the status icons).
 let todoDone = null;
 async function watchTodo() {
+  if (!openOnScreen()) return;
   let todo;
   try { todo = (await api("aitodo")).todo || []; } catch { return; }
   const now = new Set(todo.filter((i) => i.done).map((i) => i.id));

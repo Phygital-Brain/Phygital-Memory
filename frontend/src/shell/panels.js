@@ -17,7 +17,7 @@ export function openStorage(ctx) {
     const moveTo = async (parent, label) => {
       err.textContent = "";
       busy(true);
-      try { if (await ctx.move(parent, label)) done(true); else busy(false); }
+      try { if (await ctx.move(parent, label)) done("moved"); else busy(false); }
       catch (e) { err.textContent = e.message; busy(false); }
     };
     const option = (key, title, text, on, body) => el("div", { class: "st-opt" + (on ? " on" : "") },
@@ -35,12 +35,12 @@ export function openStorage(ctx) {
           gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null,
           el("div", {}, el("button", { class: "btn small st-stop", type: "button", onclick: async () => {
             err.textContent = ""; busy(true);
-            try { if (await ctx.stopGithub(s.github)) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
+            try { if (await ctx.stopGithub(s.github)) done("github"); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
           } }, "Stop GitHub sync…")))
       : el("div", {}, el("div", { class: "st-gh-note" }, "Nothing talks to GitHub until you press the button."),
           el("button", { class: "btn gh-btn", type: "button", onclick: async () => {
             err.textContent = ""; busy(true);
-            try { if (await ctx.toGithub()) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
+            try { if (await ctx.toGithub()) done("github"); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
           } }, githubMark(), "Sign in with GitHub"));
     const cloudCards = el("div", { class: "st-places" }, ...s.places.map((p) => {
       const here = s.cloud && s.path.startsWith(p.path + "/");
