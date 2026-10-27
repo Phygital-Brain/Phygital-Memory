@@ -90,6 +90,7 @@ class Folder:
         self.passes: set[str] = set()
         self.fails = {"n": 0, "until": 0.0}
         self.github, self.sync = github, None   # "owner/repo" when kept in a private GitHub repo
+        self.ai_hidden = False   # "AI can't see this": no AI app reaches it, whatever its key says
         if github and (self.path / ".git").is_dir():
             self.start_sync()
 
@@ -105,7 +106,8 @@ class Folder:
         place = cloud.where(self.cloud_at, self.cloud_at["path"]) if self.cloud_at else str(self.path)
         return {"id": self.id, "name": self.name, "path": place, "open": self.memory.is_open,
                 "exists": True if self.cloud_at else is_vault(self.path), "finder": bool(self.finder.where()),
-                "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None}
+                "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None,
+                "aiHidden": self.ai_hidden}
 
     def ready(self) -> None:
         """Before unlocking: a cloud memory's files must be reachable (this is when the app talks to the cloud)."""
@@ -137,6 +139,7 @@ class Folders:
             if isinstance(e, dict) and e.get("id") and e.get("path"):
                 self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
                                              e.get("github"), e.get("cloud"))
+                self.items[e["id"]].ai_hidden = bool(e.get("aiHidden"))
         for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
                 cloud.unmount(point)
@@ -148,7 +151,8 @@ class Folders:
     def _save(self) -> None:
         STATE.mkdir(parents=True, exist_ok=True)
         data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {}),
-                             **({"cloud": f.cloud_at} if f.cloud_at else {})} for f in self.items.values()]}
+                             **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"aiHidden": True} if f.ai_hidden else {})}
+                            for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1))
         os.replace(tmp, REGISTRY)
@@ -273,6 +277,7 @@ class Folders:
         shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
         with self._lock:
             moved = Folder(f.id, f.name, Path(), None, {**conn, "path": path})
+            moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()
         return moved.info()
@@ -338,6 +343,13 @@ class Folders:
             self._save()
         return f.info()
 
+    def hide_from_ai(self, fid: str, hidden: bool) -> dict:
+        with self._lock:
+            f = self.get(fid)
+            f.ai_hidden = bool(hidden)
+            self._save()
+            return f.info()
+
     def rename(self, fid: str, name: str) -> dict:
         name = name.strip()
         if not name:
@@ -371,6 +383,7 @@ class Folders:
             f.lock()
             new_path = move_folder_on_disk(f.path, Path(parent))
             moved = Folder(f.id, f.name, new_path)
+            moved.ai_hidden = f.ai_hidden
             self.items[fid] = moved
             self._save()
             return moved.info()

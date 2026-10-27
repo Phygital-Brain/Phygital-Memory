@@ -600,3 +600,14 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .ai-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .ai-count { min-width: 14px; height: 14px; padding: 0 4px; border-radius: 7px; background: var(--accent); color: var(--on-accent, #111); font-size: 10px; font-weight: 700; line-height: 14px; text-align: center; }
 .status.bad { pointer-events: auto; }
+
+/* Settings › AI apps */
+.ai-access { display: flex; flex-direction: column; gap: 6px; }
+.ai-mem { padding: 2px 0; font-size: 13px; color: var(--text); }
+.ai-note { font-size: 11px; color: var(--warning); margin-left: 6px; }
+.ai-write { margin-top: 8px; }
+.ai-row { align-items: center; cursor: default; }
+.ai-door { display: flex; align-items: center; gap: 8px; }
+.ai-door code, .ai-setup { font: 12px/1.5 var(--font-mono); background: var(--bg-app); border: 1px solid var(--border); border-radius: var(--r-s); padding: 6px 8px; }
+.ai-door code { flex: 1; overflow-x: auto; white-space: nowrap; }
+.ai-setup { margin: 0; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; user-select: text; }

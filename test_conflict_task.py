@@ -3,6 +3,8 @@
 Run against a running test server: PM_TEST_PORT=8796 uv run python test_conflict_task.py
 """
 import asyncio
+
+import testkey
 import json
 import os
 import re
@@ -33,7 +35,7 @@ def call(action, body=None, pw=None, folder=None):
 
 
 async def ai(steps):
-    async with streamable_http_client(f"{BASE}/mcp") as (r, w):
+    async with streamable_http_client(f"{BASE}/mcp", http_client=testkey.client()) as (r, w):
         async with ClientSession(r, w) as s:
             await s.initialize()
             return [("\n".join(c.text for c in (await s.call_tool(n, a)).content if hasattr(c, "text"))) for n, a in steps]

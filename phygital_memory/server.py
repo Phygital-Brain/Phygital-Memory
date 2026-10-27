@@ -25,6 +25,8 @@ import time
 from pathlib import Path
 from typing import Annotated
 
+from mcp.server.auth.middleware.auth_context import get_access_token
+from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
@@ -33,7 +35,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, cloud, github_auth, gitsync
+from . import activity, cloud, gate as gate_mod, github_auth, gitsync
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -65,15 +67,45 @@ WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world
 ResultId = Annotated[str, Field(description="The id of a search_notes result, like 'a1b2:12', or of a handed note, "
                                              "like 'h-1a2b3c4d'.")]
 
-mcp = MCPServer("phygital-memory", instructions=INSTRUCTIONS, title="Phygital Memory", version="0.0.2")
+# The door's lock: every AI app needs its own key (Settings › AI apps), or signs in and the person presses Allow.
+gate = gate_mod.Gate()
+gate_mod.ISSUER = PAGE.rstrip("/")
+FolderName = Annotated[str, Field(description="Which unlocked folder (its name, from status). Leave empty when only one "
+                                          "is open.")]
+NotePath = Annotated[str, Field(description="The note's or file's path in the folder, like 'Projects/plan.md' "
+                                            "(from list_notes or a search result).")]
+
+mcp = MCPServer("phygital-memory", instructions=INSTRUCTIONS, title="Phygital Memory", version="0.0.3",
+                auth_server_provider=gate,
+                auth=AuthSettings(issuer_url=gate_mod.ISSUER, resource_server_url=f"{PAGE}mcp",
+                                  required_scopes=[gate_mod.READ], validate_token_resource=False,
+                                  client_registration_options=ClientRegistrationOptions(
+                                      enabled=True, valid_scopes=[gate_mod.READ, gate_mod.WRITE],
+                                      default_scopes=[gate_mod.READ, gate_mod.WRITE]),
+                                  revocation_options=RevocationOptions(enabled=True)))
+
+
+def _app() -> dict:
+    """The AI app behind this call, with what it may reach right now (changes in Settings apply at once)."""
+    token = get_access_token()
+    app = gate.apps.get(token.client_id) if token else None
+    if not app:
+        raise ToolError("This AI app isn't connected. The person connects it in Phygital Memory: Settings › AI apps.")
+    return app
+
+
+def _allowed(f, app: dict) -> bool:
+    return not f.ai_hidden and (app["folders"] == "all" or f.id in app["folders"])
+
+
+def _need_write() -> None:
+    if not _app()["write"]:
+        raise ToolError("This AI app may only read. The person can allow edits in Phygital Memory: Settings › AI apps.")
 
 
 def _seen(ctx) -> str:
-    try:
-        info = ctx.session.client_params.client_info
-        name = (info.title or info.name or "AI app").strip()[:60]
-    except Exception:
-        name = "AI app"
+    """The app's name as the person named it when connecting it (never the name the AI app gives itself)."""
+    name = _app()["name"]
     activity.seen[name] = time.time()
     return name
 
@@ -105,10 +137,11 @@ def _guard(fn, *a, **k):
 
 
 def _open_or_fail():
-    open_ = folders.open()
+    app = _app()
+    open_ = [f for f in folders.open() if _allowed(f, app)]
     if not open_:
-        raise ToolError(f"Every folder is locked. The person unlocks one in the Phygital Memory app ({PAGE}). "
-                        "Never ask for the password.")
+        raise ToolError(f"No memory this app may use is unlocked. The person unlocks one in the Phygital Memory app "
+                        f"({PAGE}). Never ask for the password.")
     return open_
 
 
@@ -128,6 +161,8 @@ def _split(rid: str):
         f = folders.get(fid)
     except LookupError:
         raise ToolError("That folder isn't known. Search again.") from None
+    if not _allowed(f, _app()):
+        raise ToolError("That folder isn't known. Search again.")
     if not f.memory.is_open:
         raise ToolError(f"The folder '{f.name}' is locked now. The person unlocks it in the app.")
     return f, cid
@@ -155,13 +190,17 @@ def _note(rid: str):
 def status(ctx: Context) -> str:
     """Which locked folders exist, which are unlocked, how many notes each holds."""
     app = _seen(ctx)
-    for f in folders.open():
-        _log(app, f, "checked status")
+    mine = [f for f in folders.items.values() if _allowed(f, _app())]
+    for f in mine:
+        if f.memory.is_open:
+            _log(app, f, "checked status")
     lines = []
-    for f in folders.items.values():
+    for f in mine:
         s = f.memory.status()
         lines.append(f"{f.name}: " + (f"open, {s['notes']} notes" if s["open"] else "locked"))
-    return "\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE})."
+    may = "read and edit" if _app()["write"] else "only read"
+    return ("\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE}). "
+            f"This app may {may}.")
 
 
 @mcp.tool(annotations=READ)
@@ -179,7 +218,7 @@ def search_notes(ctx: Context, question: Annotated[str, Field(description="What 
     rows.sort(key=lambda x: -x[0])
     if not rows:
         return "No matching notes."
-    many = len(folders.open()) > 1
+    many = len(_open_or_fail()) > 1
     out = [f"[{f.id}:{r['id']}] {(f.name + ' / ') if many else ''}{r['path']}  >  {r['heading']}\n    "
            f"{r['snippet'].replace(chr(2), '[').replace(chr(3), ']')}"
            for _, f, r in rows[:limit]]
@@ -230,7 +269,7 @@ def handed_notes(ctx: Context) -> str:
     call finish_handed_note. Finished ones are not shown."""
     app = _seen(ctx)
     out = []
-    many = len(folders.open()) > 1
+    many = len(_open_or_fail()) > 1
     for f in _open_or_fail():
         for item in _guard(f.memory.todo):
             if item.get("done"):
@@ -259,6 +298,7 @@ def handed_notes(ctx: Context) -> str:
 def finish_handed_note(ctx: Context, id: Annotated[str, Field(description="The handed note's id, like 'h-1a2b3c4d'.")],
                        what_you_did: Annotated[str, Field(description="One or two plain sentences for the person.")]) -> str:
     """Tick a handed note off the AI tasks list, with a short line on what you did. The person sees it in the app."""
+    _need_write()
     app = _seen(ctx)
     f, item = _handed(id)
     _guard(f.memory.todo_set, id, True, app, what_you_did)
@@ -271,6 +311,7 @@ def replace_in_note(ctx: Context, id: ResultId,
                     old_text: Annotated[str, Field(description="Exact text now in the note (from read_note).")],
                     new_text: Annotated[str, Field(description="What to put in its place.")]) -> str:
     """Change part of a note: replaces old_text, which must appear exactly once."""
+    _need_write()
     _seen(ctx)
     f, rel = _note(id)
     def change(text):
@@ -287,6 +328,7 @@ def replace_in_note(ctx: Context, id: ResultId,
 @mcp.tool(annotations=WRITE)
 def append_to_note(ctx: Context, id: ResultId, text: Annotated[str, Field(description="Text to add at the end of the note.")]) -> str:
     """Add text at the end of the note behind a result."""
+    _need_write()
     _seen(ctx)
     f, rel = _note(id)
     uid = _ai_write(f, rel, *_guard(f.memory.update, rel, lambda old: old.rstrip("\n") + "\n\n" + text.strip("\n") + "\n"))
@@ -297,24 +339,135 @@ def append_to_note(ctx: Context, id: ResultId, text: Annotated[str, Field(descri
 @mcp.tool(annotations=WRITE)
 def create_note(ctx: Context, path: Annotated[str, Field(description="Where it goes, like 'Projects/new-idea.md'.")],
                 text: Annotated[str, Field(description="The note's text.")],
-                folder: Annotated[str, Field(description="Which unlocked folder (its name, from status). "
-                                                         "Leave empty when only one is open.")] = "") -> str:
+                folder: FolderName = "") -> str:
     """Make a new note. Refuses if a note is already at that path."""
+    _need_write()
     _seen(ctx)
+    target = _pick(folder)
+    rel = _guard(target.memory.save, path, text, new=True)
+    uid = _ai_write(target, rel, None, text)
+    _log(_seen(ctx), target, "created", f"{len(text)} characters", rel, uid)
+    return f"Created {rel} in {target.name} (encrypted)."
+
+
+def _pick(folder: str):
+    """The unlocked folder an AI app named (by name or id), or the only one open."""
     open_ = _open_or_fail()
     if folder:
         match = [f for f in open_ if f.name.casefold() == folder.casefold() or f.id == folder]
         if not match:
             raise ToolError("No unlocked folder by that name. Call status to see them.")
-        target = match[0]
-    elif len(open_) == 1:
-        target = open_[0]
+        return match[0]
+    if len(open_) == 1:
+        return open_[0]
+    raise ToolError("Several folders are open: say which one with folder=<name>.")
+
+
+TEXT_LIMIT = 60_000
+
+
+@mcp.tool(annotations=READ)
+def list_notes(ctx: Context, folder: FolderName = "",
+               inside: Annotated[str, Field(description="Only what's inside this subfolder, like 'Projects'.")] = ""
+               ) -> str:
+    """The folder's notes, files and subfolders, by path (up to 500)."""
+    app = _seen(ctx)
+    f = _pick(folder)
+    inside = inside.strip("/")
+    rows = [x for x in _guard(f.memory.list_files)
+            if not inside or x["path"] == inside or x["path"].startswith(inside + "/")]
+    _log(app, f, "listed notes", inside or "everything")
+    out = [x["path"] + ("/" if x["kind"] == "folder" else "") for x in rows[:500]]
+    more = f"\n…and {len(rows) - 500} more. Use inside= to look in one subfolder." if len(rows) > 500 else ""
+    return LABEL + (f"{f.name}:\n" + "\n".join(out) + more if out else "Nothing there.")
+
+
+@mcp.tool(annotations=READ)
+def recent_changes(ctx: Context, limit: Annotated[int, Field(ge=1, le=50, description="How many (default 15).")] = 15
+                   ) -> str:
+    """The notes and files changed most recently, in every unlocked folder, newest first."""
+    app = _seen(ctx)
+    rows = []
+    for f in _open_or_fail():
+        _log(app, f, "looked at recent changes")
+        rows += [(x["mtime"], f, x["path"]) for x in _guard(f.memory.list_files) if x["kind"] == "file"]
+    rows.sort(key=lambda r: -r[0])
+    many = len(_open_or_fail()) > 1
+    return LABEL + "\n".join(f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(t))}  {(f.name + ' / ') if many else ''}{p}"
+                              for t, f, p in rows[:limit]) if rows else "No notes yet."
+
+
+@mcp.tool(annotations=READ)
+def read_file_text(ctx: Context, path: NotePath, folder: FolderName = "") -> str:
+    """The text inside a note or a file: Markdown, plain text, CSV, Word (.docx) or PDF. Long text is cut."""
+    app = _seen(ctx)
+    f = _pick(folder)
+    rel = path.strip().lstrip("/")
+    ext = Path(rel).suffix.lower()
+    if ext in (".md", ".txt", ".csv", ".tsv", ".json", ".yaml", ".yml", ""):
+        text = _guard(f.memory.read_bytes, rel).decode("utf-8", errors="replace")
+    elif ext == ".docx":
+        text = "\n".join(p["text"] for p in _guard(f.memory.docx_read, rel)["paragraphs"])
+    elif ext == ".pdf":
+        import io
+        from pypdf import PdfReader
+        try:
+            reader = PdfReader(io.BytesIO(_guard(f.memory.read_bytes, rel)))
+            text = "\n\n".join((page.extract_text() or "") for page in reader.pages[:200])
+        except Exception:
+            raise ToolError("That PDF can't be read (it may be a scan, or locked with its own password).") from None
     else:
-        raise ToolError("Several folders are open: say which one with folder=<name>.")
-    rel = _guard(target.memory.save, path, text, new=True)
-    uid = _ai_write(target, rel, None, text)
-    _log(_seen(ctx), target, "created", f"{len(text)} characters", rel, uid)
-    return f"Created {rel} in {target.name} (encrypted)."
+        raise ToolError("Only notes, text, CSV, Word and PDF files can be read as text.")
+    _log(app, f, "read a file", f"{len(text)} characters", rel)
+    cut = f"\n\n[Cut at {TEXT_LIMIT} characters of {len(text)}.]" if len(text) > TEXT_LIMIT else ""
+    return LABEL + f"{rel}\n---8<---\n{text[:TEXT_LIMIT]}{cut}"
+
+
+@mcp.tool(annotations=READ)
+def links_to(ctx: Context, path: NotePath, folder: FolderName = "") -> str:
+    """The notes that link to this note ([[wiki links]]), with the line where each link is."""
+    app = _seen(ctx)
+    f = _pick(folder)
+    rows = _guard(f.memory.backlinks, path)
+    _log(app, f, "looked at links", f"{len(rows)} notes link here", path)
+    return LABEL + ("\n".join(f"{r['path']}: {r['line']}" for r in rows) if rows else "No notes link to it.")
+
+
+@mcp.tool(annotations=WRITE)
+def move_note(ctx: Context, path: NotePath,
+              new_path: Annotated[str, Field(description="Where it goes, like 'Archive/plan.md'. Also renames.")],
+              folder: FolderName = "") -> str:
+    """Move or rename a note, file or subfolder inside the same folder."""
+    _need_write()
+    app = _seen(ctx)
+    f = _pick(folder)
+    new = _guard(f.memory.move, path, new_path)
+    _log(app, f, "moved", f"{path} → {new}", new)
+    return f"Moved {path} to {new}."
+
+
+@mcp.tool(annotations=WRITE)
+def make_folder(ctx: Context, path: Annotated[str, Field(description="The new subfolder, like 'Projects/2027'.")],
+                folder: FolderName = "") -> str:
+    """Make a subfolder."""
+    _need_write()
+    app = _seen(ctx)
+    f = _pick(folder)
+    made = _guard(f.memory.make_folder, path)
+    _log(app, f, "made a folder", "", made)
+    return f"Made {made}/."
+
+
+@mcp.tool(annotations=WRITE)
+def trash_note(ctx: Context, path: NotePath, folder: FolderName = "") -> str:
+    """Put a note, file or subfolder in the app's trash. Nothing is erased: the person can put it back from the
+    Trash in the app."""
+    _need_write()
+    app = _seen(ctx)
+    f = _pick(folder)
+    _guard(f.memory.trash, path)
+    _log(app, f, "put in the trash", "the person can put it back from Trash", path)
+    return f"Put {path} in the trash. The person can put it back from Trash in the app."
 
 
 # ---------- the person's own app: the page and its /api ----------
@@ -324,6 +477,48 @@ HEADERS = {"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Pol
                                       "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
                                       "connect-src 'self'; media-src blob:; frame-src blob:; worker-src 'self' blob:; "
                                       "object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"}
+
+
+ALLOW_PAGE = """<!doctype html><meta charset="utf-8"><title>Phygital Memory</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>:root{color-scheme:light dark;--bg:#faf9f8;--text:#1a1a1e;--faint:#6b6b76;--accent:#7f73ff}
+@media (prefers-color-scheme:dark){:root{--bg:#121214;--text:#ececf1;--faint:#9d9da7;--accent:#a69cff}}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);
+font:15px/1.5 -apple-system,system-ui,sans-serif}main{max-width:380px;padding:24px;text-align:center}
+h1{font:600 20px/1.3 -apple-system,system-ui,sans-serif;margin:0 0 12px}h1 b{color:var(--accent);font-weight:600}
+p{color:var(--faint);margin:0}</style>
+<main><h1>Phygital <b>Memory</b></h1><p id="m">Switch to the Phygital Memory app to answer. If it's locked, unlock a
+memory first. This page goes on by itself.</p></main>
+<script>
+const m = document.getElementById("m");
+async function tick() {
+  try {
+    const r = await fetch(location.pathname + "/state", { cache: "no-store" });
+    const j = await r.json();
+    if (j.next) { m.textContent = "Done. Going back to the AI app…"; location.replace(j.next); return; }
+    if (j.gone) { m.textContent = "This request ran out. Start the sign-in again from the AI app."; return; }
+  } catch (e) {}
+  setTimeout(tick, 1500);
+}
+tick();
+</script>"""
+
+
+@mcp.custom_route("/allow/{rid}", methods=["GET"])
+async def allow_page(request: Request) -> Response:
+    """The browser page an AI app's sign-in lands on. It waits while the person answers in the app itself (there,
+    only someone who unlocked a memory can say Allow: no other program on this Mac can answer for them)."""
+    if not _local(request):
+        return Response("Not allowed.", status_code=403)
+    return HTMLResponse(ALLOW_PAGE, headers=HEADERS)
+
+
+@mcp.custom_route("/allow/{rid}/state", methods=["GET"])
+async def allow_state(request: Request) -> Response:
+    if not _local(request):
+        return Response("Not allowed.", status_code=403)
+    nxt = gate.answered(request.path_params["rid"])
+    return JSONResponse({"next": nxt or None, "gone": nxt == ""}, headers={"Cache-Control": "no-store"})
 
 
 def _local(request: Request) -> bool:
@@ -534,7 +729,30 @@ async def api(request: Request) -> Response:
             return _ok({"folder": await asyncio.to_thread(folders.relocate, f.id, body["parent"])})
         if action == "renamefolder":
             return _ok({"folder": folders.rename(f.id, body["name"])})
+        # ---- AI apps (Settings › AI apps): only from a page that unlocked a memory with its password ----
+        if action == "aiapps":
+            return _ok({"apps": gate.list(), "waiting": gate.waiting(), "door": f"{PAGE}mcp",
+                        "folders": [{"id": x.id, "name": x.name, "aiHidden": x.ai_hidden} for x in folders.items.values()]})
+        if action == "aiappadd":   # a new key: shown once here, never stored
+            app, key = gate.add_key(str(body.get("name", "")), str(body.get("kind", "other")),
+                                    body.get("folders", "all"), bool(body.get("write")))
+            return _ok({"app": app, "key": key, "door": f"{PAGE}mcp"})
+        if action == "aiappupdate":
+            return _ok({"app": gate.update(str(body.get("id")), body.get("folders"), body.get("write"))})
+        if action == "aiappremove":
+            gate.remove(str(body.get("id")))
+            return _ok({"ok": True})
+        if action == "aihide":   # "AI can't see this" for the selected memory
+            return _ok({"folder": folders.hide_from_ai(f.id, bool(body.get("hidden")))})
+        if action == "allowwaiting":   # AI apps waiting for the person's Allow
+            return _ok({"waiting": gate.waiting()})
+        if action == "allowanswer":
+            gate.answer(str(body.get("id")), bool(body.get("allow")), body.get("folders", "all"), bool(body.get("write")))
+            return _ok({"ok": True})
+        if action == "claudecodeadd":   # one button: add the door, with its key, to Claude Code
+            return _ok(await asyncio.to_thread(_claude_code_add, str(body.get("key", ""))))
         if action == "forgetfolder":
+            gate.forget_folder(f.id)
             folders.forget(f.id)
             return _ok({"ok": True})
         if action == "gen":   # polled every few seconds: has any note changed?
@@ -684,6 +902,26 @@ async def api(request: Request) -> Response:
     except Exception as e:
         return _ok({"error": str(e)}, 400)
     return _ok({"error": "Unknown action."}, 404)
+
+
+def _claude_code_add(key: str) -> dict:
+    """Run Claude Code's own "mcp add" for this Mac user, so the person doesn't have to paste a command."""
+    if not re.fullmatch(r"pm_[A-Za-z0-9_-]{20,}", key):
+        raise ValueError("That isn't a Phygital Memory key.")
+    home = Path.home()
+    for exe in (home / ".claude/local/claude", home / ".local/bin/claude", Path("/opt/homebrew/bin/claude"),
+                Path("/usr/local/bin/claude")):
+        if exe.is_file():
+            break
+    else:
+        return {"ok": False, "error": "Claude Code isn't installed on this Mac. Copy the command instead."}
+    subprocess.run([str(exe), "mcp", "remove", "--scope", "user", "phygital-memory"], capture_output=True, timeout=60)
+    r = subprocess.run([str(exe), "mcp", "add", "--scope", "user", "--transport", "http", "phygital-memory",
+                        f"{PAGE}mcp", "--header", f"Authorization: Bearer {key}"],
+                       capture_output=True, text=True, timeout=60)
+    if r.returncode != 0:
+        return {"ok": False, "error": "Claude Code said no: " + (r.stderr.strip().splitlines() or ["unknown"])[-1][:200]}
+    return {"ok": True}
 
 
 def cloud_place(path: Path) -> str | None:

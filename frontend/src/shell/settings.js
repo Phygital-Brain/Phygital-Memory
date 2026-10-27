@@ -65,6 +65,8 @@ export function openSettings(folderOpts) {
     row("Show properties", "The fields under a note's title.", el("label", { class: "switch" }, props, el("span", { class: "switch-t" }))),
     row("Desktop icon when unlocked", "A folder icon on the Desktop, with your memory's name, to open your notes in Finder. While it's there, any app on this Mac can read them. It goes away when you lock.",
       el("label", { class: "switch" }, onUnlock, el("span", { class: "switch-t" }))),
+    ...(folderOpts && folderOpts.aiApps ? [row("AI apps", "Which AI apps can use your notes, and what each can reach.",
+      el("button", { class: "btn small", type: "button", onclick: () => { close(); folderOpts.aiApps(); } }, "Manage…"))] : []),
     ...folderSection());
   // The selected memory: rename, where it's stored, its encrypted files, Finder, lock.
   function folderSection() {
@@ -83,6 +85,10 @@ export function openSettings(folderOpts) {
       rows.push(row("Show in Finder", "The unlocked notes as a normal folder. While it's open, any app on this Mac can read them. It closes when you lock.",
         el("label", { class: "switch" }, fin, el("span", { class: "switch-t" }))));
     }
+    const hide = el("input", { type: "checkbox", checked: !!folderOpts.aiHidden, "aria-label": "AI can't see this" });
+    hide.addEventListener("change", async () => { hide.checked = !!(await folderOpts.setAiHidden(hide.checked)); });
+    rows.push(row("AI can't see this", "No AI app can reach this memory, whatever its access says.",
+      el("label", { class: "switch" }, hide, el("span", { class: "switch-t" }))));
     rows.push(row("Lock", "Locks this memory now. AI apps can't reach it until you unlock it again.",
       el("div", { class: "set-btns" }, btn("Lock", folderOpts.lock), folderOpts.lockAll ? btn("Lock all", folderOpts.lockAll) : null)));
     return rows;

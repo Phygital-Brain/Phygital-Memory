@@ -9,6 +9,7 @@ import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
 import { openSettings, closeSettings, onSettings, settings } from "./shell/settings.js";
+import { openAIApps, allowDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
@@ -590,6 +591,12 @@ function openSettingsHere() {
     rename: () => renameFolder(), storage: openStoragePanel, lock: () => lockFolder(),
     lockAll: folderList.filter((f) => unlocked(f.id)).length > 1 ? lockAll : null,
     revealVault: info.cloudOnly ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
+    aiHidden: !!info.aiHidden,
+    setAiHidden: async (v) => { try { await api("aihide", { hidden: v }); await refreshFolders(); return v; } catch (e) { toastErr(e.message); return !v; } },
+    aiApps: () => openAIApps({
+      load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
+      remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
+    }),
   } : null);
 }
 
@@ -620,8 +627,28 @@ let genTimer = null, lastGen = null;
 // each of those redraws the unlock screen: that wiped the password as it was being typed.
 const openOnScreen = () => !!loadedFolder && hasPass(loadedFolder) && !appEl.classList.contains("hidden");
 
+// An AI app signed in and waits for the person's Allow: ask here (only a page that unlocked a memory can answer).
+const asked = new Set();
+async function watchAllow() {
+  if (document.querySelector(".overlay")) return;   // never on top of another window: a click meant for it could land on Allow
+  let w;
+  try { w = (await api("allowwaiting")).waiting || []; } catch { return; }
+  for (const req of w) {
+    if (asked.has(req.id)) continue;
+    asked.add(req.id);
+    let folders = [];
+    try { folders = (await api("aiapps")).folders || []; } catch {}
+    const v = await allowDialog(req.name, folders);
+    try {
+      await api("allowanswer", { id: req.id, ...v });
+      if (v.allow) toastOk(`${req.name} can use your notes now. Change it any time in Settings › AI apps.`);
+    } catch (e) { toastErr(e.message); }
+  }
+}
+
 async function watchChanges() {
   if (!openOnScreen() || !barEls || !barEls.cloud.isConnected) return;
+  watchAllow();
   let g;
   try { g = (await api("gen")).gen; } catch { return; }
   if (g == null) return;

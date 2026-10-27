@@ -6,6 +6,7 @@ dependencies = [
     "cheroot>=10",
     "cryptography>=44",
     "mcp>=2.3,<3",
+    "pypdf>=6.21.2",
     "wsgidav>=4.3",
 ]
 

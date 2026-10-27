@@ -1,5 +1,7 @@
 """End to end, against the running server: an AI app over MCP, and the person's app over /api."""
 import asyncio
+
+import testkey
 import json
 import urllib.error
 import urllib.request
@@ -28,7 +30,7 @@ def text(result):
 
 
 async def ai(steps):
-    async with streamable_http_client(f"{BASE}/mcp") as (r, w):
+    async with streamable_http_client(f"{BASE}/mcp", http_client=testkey.client()) as (r, w):
         async with ClientSession(r, w) as s:
             await s.initialize()
             tools = sorted(t.name for t in (await s.list_tools()).tools)
@@ -48,10 +50,10 @@ async def main():
     api("lock", app_pass="none")
     # 1. Locked: the AI gets nothing and is told to ask the person to unlock in the app
     r = await ai([("search_notes", {"question": "storm"})])
-    good &= check("AI tools are only search/open/write, no folder listing or path reading",
+    good &= check("AI tools: search, open, write, plus listing, recent changes, file text, links, move, folder, trash",
                   r["tools"] == ["append_to_note", "around_result", "create_note", "finish_handed_note", "handed_notes",
-                                 "open_result", "read_note",
-                                 "replace_in_note", "search_notes", "status"])
+                                 "links_to", "list_notes", "make_folder", "move_note", "open_result", "read_file_text",
+                                 "read_note", "recent_changes", "replace_in_note", "search_notes", "status", "trash_note"])
     good &= check("locked: search refused", "locked" in r['search_notes{"question": "storm"}'].lower())
     # 2. The app without the password gets nothing
     good &= check("app without pass refused", api("notes")[0] == 423)

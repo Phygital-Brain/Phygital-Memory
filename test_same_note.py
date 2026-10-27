@@ -6,6 +6,8 @@ Part 1 needs no server. Part 2 runs against a running test server (PM_TEST_PORT,
 Run: uv run python test_same_note.py
 """
 import asyncio
+
+import testkey
 import json
 import os
 import shutil
@@ -136,7 +138,7 @@ def call(action, body=None, pw=None, folder=None):
 async def mcp(steps):
     from mcp.client.session import ClientSession
     from mcp.client.streamable_http import streamable_http_client
-    async with streamable_http_client(f"{BASE}/mcp") as (r, w):
+    async with streamable_http_client(f"{BASE}/mcp", http_client=testkey.client()) as (r, w):
         async with ClientSession(r, w) as s:
             await s.initialize()
             out = []
