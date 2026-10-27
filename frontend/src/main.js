@@ -13,7 +13,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openAIPanel, openTrash, openGithubSignIn } from "./shell/panels.js";
+import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo } from "./shell/panels.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
@@ -197,8 +197,14 @@ async function openFromGithub() {
     if (!(await api("githubaccount")).account
         && !(await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") }))) return;
   } catch (e) { toastErr(e.message); return; }
-  const repo = await askText("Open from GitHub", "", "Open", (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
-  if (repo == null) return;
+  let repos = [];
+  try { repos = (await api("githubrepos")).repos || []; } catch (e) { toastErr(e.message); }
+  const known = new Set(folderList.map((f) => f.github).filter(Boolean));
+  let repo = await pickRepo(repos.filter((r) => !known.has(r.repo)));
+  if (repo === "") {   // "Another repo…": type it
+    repo = await askText("Open from GitHub", "", "Open", (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
+  }
+  if (!repo) return;
   try {
     toast("Choose where to keep it on this Mac, in the window that opens…");
     const j = await api("fromgithub", { repo });
@@ -238,7 +244,12 @@ async function renameFolder(id) {
   if (!info) return;
   const v = await askText("Rename folder", info.name, "Rename", (x) => (x.trim() ? "" : "Name can't be empty."));
   if (v == null) return;
-  try { await api("renamefolder", { folder: info.id, name: v.trim() }); await refreshFolders(); } catch (e) { toastErr(e.message); }
+  try {
+    const j = await api("renamefolder", { folder: info.id, name: v.trim() });
+    await refreshFolders();
+    if (j.folder && j.folder.warning) toastErr(j.folder.warning);
+    else if (j.folder && j.folder.github) toastOk(`Renamed. The GitHub repo is now ${j.folder.github}.`);
+  } catch (e) { toastErr(e.message); }
 }
 
 async function forgetFolder(id) {

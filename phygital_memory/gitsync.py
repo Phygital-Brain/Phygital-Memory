@@ -144,10 +144,48 @@ def is_private(repo: str) -> bool:
     return r.returncode == 0 and r.stdout.strip() == "true"
 
 
+SUFFIX = "-Phygital-Memory"
+
+
 def repo_name(name: str) -> str:
-    """"Notes - Phygital Memory" as GitHub allows it (no spaces): "Notes-Phygital-Memory"."""
+    """"Notes - Phygital Memory" as GitHub allows it (no spaces): "Notes-Phygital-Memory". A memory already called
+    "Phygital Memory" (or "… Phygital Memory") isn't doubled: "Phygital-Memory"."""
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.") or "Notes"
-    return f"{slug[:70]}-Phygital-Memory"
+    if slug.lower() == "phygital-memory" or slug.lower().endswith(SUFFIX.lower()):
+        return slug[:90]
+    return f"{slug[:70]}{SUFFIX}"
+
+
+def memory_repos() -> list[dict]:
+    """The signed-in account's private repos made for Phygital Memory (name ending in -Phygital-Memory, or
+    Phygital-Memory itself), newest first. This asks GitHub."""
+    repos, page = [], 1
+    while page <= 10:
+        if _own():
+            code, batch = github_auth.api(f"/user/repos?per_page=100&page={page}&affiliation=owner&sort=pushed")
+            if code != 200:
+                raise RuntimeError("GitHub didn't send the list of repos.")
+        else:
+            r = _run([gh(), "api", f"user/repos?per_page=100&page={page}&affiliation=owner&sort=pushed"], timeout=60)
+            batch = json.loads(r.stdout or "[]")
+        repos += batch
+        if len(batch) < 100:
+            break
+        page += 1
+    mine = [r for r in repos if r.get("private") and (r["name"].lower() == "phygital-memory"
+                                                     or r["name"].lower().endswith(SUFFIX.lower()))]
+    return [{"repo": r["full_name"], "name": r["name"], "pushed": r.get("pushed_at")} for r in mine]
+
+
+def rename_repo(repo: str, new_name: str) -> str:
+    """Rename a repo on GitHub (it forwards the old address). Returns the new 'owner/name'."""
+    if _own():
+        code, info = github_auth.api(f"/repos/{repo}", method="PATCH", body={"name": new_name})
+        if code != 200:
+            raise RuntimeError(info.get("message") or "GitHub didn't rename the repo.")
+        return info["full_name"]
+    r = _run([gh(), "api", "-X", "PATCH", f"repos/{repo}", "-f", f"name={new_name}", "--jq", ".full_name"], timeout=60)
+    return r.stdout.strip()
 
 
 class GitSync:
@@ -200,11 +238,19 @@ class GitSync:
         (self.folder / ".gitattributes").write_text(ATTRIBUTES)
         self.update_readme(name)
 
-    def update_readme(self, name: str) -> None:
+    def renamed(self, name: str, new_repo: str) -> None:
+        """The memory and its repo got a new name: point git at the new address and retitle the README."""
+        with self._lock:
+            self.repo = self.state["repo"] = new_repo
+            self.git("remote", "set-url", "origin", f"https://github.com/{new_repo}.git")
+            self.update_readme(name, force=True)
+        self.poke()
+
+    def update_readme(self, name: str, force: bool = False) -> None:
         """Write the README, or bring the app's own older one up to date. A README someone wrote is left alone."""
         p = self.folder / "README.md"
         old = p.read_text(errors="replace") if p.exists() else None
-        if old is None or (old.startswith("# ") and "Phygital Memory" in old[:200]) or \
+        if (force and (old is None or old.startswith(README_MARK))) or old is None or (old.startswith("# ") and "Phygital Memory" in old[:200]) or \
                 (old.startswith("<!-- phygital-memory-readme") and not old.startswith(README_MARK)):
             p.write_text(README.format(name=name, repo=self.repo))
 

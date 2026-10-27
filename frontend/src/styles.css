@@ -467,6 +467,8 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .st-place.on { border-color: var(--accent); color: var(--accent); cursor: default; }
 .st-here { font-size: 11px; color: var(--text-3); }
 .st-none { color: var(--text-3); font-size: 12px; }
+.repo-row { width: 100%; text-align: left; cursor: pointer; }
+.repo-row:hover { background: var(--bg-subtle); }
 .gh-btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 8px; background: #24292f; color: #fff; border: 1px solid rgba(255, 255, 255, .15); font-weight: 600; font-size: 13px; }
 .gh-btn:hover { background: #32383f; }
 .gh-signin { width: min(420px, calc(100vw - 32px)); }

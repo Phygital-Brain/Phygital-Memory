@@ -271,3 +271,24 @@ function githubMark() {
   svg.append(path);
   return svg;
 }
+
+// Open from GitHub: the person's memory repos to pick from. Resolves with "owner/name", "" for "Another repo…"
+// (typed by hand), or null if cancelled.
+export function pickRepo(repos) {
+  return modal((done) => {
+    const when = (t) => t ? new Date(t).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+    const list = el("div", { class: "act-list" }, ...(repos.length ? repos.map((r) =>
+      el("button", { class: "todo-row repo-row", type: "button", onclick: () => done(r.repo) },
+        el("span", { class: "trash-ic" }, githubMark()),
+        el("div", { class: "act-main" }, el("div", { class: "act-line" }, r.name), el("div", { class: "act-folder" }, `${r.repo}${r.pushed ? " · last change " + when(r.pushed) : ""}`))))
+      : [el("div", { class: "act-empty" }, "No Phygital Memory repos found on this GitHub account.")]));
+    const card = el("div", { class: "dlg activity", role: "dialog" },
+      el("div", { class: "dlg-title" }, "Open from GitHub"),
+      el("div", { class: "mf-hint" }, "Your private Phygital Memory repos. Pick one to bring it to this Mac, then unlock it with its password."),
+      list,
+      el("div", { class: "dlg-actions" },
+        el("button", { class: "btn", type: "button", onclick: () => done("") }, "Another repo…"),
+        el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel")));
+    return { card };
+  });
+}

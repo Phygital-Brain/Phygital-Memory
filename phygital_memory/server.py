@@ -435,6 +435,8 @@ async def api(request: Request) -> Response:
         if action == "githubsignout":
             await asyncio.to_thread(github_auth.sign_out)
             return _ok({"ok": True})
+        if action == "githubrepos":   # Open from GitHub: the person's memory repos, to pick one
+            return _ok({"repos": await asyncio.to_thread(gitsync.memory_repos)})
         if action == "githubaccount":   # only when the person presses Connect GitHub
             return _ok({"account": await asyncio.to_thread(gitsync.signed_in)})
         if action == "fromgithub":   # another Mac: bring a private Phygital Memory repo down and add it

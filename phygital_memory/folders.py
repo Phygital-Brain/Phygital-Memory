@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import activity
 from .finder import Finder
-from .gitsync import GitSync, repo_name
+from .gitsync import GitSync, rename_repo, repo_name
 from .memory import Memory
 
 STATE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser()
@@ -216,7 +216,7 @@ class Folders:
         repo = repo.strip().removeprefix("https://github.com/").removesuffix(".git").strip("/")
         if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repo):
             raise ValueError('Write it like "your-name/Notes-Phygital-Memory".')
-        name = repo.split("/")[1].removesuffix("-Phygital-Memory") or repo.split("/")[1]
+        name = (repo.split("/")[1].removesuffix("-Phygital-Memory") or repo.split("/")[1]).replace("-", " ")
         dest = Path(parent).expanduser() / name
         if dest.exists():
             raise ValueError(f'There is already a "{name}" in that place.')
@@ -238,7 +238,19 @@ class Folders:
             f.name = name
             f.finder.renamed(name)
             self._save()
-            return f.info()
+        info = f.info()
+        if f.github and f.github.split("/")[1] != repo_name(name):   # the GitHub repo follows the new name
+            try:
+                new_repo = rename_repo(f.github, repo_name(name))
+                if f.sync:
+                    f.sync.renamed(name, new_repo)
+                f.github = new_repo
+                with self._lock:
+                    self._save()
+                info = f.info()
+            except Exception as e:
+                info["warning"] = f"Renamed here, but the GitHub repo kept its name: {e}"
+        return info
 
     def relocate(self, fid: str, parent: str) -> dict:
         """Move a folder to another place on disk (a cloud folder, or back to the Mac). It is locked first: only
