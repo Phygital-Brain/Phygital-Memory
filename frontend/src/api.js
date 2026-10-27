@@ -21,7 +21,7 @@ export async function api(action, body = {}) {
   if (pass) headers["X-App-Pass"] = pass;
   const r = await fetch("/api/" + action, { method: "POST", headers, body: JSON.stringify(folder && !body.folder ? { ...body, folder } : body) });
   const j = await r.json().catch(() => ({}));
-  if (r.status === 423 && action !== "unlock" && action !== "devunlock") {
+  if (r.status === 423 && action !== "unlock") {
     const id = j.folder || folder;
     passes.delete(id);
     lockedListeners.forEach((fn) => fn(id));

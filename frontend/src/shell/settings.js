@@ -112,6 +112,7 @@ export function openSettings(folderOpts, me) {
     rows.push(row("Hide from AI", "No AI app can reach this memory.", toggle("Hide from AI", f.aiHidden, f.setAiHidden),
       "Turns off AI access to this memory, whatever each app is allowed."));
   }
+  if (me && me.licenses) rows.push(section("About"), row("Open-source licences", "Syncthing and rclone, which this app includes.", btn("Show", me.licenses)));
   const card = el("div", { class: "dlg settings", role: "dialog", "aria-label": "Settings" },
     el("div", { class: "set-head" }, el("div", { class: "dlg-title" }, "Settings"),
       el("button", { class: "icon-btn", title: "Close", "aria-label": "Close", onclick: close }, icon("x", 14, 2))),

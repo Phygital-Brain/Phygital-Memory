@@ -7,7 +7,7 @@ import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
-import { askText, askPassword, confirmDialog, choiceDialog, showRecoveryKey, recoveryDialog } from "./shell/dialogs.js";
+import { askText, askPassword, confirmDialog, choiceDialog, showRecoveryKey, recoveryDialog, showLicenses } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
@@ -850,6 +850,7 @@ async function openSettingsHere() {
     me.approver = { label: !ap.set ? "Not set up yet" : ap.kind === "chip" ? "Touch ID (security chip)" : "Approval password",
       signed: ap.signed, setUp: ap.set ? null : () => setUpApprover(ap.chip) };
     me.macs = { list: (await api("mymacs")).macs, link: linkOtherMac };
+    me.licenses = async () => { try { showLicenses((await api("licenses")).text); } catch (e) { toastErr(e.message); } };
   } catch {}
   openSettings(info && unlocked(info.id) ? {
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
@@ -2756,10 +2757,6 @@ window.phygitalOpenFolder = async (id) => {
     let first = folderList[0].id;
     try { const w = await api("wanted"); if (w.id && folderList.some((f) => f.id === w.id)) first = w.id; } catch {}
     setFolder(first);
-    try {
-      const j = await api("devunlock");
-      if (j && j.pass) { setPass(j.pass); await enterApp(); return; }
-    } catch {}
   }
   showUnlock();
 })();

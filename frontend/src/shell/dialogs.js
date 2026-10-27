@@ -66,6 +66,16 @@ export function showRecoveryKey(words) {
   });
 }
 
+// The open-source licences of the programs the app includes, as their authors wrote them.
+export function showLicenses(text) {
+  return modal((done) => {
+    const ok = el("button", { class: "btn primary", type: "button", onclick: () => done(true) }, "Done");
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, "Open-source licences"),
+      el("pre", { class: "lic-text" }, text), el("div", { class: "dlg-actions" }, ok));
+    return { card, focus: ok };
+  });
+}
+
 // Forgot the password: the recovery key, and a new password twice. Resolves {words, password, again} or null.
 export function recoveryDialog() {
   return modal((done) => {

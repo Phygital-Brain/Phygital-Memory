@@ -1531,6 +1531,12 @@ async def api(request: Request) -> Response:
         if action == "linkwait":   # polled by the other Mac until the answer is here
             async with _link_wait:
                 return await _link_wait_step(body)
+        if action == "licenses":   # the open-source licences of what the app includes (Resources/server/licenses)
+            d = Path(sys.executable).parent / "licenses"
+            files = sorted(d.glob("*.txt")) if getattr(sys, "frozen", False) and d.is_dir() else []
+            if not files:
+                return _ok({"error": "The licences come with the installed app."}, 404)
+            return _ok({"text": "\n\n".join(p.read_text() for p in files)})
         if action == "mymacs":
             return _ok({"macs": [{"device": d, "name": i.get("name", "Mac"), "linked": i.get("linked")}
                                  for d, i in linking.macs().items()], "here": linking.computer_name()})
@@ -1706,12 +1712,8 @@ async def api(request: Request) -> Response:
                         "cloudHealth": await asyncio.to_thread(f.drive.health) if f.drive and stat.get("open") else None,
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})
-        # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
-        # fields). Works only when the app is started with PHYGITAL_MEMORY_DEV_PASSWORD_FILE. Remove before release.
-        if action in ("unlock", "devunlock", "touchidunlock") and not f.memory.is_open:
+        if action in ("unlock", "touchidunlock") and not f.memory.is_open:
             await asyncio.to_thread(f.ready)   # a cloud memory: open its hidden drive first
-        if action == "devunlock" and os.environ.get("PHYGITAL_MEMORY_DEV_PASSWORD_FILE"):
-            return _unlock(f, Path(os.environ["PHYGITAL_MEMORY_DEV_PASSWORD_FILE"]).read_text().strip())
         if action == "unlock":
             r = _unlock(f, body.get("password", ""))
             if body.get("touchid") and r.status_code == 200 and await asyncio.to_thread(touchid.available):
