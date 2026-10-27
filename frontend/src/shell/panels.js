@@ -1,4 +1,4 @@
-// Two small panels from the sidebar's status icons: where this folder is stored, and what AI apps did with it.
+// Panels from the sidebar's status icons: where this folder is stored, the AI panel (tasks and activity), the trash.
 // Everything from the server is put in as text only.
 import { el, icon } from "./dom.js";
 import { modal } from "./dialogs.js";
@@ -56,102 +56,115 @@ export function openStorage(ctx) {
   });
 }
 
-// ctx: {rows:[{t, ago, app, folderName, what, detail, path, undo, canUndo}], open(path), todo(), undo(row), fail(msg)}
-export function openActivity(ctx) {
+// One AI panel with two tabs: Tasks (notes given to the AI, each with what to do) and Activity (what AI apps did).
+// ctx.tasks: {path?, label(path), todo:[{id, path, ask, t, done, by, result}], give(ask) -> todo, set(id, done) -> todo,
+//             remove(id) -> todo, load() -> todo, open(path)}   With path, a box on top gives that note.
+// ctx.activity: {rows:[{t, ago, app, folderName, what, detail, path, undo, canUndo}], open(path), undo(row), fail(msg)}
+export function openAIPanel(ctx, start = "tasks") {
   return modal((done) => {
-    const apps = [...new Set(ctx.rows.map((r) => r.app))];
-    const filter = el("select", { class: "act-filter", "aria-label": "Which app" },
-      el("option", { value: "" }, "All AI apps"), ...apps.map((a) => el("option", { value: a }, a)));
-    const list = el("div", { class: "act-list" });
-    const draw = () => {
-      const rows = ctx.rows.filter((r) => !filter.value || r.app === filter.value);
-      list.replaceChildren(...(rows.length ? rows.map((r) => {
-        const pathBtn = r.path ? el("button", { class: "act-path", type: "button", title: "Open this note",
-                                                onclick: () => { done(null); ctx.open(r.path); } }, r.path) : null;
-        return el("div", { class: "act-row" + (/changed|added|created/.test(r.what) ? " write" : "") },
-          el("div", { class: "act-time", title: new Date(r.t * 1000).toLocaleString() }, clock(r.t), el("span", {}, ago(r.ago))),
-          el("div", { class: "act-main" },
-            el("div", { class: "act-line" }, el("b", {}, r.app), ` ${r.what} `, pathBtn,
-              r.canUndo ? el("button", { class: "btn small act-undo", type: "button", title: "Put the note back as it was before this change",
-                onclick: async (e) => {
-                  const b = e.currentTarget; b.disabled = true;
-                  try { await ctx.undo(r); r.canUndo = false; b.replaceWith(el("span", { class: "act-undone" }, "Undone")); }
-                  catch (err) { b.disabled = false; b.title = err.message; ctx.fail(err.message); }
-                } }, "Undo") : null),
-            r.detail ? el("div", { class: "act-detail" }, r.detail) : null,
-            el("div", { class: "act-folder" }, r.folderName)));
-      }) : [el("div", { class: "act-empty" }, "No AI app has used your notes since they were unlocked.")]));
+    const tasks = tasksView(ctx.tasks, done), activity = activityView(ctx.activity, done);
+    const views = { tasks, activity };
+    const body = el("div", { class: "ai-body" });
+    const tools = el("div", { class: "act-tools" });
+    const tabs = el("div", { class: "seg", role: "tablist" });
+    const show = (k) => {
+      for (const b of tabs.children) { const on = b.dataset.k === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); }
+      body.replaceChildren(...views[k].body);
+      tools.replaceChildren(...(views[k].tools || []));
+      if (k === "tasks" && tasks.focus) tasks.focus.focus();
     };
-    filter.addEventListener("change", draw);
-    draw();
+    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"]]) {
+      tabs.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
+    }
     const card = el("div", { class: "dlg activity", role: "dialog" },
-      el("div", { class: "act-head" }, el("div", { class: "dlg-title" }, "AI activity"),
-        el("div", { class: "act-tools" }, el("button", { class: "btn small", type: "button", onclick: () => { done(null); ctx.todo(); } }, "AI tasks"), filter)),
-      el("div", { class: "mf-hint" }, "What AI apps did with your unlocked notes. Kept only until you lock."),
-      list,
+      el("div", { class: "act-head" }, el("div", { class: "ai-head-left" }, el("div", { class: "dlg-title" }, "AI"), tabs), tools),
+      body,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
-    return { card };
+    show(start);
+    return { card, focus: start === "tasks" ? tasks.focus : null };
   });
 }
 
-// AI tasks: notes given to the AI, each with what to do. With ctx.path, a box on top gives that note.
-// ctx: {path?, label(path), todo:[{id, path, ask, t, done, by, result}], give(ask) -> todo, set(id, done) -> todo,
-//       remove(id) -> todo, load() -> todo, open(path)}
-export function openAITodo(ctx) {
-  return modal((done) => {
-    let todo = ctx.todo;
-    const err = el("div", { class: "dlg-err" });
-    const list = el("div", { class: "act-list todo-list" });
-    const act = async (fn) => {
-      err.textContent = "";
-      try { todo = await fn(); draw(); } catch (e) { err.textContent = e.message; }
-    };
-    const draw = () => {
-      const items = [...todo].sort((a, b) => (a.done - b.done) || (b.t - a.t));
-      list.replaceChildren(...(items.length ? items.map((i) => {
-        const box = el("input", { type: "checkbox", class: "todo-check", "aria-label": "Done" });
-        box.checked = !!i.done;
-        box.addEventListener("change", () => act(() => ctx.set(i.id, box.checked)));
-        return el("div", { class: "todo-row" + (i.done ? " done" : "") }, box,
-          el("div", { class: "act-main" },
-            el("button", { class: "act-path", type: "button", title: i.path, onclick: () => { done(null); ctx.open(i.path); } }, ctx.label(i.path)),
-            el("div", { class: "act-detail" }, i.ask || "No request: just read it."),
-            i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : "Ticked off by you"}${i.result ? ": " + i.result : ""}`)
-                   : el("div", { class: "act-folder" }, `Given ${ago(Math.max(0, Date.now() / 1000 - i.t))}`)),
-          el("button", { class: "icon-btn todo-x", type: "button", title: "Remove from the list", "aria-label": "Remove",
-                         onclick: () => act(() => ctx.remove(i.id)) }, icon("x", 14)));
-      }) : [el("div", { class: "act-empty" }, "Nothing here yet. Open a note and press the sparkle button to give your AI a task.")]));
-    };
-    draw();
-    // Stay current while open: the AI may tick things off meanwhile.
-    const tick = setInterval(async () => {
-      if (!list.isConnected) { clearInterval(tick); return; }
-      try { const t = await ctx.load(); if (JSON.stringify(t) !== JSON.stringify(todo)) { todo = t; draw(); } } catch {}
-    }, 4000);
+function activityView(ctx, done) {
+  const apps = [...new Set(ctx.rows.map((r) => r.app))];
+  const filter = el("select", { class: "act-filter", "aria-label": "Which app" },
+    el("option", { value: "" }, "All AI apps"), ...apps.map((a) => el("option", { value: a }, a)));
+  const list = el("div", { class: "act-list" });
+  const draw = () => {
+    const rows = ctx.rows.filter((r) => !filter.value || r.app === filter.value);
+    list.replaceChildren(...(rows.length ? rows.map((r) => {
+      const pathBtn = r.path ? el("button", { class: "act-path", type: "button", title: "Open this note",
+                                              onclick: () => { done(null); ctx.open(r.path); } }, r.path) : null;
+      return el("div", { class: "act-row" + (/changed|added|created/.test(r.what) ? " write" : "") },
+        el("div", { class: "act-time", title: new Date(r.t * 1000).toLocaleString() }, clock(r.t), el("span", {}, ago(r.ago))),
+        el("div", { class: "act-main" },
+          el("div", { class: "act-line" }, el("b", {}, r.app), ` ${r.what} `, pathBtn,
+            r.canUndo ? el("button", { class: "btn small act-undo", type: "button", title: "Put the note back as it was before this change",
+              onclick: async (e) => {
+                const b = e.currentTarget; b.disabled = true;
+                try { await ctx.undo(r); r.canUndo = false; b.replaceWith(el("span", { class: "act-undone" }, "Undone")); }
+                catch (err) { b.disabled = false; b.title = err.message; ctx.fail(err.message); }
+              } }, "Undo") : null),
+          r.detail ? el("div", { class: "act-detail" }, r.detail) : null,
+          el("div", { class: "act-folder" }, r.folderName)));
+    }) : [el("div", { class: "act-empty" }, "No AI app has used your notes since they were unlocked.")]));
+  };
+  filter.addEventListener("change", draw);
+  draw();
+  return { tools: apps.length > 1 ? [filter] : [],
+           body: [el("div", { class: "mf-hint" }, "What AI apps did with your unlocked notes. Kept only until you lock."), list] };
+}
 
-    let give = null, ask = null;
-    if (ctx.path) {
-      ask = el("textarea", { class: "dlg-input todo-ask", rows: "3", spellcheck: "true",
-                             placeholder: "What should the AI do with this note? (optional)\nFor example: fix typos and make it shorter." });
-      const add = () => act(async () => {
-        const t = await ctx.give(ask.value);
-        ask.value = "";
-        return t;
-      });
-      ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } });
-      give = el("div", { class: "todo-give" },
-        el("div", { class: "dlg-sub" }, el("b", {}, ctx.label(ctx.path))),
-        ask,
-        el("div", { class: "dlg-actions" }, el("button", { class: "btn primary", type: "button", onclick: add }, "Add task")));
-    }
-    const card = el("div", { class: "dlg activity", role: "dialog" },
-      el("div", { class: "dlg-title" }, ctx.path ? "Give AI a task" : "AI tasks"),
-      give,
-      el("div", { class: "mf-hint" }, "Your AI works through these tasks when you ask it to, for example: “Do my Phygital Memory tasks.” Its changes can be undone in each note’s version history."),
-      list, err,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
-    return { card, focus: ask };
-  });
+function tasksView(ctx, done) {
+  let todo = ctx.todo;
+  const err = el("div", { class: "dlg-err" });
+  const list = el("div", { class: "act-list todo-list" });
+  const act = async (fn) => {
+    err.textContent = "";
+    try { todo = await fn(); draw(); } catch (e) { err.textContent = e.message; }
+  };
+  const draw = () => {
+    const items = [...todo].sort((a, b) => (a.done - b.done) || (b.t - a.t));
+    list.replaceChildren(...(items.length ? items.map((i) => {
+      const box = el("input", { type: "checkbox", class: "todo-check", "aria-label": "Done" });
+      box.checked = !!i.done;
+      box.addEventListener("change", () => act(() => ctx.set(i.id, box.checked)));
+      return el("div", { class: "todo-row" + (i.done ? " done" : "") }, box,
+        el("div", { class: "act-main" },
+          el("button", { class: "act-path", type: "button", title: i.path, onclick: () => { done(null); ctx.open(i.path); } }, ctx.label(i.path)),
+          el("div", { class: "act-detail" }, i.ask || "No request: just read it."),
+          i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : "Ticked off by you"}${i.result ? ": " + i.result : ""}`)
+                 : el("div", { class: "act-folder" }, `Given ${ago(Math.max(0, Date.now() / 1000 - i.t))}`)),
+        el("button", { class: "icon-btn todo-x", type: "button", title: "Remove from the list", "aria-label": "Remove",
+                       onclick: () => act(() => ctx.remove(i.id)) }, icon("x", 14)));
+    }) : [el("div", { class: "act-empty" }, "No tasks yet. Open a note and press the sparkle button to give your AI a task.")]));
+  };
+  draw();
+  // Stay current while open: the AI may tick things off meanwhile.
+  const tick = setInterval(async () => {
+    if (!list.isConnected && !document.querySelector(".ai-body")) { clearInterval(tick); return; }
+    if (!list.isConnected) return;
+    try { const t = await ctx.load(); if (JSON.stringify(t) !== JSON.stringify(todo)) { todo = t; draw(); } } catch {}
+  }, 4000);
+
+  let give = null, ask = null;
+  if (ctx.path) {
+    ask = el("textarea", { class: "dlg-input todo-ask", rows: "3", spellcheck: "true",
+                           placeholder: "What should the AI do with this note? (optional)\nFor example: fix typos and make it shorter." });
+    const add = () => act(async () => {
+      const t = await ctx.give(ask.value);
+      ask.value = "";
+      return t;
+    });
+    ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } });
+    give = el("div", { class: "todo-give" },
+      el("div", { class: "dlg-sub" }, "Give AI a task with ", el("b", {}, ctx.label(ctx.path))),
+      ask,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn primary", type: "button", onclick: add }, "Add task")));
+  }
+  return { focus: ask, body: [give,
+    el("div", { class: "mf-hint" }, "Your AI works through these tasks when you ask it to, for example: \u201cDo my Phygital Memory tasks.\u201d Its changes can be undone from Activity."),
+    list, err].filter(Boolean) };
 }
 
 // The trash: everything moved there stays (encrypted, inside the folder) until restored.

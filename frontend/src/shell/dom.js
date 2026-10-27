@@ -39,6 +39,7 @@ const ICONS = {
   home: ["M4 11l8-7 8 7", "M6 10v10h12V10", "M10 20v-5h4v5"],
   undo: ["M9 14L4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"],
   redo: ["M15 14l5-5-5-5", "M20 9H9.5a5.5 5.5 0 0 0 0 11H13"],
+  pulse: ["M3 12h4l3-7 4 14 3-7h4"],   // AI activity light (the sparkle is for Give AI a task)
   trash: ["M4 7h16", "M10 11v6M14 11v6", "M6 7l1 13h10l1-13", "M9 7V4h6v3"],
   pin: ["M9 4h6l-1 6 3 3H7l3-3z", "M12 13v7"],
   check: ["M5 12.5l4.5 4.5L19 7.5"],

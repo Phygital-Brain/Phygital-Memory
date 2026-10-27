@@ -13,7 +13,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openActivity, openAITodo, openTrash } from "./shell/panels.js";
+import { openStorage, openAIPanel, openTrash } from "./shell/panels.js";
 import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
@@ -572,7 +572,7 @@ async function refreshBar() {
   barEls.cloud.classList.toggle("on", !!b.cloud);
   barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}, encrypted. The cloud only sees scrambled files.` : "Only on this Mac.";
   const recent = (b.ai || []).filter((a) => a.ago < 120);
-  barEls.ai.replaceChildren(icon("sparkle", 14, 1.7));
+  barEls.ai.replaceChildren(icon("pulse", 14, 1.8));
   barEls.ai.classList.toggle("on", recent.length > 0);
   const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
   barEls.ai.title = (b.ai || []).length
@@ -616,18 +616,7 @@ async function openTrashPanel() {
   });
 }
 
-async function openActivityPanel() {
-  let rows = [];
-  try { rows = (await api("aiactivity")).activity || []; } catch (e) { toastErr(e.message); return; }
-  openActivity({ rows, open: (p) => openPath(p), todo: () => openTodoList(),
-    undo: async (r) => {
-      const j = await api("undoai", { id: r.undo, folder: r.folder });
-      await syncFromDisk();
-      toastOk(j.trashed ? `Moved "${label(j.path)}" to the trash. Restore it from there if you change your mind.`
-                        : `"${label(j.path)}" is back as it was. The AI's version is kept in version history.`);
-    },
-    fail: (m) => toastErr(m) });
-}
+async function openActivityPanel() { return openAI("activity"); }
 
 // Click a note's path: copy it in the form you need.
 function copyPathMenu(path, anchor) {
@@ -1608,22 +1597,38 @@ async function giveToAI() {
   openTodoList(tab.path);
 }
 
-async function openTodoList(path) {
-  let todo;
-  try { todo = (await api("aitodo")).todo || []; } catch (e) { toastErr(e.message); return; }
-  await openAITodo({
-    path, todo, label,
-    give: async (ask) => {
-      const j = await api("handtoai", { path, ask });
-      navigator.clipboard.writeText("Do my Phygital Memory tasks.").catch(() => {});
-      toastOk("Added to AI tasks. “Do my Phygital Memory tasks.” is copied, to paste in your AI chat.");
-      return j.todo || [];
+async function openTodoList(path) { return openAI("tasks", path); }
+
+// The AI panel: Tasks and Activity tabs.
+async function openAI(start, path) {
+  let todo, rows;
+  try { [todo, rows] = await Promise.all([api("aitodo").then((j) => j.todo || []), api("aiactivity").then((j) => j.activity || [])]); }
+  catch (e) { toastErr(e.message); return; }
+  await openAIPanel({
+    tasks: {
+      path, todo, label,
+      give: async (ask) => {
+        const j = await api("handtoai", { path, ask });
+        navigator.clipboard.writeText("Do my Phygital Memory tasks.").catch(() => {});
+        toastOk("Added to AI tasks. \u201cDo my Phygital Memory tasks.\u201d is copied, to paste in your AI chat.");
+        return j.todo || [];
+      },
+      set: async (id, done) => (await api("aitodoset", { id, done })).todo || [],
+      remove: async (id) => (await api("aitodoremove", { id })).todo || [],
+      load: async () => (await api("aitodo")).todo || [],
+      open: (p) => openPath(p),
     },
-    set: async (id, done) => (await api("aitodoset", { id, done })).todo || [],
-    remove: async (id) => (await api("aitodoremove", { id })).todo || [],
-    load: async () => (await api("aitodo")).todo || [],
-    open: (p) => openPath(p),
-  });
+    activity: {
+      rows, open: (p) => openPath(p),
+      undo: async (r) => {
+        const j = await api("undoai", { id: r.undo, folder: r.folder });
+        await syncFromDisk();
+        toastOk(j.trashed ? `Moved "${label(j.path)}" to the trash. Restore it from there if you change your mind.`
+                          : `"${label(j.path)}" is back as it was. The AI's version is kept in version history.`);
+      },
+      fail: (m) => toastErr(m),
+    },
+  }, start);
   watchTodo();
 }
 

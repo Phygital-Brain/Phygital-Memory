@@ -584,3 +584,5 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 /* no system title bar (like Baalda): the window buttons float over the sidebar's top strip; these strips move the window */
 .win-drag { height: 40px; flex: none; border-bottom: 1px solid var(--border); }
 .win-drag-top { position: absolute; top: 0; left: 0; right: 0; height: 40px; }
+.ai-head-left { display: flex; align-items: center; gap: 12px; }
+.ai-body { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
