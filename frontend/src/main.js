@@ -1402,7 +1402,8 @@ async function setUpApprover(chip) {
 }
 
 // The "sealed" moment: wires run in from both sides, the lock between closes, a ring draws round it and scrambled
-// characters settle into the app's name, slowly (about six seconds; it never blocks a click). Plays after a signed
+// characters settle into the app's name, on one colour over the whole screen, then it all fades out (about six
+// seconds; a click skips it). Plays after a signed
 // sharing yes, an unlock, being let in, allowing an AI app and making a new memory. A plain fade with motion turned down.
 function sealAnimation() {
   const ns = "http://www.w3.org/2000/svg";
@@ -1418,7 +1419,7 @@ function sealAnimation() {
     + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/></g>';
   const words = "Phygital Memory";
   const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
-  const box = el("div", { class: "pk-seal", "aria-hidden": "true" }, el("div", { class: "pk-card" }, svg, text));
+  const box = el("div", { class: "pk-seal", "aria-hidden": "true", onclick: () => box.remove() }, el("div", { class: "pk-card" }, svg, text));
   document.body.append(box);
   const glyphs = "0123456789abcdef#%&*+=<>";
   const start = performance.now();
