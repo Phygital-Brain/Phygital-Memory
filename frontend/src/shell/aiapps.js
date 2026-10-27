@@ -136,6 +136,8 @@ export function openAIApps(ctx) {
       }, "primary"));
     };
 
+    const again = () => { if (!card.isConnected) document.removeEventListener("ai-apps-changed", again); else if (title.textContent === "AI apps") list(); };
+    document.addEventListener("ai-apps-changed", again);
     list();
     return { card };
   });

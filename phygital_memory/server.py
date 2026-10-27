@@ -486,7 +486,7 @@ ALLOW_PAGE = """<!doctype html><meta charset="utf-8"><title>Phygital Memory</tit
 @media (prefers-color-scheme:dark){:root{--bg:#121214;--text:#ececf1;--faint:#9d9da7;--accent:#a69cff}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);
 font:15px/1.5 -apple-system,system-ui,sans-serif}main{max-width:380px;padding:24px;text-align:center}
-h1{font:600 20px/1.3 -apple-system,system-ui,sans-serif;margin:0 0 12px}h1 b{color:var(--accent);font-weight:600}
+a{color:var(--accent)}h1{font:600 20px/1.3 -apple-system,system-ui,sans-serif;margin:0 0 12px}h1 b{color:var(--accent);font-weight:600}
 p{color:var(--faint);margin:0}</style>
 <main><h1>Phygital <b>Memory</b></h1><p id="m">Switch to the Phygital Memory app to answer. If it's locked, unlock a
 memory first. This page goes on by itself.</p></main>
@@ -496,7 +496,11 @@ async function tick() {
   try {
     const r = await fetch(location.pathname + "/state", { cache: "no-store" });
     const j = await r.json();
-    if (j.next) { m.textContent = "Done. Going back to the AI app…"; location.replace(j.next); return; }
+    if (j.next) {
+      m.textContent = "Done. Going back to the AI app… If nothing happens, ";
+      const a = document.createElement("a"); a.href = j.next; a.textContent = "click here"; m.append(a, ".");
+      location.replace(j.next); return;
+    }
     if (j.gone) { m.textContent = "This request ran out. Start the sign-in again from the AI app."; return; }
   } catch (e) {}
   setTimeout(tick, 1500);

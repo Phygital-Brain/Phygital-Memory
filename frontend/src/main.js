@@ -630,7 +630,10 @@ const openOnScreen = () => !!loadedFolder && hasPass(loadedFolder) && !appEl.cla
 // An AI app signed in and waits for the person's Allow: ask here (only a page that unlocked a memory can answer).
 const asked = new Set();
 async function watchAllow() {
-  if (document.querySelector(".overlay")) return;   // never on top of another window: a click meant for it could land on Allow
+  // never on top of another window (a click meant for it could land on Allow), except the AI apps window itself,
+  // where the person is likely waiting for this
+  const open = [...document.querySelectorAll(".overlay")];
+  if (open.length && !(open.length === 1 && open[0].querySelector(".ai-apps"))) return;
   let w;
   try { w = (await api("allowwaiting")).waiting || []; } catch { return; }
   for (const req of w) {
@@ -642,6 +645,7 @@ async function watchAllow() {
     try {
       await api("allowanswer", { id: req.id, ...v });
       if (v.allow) toastOk(`“${req.name}” can use your notes now. Change it any time in Settings › AI apps.`);
+      document.dispatchEvent(new Event("ai-apps-changed"));
     } catch (e) { toastErr(e.message); }
   }
 }
