@@ -1,6 +1,6 @@
-// Right-click / "more" menus. Items: {label, fn, cls, check, hint, value, dot, sub: [items], node, sep}.
+// Right-click / "more" menus. Items: {label, fn, cls, check, hint, value, dot, icon, sub: [items], node, sep}.
 // A submenu opens beside its row on hover (or click), like the Mac's own menus.
-import { el } from "./dom.js";
+import { el, icon } from "./dom.js";
 
 let panels = [];   // the menu, then each open submenu
 let closeTimer = null;
@@ -29,6 +29,7 @@ function panel(list, depth) {
     if (it.sep) { p.append(el("div", { class: "menu-sep" })); continue; }
     if (it.node) { p.append(it.node); continue; }
     const row = el("button", { class: "menu-item " + (it.cls || ""), role: "menuitem", "aria-haspopup": it.sub ? "menu" : null },
+      it.icon ? el("span", { class: "fo-action-icon" }, icon(it.icon, 15)) : null,
       el("span", { class: "mi-main" }, el("span", {}, it.label), it.hint ? el("span", { class: "mi-hint" }, it.hint) : null),
       el("span", { class: "mi-end" },
         it.value ? el("span", { class: "mi-value" }, it.value) : null,

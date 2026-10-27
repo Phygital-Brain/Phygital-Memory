@@ -50,16 +50,17 @@ export function switcherItems(ctx) {
   const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id));
   const items = [...rows, { sep: true },
     actionRow("plus", "New memory", ctx.createNew),
-    actionRow("folder", "Open memory", ctx.openOther),
-    ...(ctx.fromGithub ? [actionRow("cloud", "Open from GitHub", ctx.fromGithub)] : []),
-    ...(ctx.fromCloud ? [actionRow("cloud", "Open from WebDAV", ctx.fromCloud)] : []),
+    { label: "Open memory", icon: "folder", cls: "fo-menu-item", sub: [
+      { label: "From this Mac", fn: ctx.openOther },
+      ...(ctx.fromGithub ? [{ label: "From GitHub", fn: ctx.fromGithub }] : []),
+      ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : [])] },
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
-      actionRow("gear", "Rename folder", ctx.rename),
+      actionRow("gear", "Rename memory", ctx.rename),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
       actionRow("home", "Home", ctx.home, { label: "⇧⌘H" }),
-      actionRow("lock", "Lock folder", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
+      actionRow("lock", "Lock memory", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
   }
   return items;
 }

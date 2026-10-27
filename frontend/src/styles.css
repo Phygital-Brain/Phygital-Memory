@@ -634,3 +634,5 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .st-e2e { display: flex; gap: 8px; align-items: center; margin-top: 10px; padding: 8px 10px; border-radius: var(--r-s); background: var(--accent-soft); color: var(--text-2); font-size: 12px; }
 .st-e2e svg { color: var(--accent); flex: none; }
 .info-pop { position: fixed; z-index: 200; max-width: 260px; padding: 8px 10px; border-radius: var(--r-s); background: var(--bg-surface); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--text); font-size: 12px; line-height: 1.45; }
+.menu-item.fo-menu-item { justify-content: flex-start; gap: 12px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--text); }
+.menu-item.fo-menu-item .mi-main { flex: 1; }

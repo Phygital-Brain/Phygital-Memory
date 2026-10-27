@@ -81,8 +81,6 @@ export function openSettings(folderOpts) {
       "These are the real files. Only you can read them, with your password."));
     if (f.showHidden) rows.push(row("Show hidden files", "⇧⌘.", toggle("Show hidden files", f.showHidden.on, f.showHidden.set),
       "Files and folders whose names start with a dot, like .env. They show in Hidden Notes at the bottom of the list."));
-    rows.push(row("Lock", "Lock it now.", el("div", { class: "set-btns" }, btn("Lock", f.lock), f.lockAll ? btn("Lock all", f.lockAll) : null),
-      "AI apps and Finder can't reach it until you unlock it again."));
   }
   rows.push(section("Finder"));
   if (f && f.finderAvailable) rows.push(row("Show in Finder", "Your notes as a normal folder.", toggle("Show in Finder", f.finderShown, f.toggleFinder),
