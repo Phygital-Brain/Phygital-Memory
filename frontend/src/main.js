@@ -14,7 +14,6 @@ import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
 import { openStorage, openAIPanel, openTrash } from "./shell/panels.js";
-import { askClose } from "./shell/closedlg.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
@@ -79,7 +78,7 @@ const unlocked = (id) => hasPass(id) && !!(folderList.find((f) => f.id === id) |
 async function refreshFolders() {
   try { folderList = (await api("folders")).folders || []; } catch { return folderList; }
   drawSwitcher();
-  syncClosePoll();
+  watchFolders();
   return folderList;
 }
 
@@ -1978,43 +1977,16 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("beforeunload", (e) => { if (state.tabs.some((t) => t.dirty)) { e.preventDefault(); e.returnValue = ""; } });
 
 // ---------- closing the app ----------
-// When the window closes while a folder is open in Finder, the program asks (through closestate) whether to keep
-// the notes open for a while. We always watch for it (a tiny local call each second): the page can't be sure it
-// knows about every Finder view, and a missed question would leave the folders open.
-let closeTimer = null, closeBusy = false, closeTick = 0;
+// The Mac app hides the window and asks its own small question (lock all, or keep open). First it calls this, so
+// nothing just typed is lost if everything locks.
+window.phygitalSaveAll = async () => {
+  if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+};
 
-function syncClosePoll() {
-  if (!closeTimer) { closeTick = 0; closeTimer = setInterval(pollClose, 1000); }
-}
-
-async function pollClose() {
-  if (closeBusy) return;
-  if (++closeTick % 15 === 0) refreshFolders();   // notice a Finder view that ended by itself
-  let asked = false;
-  try { asked = !!(await api("closestate")).asked; } catch {}
-  if (!asked) return;
-  closeBusy = true;
-  try { await answerClose(); } finally { closeBusy = false; }
-}
-
-async function answerClose() {
-  const keep = await askClose();
-  try {
-    if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-    const pass = hasPass(currentFolder()) ? currentFolder() : (folderList.find((f) => hasPass(f.id)) || {}).id;
-    await api("closeanswer", { keep, ...(pass ? { folder: pass } : {}) });
-  } catch (e) {
-    toastErr(e.message);
-    await new Promise((r) => setTimeout(r, 3000));
-    return;
-  }
-  if (keep === 0) {
-    toastOk("Everything is locked. Closing now.");
-    for (const id of [...folderList.map((f) => f.id), ...views.keys()]) lockedLocally(id);
-    showUnlock();
-  } else {
-    toastOk("Your notes stay open. The app keeps running in the Dock until you lock or quit it.");
-  }
+// Notice a Finder view that ended by itself.
+let foldersTimer = null;
+function watchFolders() {
+  if (!foldersTimer) foldersTimer = setInterval(refreshFolders, 15000);
 }
 
 // ---------- start ----------

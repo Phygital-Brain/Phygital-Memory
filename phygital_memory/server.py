@@ -326,10 +326,6 @@ def _has_pass(request: Request, f) -> bool:
     return f.memory.is_open and any(secrets.compare_digest(given, p) for p in f.passes)
 
 
-def _any_pass(request: Request) -> bool:
-    return any(_has_pass(request, f) for f in folders.items.values())
-
-
 @mcp.custom_route("/", methods=["GET"])
 async def page(request: Request) -> Response:
     if not _local(request):
@@ -407,13 +403,6 @@ async def api(request: Request) -> Response:
         if action == "wanted":   # a folder the person asked for by double-clicking its opener file (once)
             fid, wanted["id"] = wanted["id"], None
             return _ok({"id": fid})
-        if action == "closestate":   # the app window is closing and asks the page what to do
-            return _ok({"asked": closing["asked"]})
-        if action == "closeanswer":
-            if not closing["asked"] or not _any_pass(request) and folders.open():
-                return _ok({"error": "Not allowed."}, 403)
-            _answer_close(bool(body.get("keep")))
-            return _ok({"ok": True})
 
         f = folders.get(body.get("folder"))
         if action == "status":
@@ -616,7 +605,7 @@ def cloud_place(path: Path) -> str | None:
 # When the window closes while a folder is open in Finder, the page asks whether to keep it open for a while.
 # Keeping it: the window hides, and when the time is up every folder locks (Finder views close) and the app quits.
 
-closing = {"asked": False, "answer": None, "exit": False}
+closing = {"answer": None, "exit": False}
 
 
 def _finish() -> None:
@@ -639,7 +628,6 @@ def _answer_close(keep: bool) -> None:
     """Keep open: the window hides and the app stays in the Dock with the folders open, until the person locks
     them or quits. The answer is remembered for 72 hours, so closing doesn't ask every time. Otherwise everything
     locks and the app quits."""
-    closing["asked"] = False
     closing["answer"] = {"keep": 1 if keep else 0}
     if keep:
         STATE.mkdir(parents=True, exist_ok=True)
@@ -657,12 +645,19 @@ async def shell(request: Request) -> Response:
     if action == "close":   # ask whenever something is open: lock it all, or keep it open
         if folders.open() or any(f.finder.where() for f in folders.items.values()):
             if _keep_remembered():   # "Keep open" chosen in the last 72 hours: don't ask again
-                closing.update(asked=False, answer={"keep": 1}, exit=False)
+                closing.update(answer={"keep": 1}, exit=False)
                 return JSONResponse({"ask": False, "keep": True})
-            closing.update(asked=True, answer=None, exit=False)
-            return JSONResponse({"ask": True})
+            closing.update(answer=None, exit=False)
+            return JSONResponse({"ask": True})   # the Mac app asks in its own small box, then calls "decide"
         _finish()
         return JSONResponse({"ask": False})
+    if action == "decide":   # the person's answer to the closing question (no answer in 30 s counts as lock)
+        try:
+            keep = bool((await request.json()).get("keep"))
+        except Exception:
+            keep = False
+        await asyncio.to_thread(_answer_close, keep)
+        return JSONResponse({"answer": closing["answer"]})
     if action == "answer":
         return JSONResponse({"answer": closing["answer"]})
     if action == "should-exit":
@@ -682,7 +677,7 @@ async def shell(request: Request) -> Response:
         wanted["id"] = fid
         return JSONResponse({"id": fid})
     if action == "reopen":   # the person came back from the Dock
-        closing.update(asked=False, answer=None, exit=False)
+        closing.update(answer=None, exit=False)
         return JSONResponse({"ok": True})
     return JSONResponse({"error": "Unknown."}, status_code=404)
 
