@@ -32,7 +32,7 @@ IGNORE = ".DS_Store\n._*\n.encryptor-*\n*.tmp\n"
 # Every file is scrambled: git must never merge inside one (a small one can look like text to it and get spliced).
 ATTRIBUTES = "* binary\n"
 LOST = "phygital-lost-folders.json"   # in .git: folder IDs that lost a clash, for the app to fold back in
-README_MARK = "<!-- phygital-memory-readme 3 -->"   # the app updates its own README when this goes up
+README_MARK = "<!-- phygital-memory-readme 4 -->"   # the app updates its own README when this goes up
 README = README_MARK + """
 # {name} · Phygital Memory
 
@@ -55,7 +55,7 @@ Phygital Memory app.
 | `vault.cryptomator` | Settings for the encryption. |
 | `AGENTS.md`, `CLAUDE.md` | Short notes for AI apps: use Phygital Memory, don't open these files directly. |
 | `Open in Phygital Memory.phygitalmemory` | Double-click it on a Mac to open the folder in the app. |
-| `README.md`, `.gitignore`, `.gitattributes` | This page, and two small files that tell git how to handle the encrypted files. |
+| `.github/README.md`, `.gitignore`, `.gitattributes` | This page, and two small files that tell git how to handle the encrypted files. Your Mac hides them in Finder. |
 
 ## What GitHub can see
 
@@ -247,11 +247,17 @@ class GitSync:
         self.poke()
 
     def update_readme(self, name: str, force: bool = False) -> None:
-        """Write the README, or bring the app's own older one up to date. A README someone wrote is left alone."""
-        p = self.folder / "README.md"
+        """Write the README in the hidden .github folder: GitHub shows it on the repo's page, Finder doesn't show it in
+        the folder. The app's own older README (at the top of the folder, or an older text) is replaced; a README
+        someone wrote is left alone."""
+        ours = lambda t: t.startswith("<!-- phygital-memory-readme") or (t.startswith("# ") and "Phygital Memory" in t[:200])
+        top = self.folder / "README.md"
+        if top.exists() and ours(top.read_text(errors="replace")):
+            top.unlink()   # moved into .github (the next sync sends the move up)
+        p = self.folder / ".github" / "README.md"
         old = p.read_text(errors="replace") if p.exists() else None
-        if (force and (old is None or old.startswith(README_MARK))) or old is None or (old.startswith("# ") and "Phygital Memory" in old[:200]) or \
-                (old.startswith("<!-- phygital-memory-readme") and not old.startswith(README_MARK)):
+        if old is None or (ours(old) and (force or not old.startswith(README_MARK))):
+            p.parent.mkdir(exist_ok=True)
             p.write_text(README.format(name=name, repo=self.repo))
 
     @staticmethod

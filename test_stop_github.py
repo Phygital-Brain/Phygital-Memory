@@ -40,7 +40,7 @@ try:
     repo = fs.stop_github(f.id)
     check(repo == "me/Notes-Phygital-Memory", "it says which repo is left on GitHub")
     check(f.github is None and f.info()["github"] is None, "the folder is Mac only now")
-    check(not (notes / ".git").exists() and not (notes / "README.md").exists() and not (notes / ".gitignore").exists(),
+    check(not (notes / ".git").exists() and not (notes / ".github").exists() and not (notes / ".gitignore").exists(),
           "the sync's files are gone from the folder")
     trashed = sorted(p.name for p in (tmp / "Trash").iterdir())
     check(len(trashed) == 4 and any(".git (GitHub sync" in n for n in trashed), "they went to the Trash, not erased", trashed)

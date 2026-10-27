@@ -56,7 +56,13 @@ try:
                           capture_output=True, text=True).stdout
     check("vault.cryptomator" in tree and "Plan" not in tree and "koala" not in tree,
           "GitHub only has scrambled names", tree[:200])
-    check("README.md" in tree and ".gitattributes" in tree, "the repo has the README and the binary-only rule")
+    check('".github/README.md"' in tree and '"README.md"' not in tree and ".gitattributes" in tree,
+          "the repo has the README (in .github) and the binary-only rule", tree[:300])
+    shown = subprocess.run([gitsync.gh(), "api", f"repos/{full}/readme?ref={BRANCH}", "--jq", ".path"],
+                           capture_output=True, text=True).stdout.strip()
+    check(shown == ".github/README.md", "GitHub shows that README on the repo's page", shown)
+    check(not (a_dir / "README.md").exists() and (a_dir / ".github" / "README.md").exists(),
+          "the folder itself has no README in Finder (.github is hidden)")
     check(gitsync.repo_name("My Notes") == "My-Notes-Phygital-Memory", "repo name: FOLDER-Phygital-Memory",
           gitsync.repo_name("My Notes"))
 

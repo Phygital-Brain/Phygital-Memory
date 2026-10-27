@@ -73,12 +73,12 @@ try:
               "renaming the memory renames the GitHub repo", info)
         url = f.sync.git("remote", "get-url", "origin").stdout.strip()
         check(url.endswith("/Sync-Test-Phygital-Memory.git"), "git now points at the new name", url)
-        check((mac / "README.md").read_text().split("\n")[1].startswith("# Sync Test"), "the README has the new name")
+        check((mac / ".github" / "README.md").read_text().split("\n")[1].startswith("# Sync Test"), "the README has the new name")
         check(gitsync.is_private(current), "the renamed repo is still private")
 
         f.memory.save("Hello.md", "after the rename\n")
         f.sync.sync_once()
-        tree = subprocess.run([gitsync.gh(), "api", f"repos/{current}/contents/README.md?ref={BRANCH}", "--jq", ".content"],
+        tree = subprocess.run([gitsync.gh(), "api", f"repos/{current}/contents/.github/README.md?ref={BRANCH}", "--jq", ".content"],
                               capture_output=True, text=True).stdout
         import base64
         check("# Sync Test" in base64.b64decode(tree or b"").decode(errors="replace"), "the new README went up to GitHub")

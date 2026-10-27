@@ -200,9 +200,11 @@ class Folders:
             f.sync = None
         trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
         stamp = time.strftime("%Y-%m-%d %H.%M.%S")
-        for name in (".git", ".gitignore", ".gitattributes", "README.md"):
+        for name in (".git", ".gitignore", ".gitattributes", ".github", "README.md"):
             p = f.path / name
-            if not p.exists() or (name == "README.md" and "Phygital Memory" not in p.read_text(errors="replace")[:200]):
+            readme = p / "README.md" if name == ".github" else p
+            if not p.exists() or (name in (".github", "README.md") and
+                                  (not readme.is_file() or "Phygital Memory" not in readme.read_text(errors="replace")[:200])):
                 continue
             dest = trash / f"{f.name} {name} (GitHub sync, {stamp})"
             shutil.move(str(p), str(dest))
