@@ -522,7 +522,8 @@ function buildApp() {
         ib("plus", "New note", () => newNote()),
         ib("folderplus", "New subfolder", () => newFolder()),
         ib("collapse", "Collapse all", () => { state.open.clear(); renderTree(); }),
-        sortBtn)),
+        sortBtn,
+        ib("select", "Select", () => setSelecting(!state.selecting)))),
     selBarEl,
     treeEl,
     el("div", { class: "sb-foot" },
@@ -1110,14 +1111,25 @@ function renderTree() {
   }
 }
 
+// Select mode (the Select button): every row gets a box, a click ticks it instead of opening it.
+function setSelecting(on) {
+  state.selecting = on;
+  if (!on) state.sel.clear();
+  renderTree();
+}
+
 function drawSelBar() {
   if (!selBarEl) return;
-  selBarEl.classList.toggle("hidden", state.sel.size === 0);
-  selBarEl.replaceChildren(...(state.sel.size ? [
-    el("span", {}, `${state.sel.size} selected`),
+  const show = state.selecting || state.sel.size > 0;
+  selBarEl.classList.toggle("hidden", !show);
+  if (!show) return;
+  const trash = el("button", { class: "btn small danger", disabled: !state.sel.size, title: "Move to trash", onclick: () => trashMany([...state.sel]) }, "Trash");
+  selBarEl.replaceChildren(
+    el("span", { class: "sel-count" }, state.sel.size ? `${state.sel.size} selected` : "Select"),
     el("span", { class: "sel-btns" },
-      el("button", { class: "btn small danger", onclick: () => trashMany([...state.sel]) }, "Move to trash"),
-      el("button", { class: "btn small", onclick: () => { state.sel.clear(); renderTree(); } }, "Clear"))] : []));
+      state.selecting ? el("button", { class: "btn small", onclick: () => { state.sel = new Set(state.visible.filter((p) => p)); renderTree(); } }, "All") : null,
+      trash,
+      el("button", { class: "btn small", onclick: () => setSelecting(false) }, "Done")));
 }
 
 function dropZone(e, row, n) {
@@ -1155,6 +1167,10 @@ function rowFor(n, depth, where = "") {
   const row = el("div", {
     class: "row" + (cur ? " active" : "") + (state.sel.has(n.path) ? " sel" : "") + (isDot(n.path) ? " dotfile" : ""), role: "treeitem", draggable: true, style: `padding-left:${8 + depth * 14}px`,
     onclick: (e) => {
+      if (state.selecting && !e.shiftKey) {
+        state.sel.has(n.path) ? state.sel.delete(n.path) : state.sel.add(n.path);
+        state.anchor = n.path; renderTree(); return;
+      }
       if (e.metaKey || e.ctrlKey) {
         state.sel.has(n.path) ? state.sel.delete(n.path) : state.sel.add(n.path);
         state.anchor = n.path; renderTree(); return;
@@ -1180,6 +1196,7 @@ function rowFor(n, depth, where = "") {
     ondragstart: (e) => { dragPath = n.path; e.dataTransfer.setData("text/plain", n.path); e.dataTransfer.effectAllowed = "move"; },
     ondragend: () => { dragPath = null; clearDropMarks(); },
   },
+  state.selecting ? el("span", { class: "row-check" + (state.sel.has(n.path) ? " on" : "") }, state.sel.has(n.path) ? icon("check", 11, 2.5) : null) : null,
   el("span", { class: "chev" + (folder ? (open ? " open" : "") : " none") }, icon("chevron", 12, 2)),
   ic,
   el("span", { class: "row-name" }, folder || !isMd(n.name) ? n.name : label(n.name)),
@@ -1440,11 +1457,22 @@ async function trashDialog(n) {
   await doTrash([n.path]);
 }
 
+// Asked twice: what goes (by name), then, when folders or many items are in it, once more with how much.
 async function trashMany(paths) {
   const top = paths.filter((p) => !paths.some((q) => q !== p && p.startsWith(q + "/")));
-  const ok = await confirmDialog(`Move ${top.length} item${top.length === 1 ? "" : "s"} to trash?`, "Move to trash", true);
-  if (!ok) return;
+  const name = (p) => isMd(p) ? label(p) : baseName(p);
+  const list = top.slice(0, 5).map(name).join(", ") + (top.length > 5 ? ` and ${top.length - 5} more` : "");
+  if (!await confirmDialog(`Move ${top.length === 1 ? `"${name(top[0])}"` : `${top.length} items`} to the trash?`, "Move to trash", true,
+    `${top.length === 1 ? "" : list + ". "}You can restore them from Trash.`)) return;
+  const folders = top.filter((p) => state.files.some((f) => f.path === p && f.kind === "folder"));
+  const inside = state.files.filter((f) => f.kind === "file" && folders.some((d) => f.path.startsWith(d + "/"))).length;
+  if (folders.length || top.length > 10) {
+    const what = [folders.length && `${folders.length} folder${folders.length === 1 ? "" : "s"} with ${inside} file${inside === 1 ? "" : "s"} inside`,
+      top.length - folders.length && `${top.length - folders.length} more item${top.length - folders.length === 1 ? "" : "s"}`].filter(Boolean).join(", and ");
+    if (!await confirmDialog("Are you sure?", "Yes, move to trash", true, `This moves ${what}.`)) return;
+  }
   state.sel.clear();
+  state.selecting = false;
   await doTrash(top);
 }
 
