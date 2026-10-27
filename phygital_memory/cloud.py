@@ -155,7 +155,10 @@ def forget_password(conn: dict) -> None:
 
 
 def _password(conn: dict) -> str | None:
-    return keychain.read(KEYCHAIN, _account(conn))
+    try:
+        return keychain.read(KEYCHAIN, _account(conn))
+    except keychain.Refused:
+        return None
 
 
 def _env(conn: dict, password: str | None = None) -> dict:

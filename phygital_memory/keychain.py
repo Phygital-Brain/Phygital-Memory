@@ -18,6 +18,11 @@ _locks: dict = {}
 _guard = threading.Lock()
 
 
+class Refused(Exception):
+    """macOS didn't let the app read an item it keeps (the person said no, or didn't answer). Not the same as the
+    item missing: callers must never make a new key in its place."""
+
+
 def _helper(*args: str, secret: bytes | None = None, timeout: int = 30) -> subprocess.CompletedProcess | None:
     h = touchid.bundled()
     if not h:
@@ -66,7 +71,7 @@ def read(service: str, account: str) -> str | None:
         if k in _got:
             return _got[k]
         if time.time() < _refused.get(k, 0):
-            return None
+            raise Refused("macOS didn't let the app read its Keychain item. Allow it when macOS asks.")
         got = _read(service, account)
         if got is not None:
             _got[k] = got
@@ -81,7 +86,7 @@ def _read(service: str, account: str) -> str | None:
         missing = r is not None and r.returncode == 4 and b"-25300" in r.stderr   # simply not kept there
         if not missing:   # no answer, or the person said no: don't ask again for a while
             _refused[(service, account)] = time.time() + 600
-            return None
+            raise Refused("macOS didn't let the app read its Keychain item. Allow it when macOS asks.")
         old = _security_read(service, account)   # made by an older version: move it behind the helper
         if old is not None:
             try:

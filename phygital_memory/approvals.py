@@ -52,7 +52,10 @@ def add(what: str, detail: str = "", how: str = "") -> None:
         lines = _read()
         line = {"t": time.time(), "what": what[:120], "detail": detail[:200], "how": how,
                 "prev": lines[-1]["seal"] if lines else ""}
-        line["seal"] = _seal(line["prev"], line)
+        try:
+            line["seal"] = _seal(line["prev"], line)
+        except keychain.Refused:   # macOS hasn't let the app read its seal key yet: kept, shown as unsealed
+            line["seal"] = ""
         STATE.mkdir(parents=True, exist_ok=True)
         with FILE.open("a") as fh:
             fh.write(json.dumps(line, ensure_ascii=False) + "\n")
@@ -64,7 +67,10 @@ def listing(limit: int = 200) -> list[dict]:
         lines = _read()
     out, prev = [], ""
     for x in lines:
-        ok = bool(x.get("seal")) and x.get("prev") == prev and hmac.compare_digest(_seal(prev, x), x["seal"])
+        try:
+            ok = bool(x.get("seal")) and x.get("prev") == prev and hmac.compare_digest(_seal(prev, x), x["seal"])
+        except keychain.Refused:
+            ok = False
         out.append({"t": x.get("t", 0), "what": x.get("what", ""), "detail": x.get("detail", ""),
                     "how": x.get("how", ""), "sealed": ok})
         prev = x.get("seal", "")

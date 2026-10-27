@@ -56,7 +56,10 @@ def api(path: str, token: str | None = None, method: str = "GET", body: dict | N
 def saved_token() -> str | None:
     if os.environ.get("PHYGITAL_MEMORY_OFFLINE"):   # tests: never use the person's real GitHub sign-in
         return None
-    return (keychain.read(KEYCHAIN, "github") or "").strip() or None
+    try:
+        return (keychain.read(KEYCHAIN, "github") or "").strip() or None
+    except keychain.Refused:
+        return None
 
 
 def _save_token(token: str) -> None:
