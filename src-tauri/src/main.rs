@@ -48,15 +48,48 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
 
 // One small local request to our own program: POST /shell/<action>, returns the reply body.
 fn shell(app: &tauri::AppHandle, action: &str) -> Option<String> {
+    shell_with(app, action, "")
+}
+
+fn shell_with(app: &tauri::AppHandle, action: &str, body: &str) -> Option<String> {
     let token = app.state::<ShellToken>().0.clone();
     let mut s = TcpStream::connect_timeout(&"127.0.0.1:8790".parse().unwrap(), Duration::from_secs(2)).ok()?;
     s.set_read_timeout(Some(Duration::from_secs(10))).ok()?;
     let req = format!("POST /shell/{action} HTTP/1.1\r\nHost: 127.0.0.1:8790\r\nX-Shell-Token: {token}\r\n\
-                       Content-Length: 0\r\nConnection: close\r\n\r\n");
+                       Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                      body.len());
     s.write_all(req.as_bytes()).ok()?;
     let mut out = String::new();
     s.read_to_string(&mut out).ok()?;
     out.split_once("\r\n\r\n").map(|(_, body)| body.to_string())
+}
+
+// The opener file inside a locked folder was double-clicked (or dropped on the Dock icon). Wait for our server,
+// let it add that folder to the list, then show the window on it.
+fn open_folder_file(app: tauri::AppHandle, path: PathBuf) {
+    std::thread::spawn(move || {
+        let p = path.to_string_lossy().replace('\\', "\\\\").replace('"', "\\\"");
+        let p: String = p.chars().filter(|c| !c.is_control()).collect();
+        let mut reply = None;
+        for _ in 0..150 {   // the server may still be starting (the app was opened by this double-click)
+            reply = shell_with(&app, "openfolder", &format!("{{\"path\":\"{p}\"}}"));
+            if reply.is_some() { break; }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        let reply = reply.unwrap_or_default().replace(' ', "");
+        let Some(i) = reply.find("\"id\":\"") else { return };
+        let id: String = reply[i + 6..].chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+        if id.is_empty() { return; }
+        for _ in 0..150 {   // the window appears once the server is up
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+                let _ = w.eval(&format!("window.phygitalOpenFolder && window.phygitalOpenFolder('{id}')"));
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    });
 }
 
 fn quit(app: &tauri::AppHandle) {
@@ -108,6 +141,9 @@ fn own_page(url: &tauri::Url) -> bool {
 fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
     WebviewWindowBuilder::new(app, "main", WebviewUrl::External("http://127.0.0.1:8790/".parse().unwrap()))
         .title("Phygital Memory").inner_size(1200.0, 800.0).min_inner_size(720.0, 480.0)
+        // No title bar: the page fills the window and the close/minimise buttons float over the sidebar (as Baalda)
+        .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
+        .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0))
         .on_navigation(|url| own_page(url))
         .build().map_err(|e| e.to_string())?;
     Ok(())
@@ -148,6 +184,16 @@ fn main() {
             if let Some(w) = h.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
             let h2 = h.clone();
             std::thread::spawn(move || { let _ = shell(&h2, "reopen"); });
+        }
+        #[cfg(target_os = "macos")]
+        RunEvent::Opened { urls } => {
+            for url in urls {
+                if let Ok(path) = url.to_file_path() {
+                    if path.extension().map_or(false, |e| e == "phygitalmemory") {
+                        open_folder_file(h.clone(), path);
+                    }
+                }
+            }
         }
         RunEvent::Exit => {
             if let Some(c) = h.state::<Server>().0.lock().unwrap().take() { let _ = c.kill(); }

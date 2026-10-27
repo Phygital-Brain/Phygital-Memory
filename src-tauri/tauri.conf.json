@@ -24,6 +24,17 @@
     ],
     "externalBin": [
       "binaries/phygital-memory-server"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "phygitalmemory"
+        ],
+        "name": "Phygital Memory folder",
+        "description": "Opens this locked folder in Phygital Memory",
+        "role": "Viewer",
+        "mimeType": "application/x-phygitalmemory"
+      }
     ]
   }
 }
