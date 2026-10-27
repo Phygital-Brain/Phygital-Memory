@@ -26,7 +26,7 @@ export function openStorage(ctx) {
         on ? el("span", { class: "st-opt-now" }, "Now") : null),
       body || null);
 
-    const local = !s.cloud && !s.github;
+    const local = !s.cloud && !s.github && !s.cloudOnly;
     const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : `${Math.round(sec / 3600)} h ago`;
     const gs = s.githubStatus;
     const githubBody = s.github
@@ -55,13 +55,13 @@ export function openStorage(ctx) {
 
     const card = el("div", { class: "dlg storage", role: "dialog" },
       el("div", { class: "dlg-title" }, `Where "${ctx.name}" is stored`),
-      el("div", { class: "st-where" }, icon(s.cloud ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
-        el("button", { class: "btn small", type: "button", onclick: () => ctx.reveal() }, "Show encrypted files")),
+      el("div", { class: "st-where" }, icon(s.cloud || s.cloudOnly ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
+        s.cloudOnly ? null : el("button", { class: "btn small", type: "button", onclick: () => ctx.reveal() }, "Show encrypted files")),
       s.offline ? el("div", { class: "st-warn" },
         el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud, not on this Mac, so they can't open. `
           + `In Finder, right-click the folder and choose "Keep Downloaded" (iCloud) or "Make available offline".`),
         el("button", { class: "btn small", type: "button", onclick: () => ctx.download() }, "Download now")) : null,
-      option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
+      ...(s.cloudOnly ? [] : [option("laptop", "Only this Mac", "Your notes stay on this computer.", local,
         local ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
           const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) moveTo(p, "this Mac");
         } }, "Move to a place on this Mac…")),
@@ -70,9 +70,12 @@ export function openStorage(ctx) {
           el("button", { class: "btn small st-other", type: "button", onclick: async () => {
             const p = await ctx.pick("Choose any synced folder"); if (p) moveTo(p, "that folder");
           } }, "Other synced folder…"))),
-      option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github, githubBody),
-      option("sparkle", "Cloud only", "Nothing on this Mac: the app reads straight from your cloud (Nextcloud, WebDAV, S3). Not ready yet.", false),
-      el("div", { class: "st-note" }, "Moving locks the folder first, so only encrypted files move. Unlock it again after."),
+      option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github, githubBody)]),
+      option("sparkle", "Cloud only", s.cloudOnly
+        ? `Nothing on this Mac: the app opens it straight from ${s.cloudOnly}, which only gets encrypted files.`
+        : "Nothing on this Mac: the app opens the memory straight from your cloud (Nextcloud or WebDAV). Use Open from cloud… in the folder menu.", !!s.cloudOnly),
+      el("div", { class: "st-note" }, s.cloudOnly ? "A cloud memory stays in the cloud. Moving it to this Mac comes later."
+        : "Moving locks the folder first, so only encrypted files move. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };
@@ -290,5 +293,107 @@ export function pickRepo(repos) {
         el("button", { class: "btn", type: "button", onclick: () => done("") }, "Another repo…"),
         el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel")));
     return { card };
+  });
+}
+
+// Open from cloud: a memory that lives only in the person's cloud (Nextcloud or WebDAV for now). Steps: pick a cloud
+// (one connected before, or a new login), see the memories in it, pick one or make a new one there.
+// ctx: {clouds:[{kind,url,user,name,where}], connect({kind,server,user,password}) -> {conn, memories},
+//       memories(conn) -> {conn, memories}}
+// Resolves {conn, path} (open), {conn, create: {parent, name, password}} (new), or null.
+export function openCloud(ctx) {
+  return modal((done) => {
+    const body = el("div", { class: "cl-body" });
+    const err = el("div", { class: "dlg-err" });
+    const actions = el("div", { class: "dlg-actions" });
+    const title = el("div", { class: "dlg-title" }, "Open from cloud");
+    let submit = null;
+    const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
+    const busy = (b) => card.classList.toggle("busy", b);
+    const btn = (label, fn, cls) => el("button", { class: "btn " + (cls || ""), type: "button", onclick: fn }, label);
+    const cancel = btn("Cancel", () => done(null));
+    const row = (ic, main, sub, fn) => el("button", { class: "todo-row repo-row", type: "button", onclick: fn },
+      el("span", { class: "trash-ic" }, icon(ic, 16)),
+      el("div", { class: "act-main" }, el("div", { class: "act-line" }, main), el("div", { class: "act-folder" }, sub)));
+
+    const pick = () => {
+      title.textContent = "Open from cloud"; err.textContent = ""; submit = null;
+      body.replaceChildren(
+        el("div", { class: "mf-hint" }, "Use a memory that lives in your cloud, with nothing kept on this Mac. The cloud only ever gets encrypted files."),
+        el("div", { class: "act-list" },
+          ...ctx.clouds.map((c) => row("cloud", c.where, `Connected as ${c.user}`, () => look(c))),
+          row("cloud", "Nextcloud", "Your Nextcloud server address, user name and an app password", () => login("nextcloud")),
+          row("cloud", "Other WebDAV cloud", "Any cloud with a WebDAV address (ownCloud, Synology, Koofr…)", () => login("webdav"))),
+        el("div", { class: "st-gh-note" }, "Google Drive, Dropbox and OneDrive come next. Nothing talks to a cloud until you press Connect."));
+      actions.replaceChildren(cancel);
+    };
+
+    const login = (kind, prefill = {}) => {
+      title.textContent = kind === "nextcloud" ? "Connect Nextcloud" : "Connect a WebDAV cloud";
+      err.textContent = "";
+      const server = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.server || "",
+        placeholder: kind === "nextcloud" ? "Server, like cloud.example.com" : "WebDAV address, like https://dav.example.com/files", "aria-label": "Server" });
+      const user = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.user || "", placeholder: "User name", "aria-label": "User name" });
+      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off",
+        placeholder: kind === "nextcloud" ? "App password" : "Password", "aria-label": "Password" });
+      submit = async () => {
+        if (!server.value.trim() || !user.value.trim() || !pw.value) { err.textContent = "Fill in all three."; return; }
+        err.textContent = ""; busy(true);
+        try {
+          const j = await ctx.connect({ kind, server: server.value, user: user.value, password: pw.value });
+          pw.value = ""; busy(false); list(j.conn, j.memories);
+        } catch (e) { err.textContent = e.message; busy(false); }
+      };
+      body.replaceChildren(server, user, pw,
+        el("div", { class: "st-gh-note" }, kind === "nextcloud"
+          ? "Make an app password in Nextcloud: Settings › Security › Devices & sessions. It's kept in this Mac's Keychain."
+          : "The password is kept in this Mac's Keychain."));
+      actions.replaceChildren(btn("Back", () => { pw.value = ""; pick(); }), btn("Connect", submit, "primary"));
+      server.value ? (prefill.user ? pw : user).focus() : server.focus();
+    };
+
+    const look = async (c) => {
+      err.textContent = ""; busy(true);
+      try { const j = await ctx.memories(c); busy(false); list(j.conn, j.memories); }
+      catch (e) {
+        busy(false);
+        login(c.kind, { server: c.kind === "nextcloud" ? c.url.split("/remote.php/")[0] : c.url, user: c.user });
+        err.textContent = e.message;
+      }
+    };
+
+    const list = (conn, memories) => {
+      title.textContent = "Memories in your cloud"; err.textContent = ""; submit = null;
+      body.replaceChildren(
+        el("div", { class: "mf-hint" }, "Pick one to add it here, then unlock it with its password. Nothing is downloaded: it opens from the cloud."),
+        el("div", { class: "act-list" }, ...(memories.length
+          ? memories.map((m) => row("lock", m.name, m.path, () => done({ conn, path: m.path })))
+          : [el("div", { class: "act-empty" }, "No memories found in this cloud yet.")])));
+      actions.replaceChildren(btn("Back", pick), btn("New memory here…", () => create(conn, memories), "primary"));
+    };
+
+    const create = (conn, memories) => {
+      title.textContent = "New memory in your cloud"; err.textContent = "";
+      const name = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Name", "aria-label": "Name" });
+      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder in the cloud (empty: the top)", "aria-label": "Folder in the cloud" });
+      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password (8 or more characters)", "aria-label": "Password" });
+      const pw2 = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password again", "aria-label": "Password again" });
+      submit = () => {
+        const n = name.value.trim();
+        if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = "Pick a simple name (no / \\ : * ? \" < > |)."; return; }
+        if (pw.value.length < 8) { err.textContent = "The password needs at least 8 characters."; return; }
+        if (pw.value !== pw2.value) { err.textContent = "The two passwords differ."; return; }
+        const out = { conn, create: { parent: parent.value.trim().replace(/^\/+|\/+$/g, ""), name: n, password: pw.value } };
+        pw.value = pw2.value = "";
+        done(out);
+      };
+      body.replaceChildren(name, parent, pw, pw2,
+        el("div", { class: "st-gh-note" }, "This password unlocks the memory. It never leaves this Mac, and nobody can reset it, so keep it safe."));
+      actions.replaceChildren(btn("Back", () => { pw.value = pw2.value = ""; list(conn, memories); }), btn("Create", submit, "primary"));
+      name.focus();
+    };
+
+    pick();
+    return { card, submit: () => submit && submit() };
   });
 }

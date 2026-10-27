@@ -33,7 +33,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, github_auth, gitsync
+from . import activity, cloud, github_auth, gitsync
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -376,6 +376,8 @@ def _unlock(f, password: str):
     try:
         s = f.memory.unlock(password)
     except WrongPassword:
+        if f.drive:   # a cloud memory: its hidden drive only stays while unlocked
+            threading.Thread(target=f.drive.stop, daemon=True).start()
         f.fails["n"] += 1
         if f.fails["n"] >= 5:
             f.fails.update(n=0, until=time.time() + 60)
@@ -450,6 +452,24 @@ async def api(request: Request) -> Response:
                 return _ok({"error": "Nothing to answer."}, 409)
             _answer_close(bool(body.get("keep")))
             return _ok({"answer": closing["answer"]})
+        # ---- Cloud only (only when the person presses a button; nothing talks to a cloud before) ----
+        if action == "clouds":   # the clouds this Mac is already connected to
+            return _ok({"clouds": folders.clouds()})
+        if action == "cloudconnect":   # check the login, keep the password in the Keychain, list the memories there
+            conn = cloud.make_conn(str(body.get("kind", "")), str(body.get("server", "")), str(body.get("user", "")))
+            await asyncio.to_thread(cloud.connect, conn, str(body.get("password", "")))
+            return _ok({"conn": conn, "memories": await asyncio.to_thread(cloud.find_memories, conn)})
+        if action == "cloudmemories":   # a cloud connected before: look for memories again
+            conn = {k: str((body.get("conn") or {}).get(k, "")) for k in ("kind", "url", "user")}
+            if not cloud.has_password(conn):
+                return _ok({"error": f"Connect to {cloud.label(conn)} again.", "reconnect": True}, 400)
+            return _ok({"conn": conn, "memories": await asyncio.to_thread(cloud.find_memories, conn)})
+        if action == "fromcloud":   # add a memory that's in the cloud (nothing is downloaded)
+            return _ok({"folder": folders.from_cloud(body.get("conn") or {}, str(body.get("path", "")))})
+        if action == "createincloud":
+            return _ok({"folder": await asyncio.to_thread(folders.create_in_cloud, body.get("conn") or {},
+                                                          str(body.get("parent", "")), str(body.get("name", "")),
+                                                          str(body.get("password", "")))})
         if action == "wanted":   # a folder the person asked for by double-clicking its opener file (once)
             fid, wanted["id"] = wanted["id"], None
             return _ok({"id": fid})
@@ -461,11 +481,13 @@ async def api(request: Request) -> Response:
             st = f.memory.status() if _has_pass(request, f) else {"open": False}
             now = time.time()
             return _ok({"open": bool(st.get("open")),
-                        "cloud": "GitHub" if f.github else cloud_place(f.path),
+                        "cloud": "GitHub" if f.github else f.info()["cloudOnly"] or cloud_place(f.path),
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})
         # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
         # fields). Works only when the app is started with PHYGITAL_MEMORY_DEV_PASSWORD_FILE. Remove before release.
+        if action in ("unlock", "devunlock") and not f.memory.is_open:
+            await asyncio.to_thread(f.ready)   # a cloud memory: open its hidden drive first
         if action == "devunlock" and os.environ.get("PHYGITAL_MEMORY_DEV_PASSWORD_FILE"):
             return _unlock(f, Path(os.environ["PHYGITAL_MEMORY_DEV_PASSWORD_FILE"]).read_text().strip())
         if action == "unlock":
@@ -475,8 +497,11 @@ async def api(request: Request) -> Response:
 
         m = f.memory
         if action == "lock":
-            f.lock()
+            await asyncio.to_thread(f.lock)   # a cloud memory waits here until its saves reached the cloud
             return _ok({"open": False})
+        if action == "storage" and f.cloud_at:   # cloud only: nothing on this Mac to look at or move
+            return _ok({"path": f.info()["path"], "cloud": None, "cloudOnly": cloud.label(f.cloud_at), "places": [],
+                        "home": str(Path.home()), "offline": 0, "github": None, "githubStatus": None})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
@@ -619,6 +644,8 @@ async def api(request: Request) -> Response:
             if do == "show":
                 where = await asyncio.to_thread(f.finder.show, body.get("window", True) is not False)
                 return _ok({"shown": True, "where": where})
+            if do == "revealvault" and f.cloud_at:
+                return _ok({"error": "This memory is in the cloud, not on this Mac."}, 400)
             if do == "revealvault":   # the encrypted folder itself (scrambled files only), in Finder
                 await asyncio.to_thread(subprocess.run, ["open", "-R", str(f.path)], timeout=30)
                 return _ok({"ok": True})

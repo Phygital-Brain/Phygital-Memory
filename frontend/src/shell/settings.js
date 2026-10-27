@@ -73,7 +73,7 @@ export function openSettings(folderOpts) {
     const rows = [el("div", { class: "set-section" }, `This memory: ${folderOpts.name}`),
       row("Name", null, btn("Rename…", folderOpts.rename)),
       row("Where it's stored", folderOpts.where, el("div", { class: "set-btns" },
-        btn("Encrypted files", folderOpts.revealVault), btn("Change…", folderOpts.storage)))];
+        folderOpts.revealVault ? btn("Encrypted files", folderOpts.revealVault) : null, btn("Change…", folderOpts.storage)))];
     if (folderOpts.finderAvailable) {
       const fin = el("input", { type: "checkbox", checked: !!folderOpts.finderShown, "aria-label": "Show in Finder" });
       fin.addEventListener("change", async () => {

@@ -52,6 +52,7 @@ export function switcherItems(ctx) {
     actionRow("plus", "New folder", ctx.createNew),
     actionRow("folder", "Open folder", ctx.openOther),
     ...(ctx.fromGithub ? [actionRow("cloud", "Open from GitHub…", ctx.fromGithub)] : []),
+    ...(ctx.fromCloud ? [actionRow("cloud", "Open from cloud…", ctx.fromCloud)] : []),
     actionRow("grid", "Manage folders", ctx.manage)];
   if (cur) {
     items.push({ sep: true },

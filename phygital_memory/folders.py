@@ -16,7 +16,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import activity
+from . import activity, cloud
 from .finder import Finder
 from .gitsync import GitSync, rename_repo, repo_name
 from .memory import Memory
@@ -71,8 +71,19 @@ def write_guides(path: Path) -> None:
             pass   # a read-only place: the folder still works without them
 
 
+CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (hidden drives), and their caches
+
+
 class Folder:
-    def __init__(self, fid: str, name: str, path: Path, github: str | None = None):
+    def __init__(self, fid: str, name: str, path: Path, github: str | None = None, cloud_at: dict | None = None):
+        # cloud_at: {kind, url, user, path} for a memory that lives only in the cloud; its files appear at
+        # path (a hidden drive) only while it's unlocked
+        self.cloud_at = cloud_at
+        self.drive = None
+        if cloud_at:
+            path = CLOUDS / fid
+            self.drive = cloud.Drive({k: cloud_at[k] for k in ("kind", "url", "user")}, cloud_at["path"], path,
+                                     CLOUDS / f"{fid}.cache")
         self.id, self.name, self.path = fid, name, Path(path)
         self.memory = Memory(self.path)
         self.finder = Finder(self.memory, volume=name)
@@ -91,14 +102,26 @@ class Folder:
         self.sync.start()
 
     def info(self) -> dict:
-        return {"id": self.id, "name": self.name, "path": str(self.path), "open": self.memory.is_open,
-                "exists": is_vault(self.path), "finder": bool(self.finder.where()), "github": self.github}
+        place = cloud.where(self.cloud_at, self.cloud_at["path"]) if self.cloud_at else str(self.path)
+        return {"id": self.id, "name": self.name, "path": place, "open": self.memory.is_open,
+                "exists": True if self.cloud_at else is_vault(self.path), "finder": bool(self.finder.where()),
+                "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None}
+
+    def ready(self) -> None:
+        """Before unlocking: a cloud memory's files must be reachable (this is when the app talks to the cloud)."""
+        if self.drive:
+            self.drive.start()
+            if not is_vault(self.path):
+                self.drive.stop()
+                raise ValueError(f"This memory isn't in {cloud.label(self.cloud_at)} any more, at {self.cloud_at['path']}.")
 
     def lock(self) -> None:
         activity.forget(self.id)   # the AI's activity lines for this folder go with the lock
         self.finder.hide()          # close the Finder view first, and wait for it (locking would also close it, later)
         self.memory.lock()
         self.passes.clear()
+        if self.drive:
+            self.drive.stop()       # waits until every save has reached the cloud
 
 
 class Folders:
@@ -113,7 +136,10 @@ class Folders:
         for e in entries:
             if isinstance(e, dict) and e.get("id") and e.get("path"):
                 self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
-                                             e.get("github"))
+                                             e.get("github"), e.get("cloud"))
+        for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
+            if not point.name.endswith(".cache"):
+                cloud.unmount(point)
         if default and is_vault(default) and not any(f.path == default for f in self.items.values()):
             self._add(default, default.name, first=True)
 
@@ -121,8 +147,8 @@ class Folders:
 
     def _save(self) -> None:
         STATE.mkdir(parents=True, exist_ok=True)
-        data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {})}
-                            for f in self.items.values()]}
+        data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {}),
+                             **({"cloud": f.cloud_at} if f.cloud_at else {})} for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1))
         os.replace(tmp, REGISTRY)
@@ -172,6 +198,53 @@ class Folders:
         with self._lock:
             return self._add(target, name).info()
 
+    # ---------- cloud only ----------
+
+    def clouds(self) -> list[dict]:
+        """The clouds this Mac is connected to (from the cloud memories on the list), to look for more memories."""
+        out = {}
+        for f in self.items.values():
+            if f.cloud_at:
+                c = {k: f.cloud_at[k] for k in ("kind", "url", "user")}
+                out[cloud.make_key(c)] = {**c, "name": cloud.label(c), "where": cloud.where(c, "").rstrip(" /")}
+        return list(out.values())
+
+    def from_cloud(self, conn: dict, path: str) -> dict:
+        """Add a memory that's already in the cloud. Nothing is downloaded: it opens from there when unlocked."""
+        conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
+        if not cloud.has_password(conn):
+            raise ValueError(f"Connect to {cloud.label(conn)} first.")
+        path = path.strip("/")
+        with self._lock:
+            for f in self.items.values():
+                if f.cloud_at and cloud.make_key(f.cloud_at) == cloud.make_key(conn) and f.cloud_at["path"] == path:
+                    return f.info()
+            f = Folder(secrets.token_hex(4), path.rsplit("/", 1)[-1] or cloud.label(conn), Path(), None, {**conn, "path": path})
+            self.items[f.id] = f
+            self._save()
+            return f.info()
+
+    def create_in_cloud(self, conn: dict, parent: str, name: str, password: str) -> dict:
+        name = name.strip()
+        if not name or re.search(r'[/\\:*?"<>|]', name) or name.startswith("."):
+            raise ValueError("Pick a simple name for the memory.")
+        conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
+        if not cloud.has_password(conn):
+            raise ValueError(f"Connect to {cloud.label(conn)} first.")
+        path = "/".join(p for p in (parent.strip("/"), name) if p)
+        cloud.make_folder(conn, path)
+        f = Folder(secrets.token_hex(4), name, Path(), None, {**conn, "path": path})
+        f.drive.start()
+        try:
+            Memory.create(f.path, password)
+            write_guides(f.path)
+        finally:
+            f.drive.stop()
+        with self._lock:
+            self.items[f.id] = f
+            self._save()
+        return f.info()
+
     # ---------- a private GitHub repo ----------
 
     def to_github(self, fid: str, reuse: str | None = None) -> dict:
@@ -179,6 +252,8 @@ class Folders:
         f = self.get(fid)
         if f.github:
             raise ValueError("This folder is already kept in GitHub.")
+        if f.cloud_at:
+            raise ValueError(f"This memory lives in {cloud.label(f.cloud_at)}, so it can't go to GitHub too.")
         if any(str(f.path).startswith(p["path"] + "/") for p in cloud_places()):
             raise ValueError("Move it to a place on this Mac first: a folder shouldn't be in a cloud and GitHub at once.")
         f.github = GitSync(f.path, repo_name(f.name)).create(reuse)
@@ -259,6 +334,8 @@ class Folders:
         scrambled files move, and the person unlocks it again afterwards."""
         with self._lock:
             f = self.get(fid)
+            if f.cloud_at:
+                raise ValueError(f"This memory lives in {cloud.label(f.cloud_at)}, so it stays there.")
             f.lock()
             new_path = move_folder_on_disk(f.path, Path(parent))
             moved = Folder(f.id, f.name, new_path)
@@ -273,6 +350,10 @@ class Folders:
             f.lock()
             self.items.pop(fid, None)
             self._save()
+        if f.cloud_at:   # its cache goes; the cloud password goes too if no other memory uses that cloud
+            shutil.rmtree(CLOUDS / f"{fid}.cache", ignore_errors=True)
+            if not any(g.cloud_at and cloud.make_key(g.cloud_at) == cloud.make_key(f.cloud_at) for g in self.items.values()):
+                cloud.forget_password(f.cloud_at)
 
     def lock_all(self) -> None:
         for f in list(self.items.values()):

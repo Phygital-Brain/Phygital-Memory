@@ -13,7 +13,7 @@ import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
 import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
-import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo } from "./shell/panels.js";
+import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo, openCloud } from "./shell/panels.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "./styles.css";
 
@@ -215,6 +215,29 @@ async function openFromGithub() {
   } catch (e) { toastErr(e.message); }
 }
 
+// Cloud only: a memory that lives in the person's cloud. Nothing talks to a cloud until they press Connect.
+async function openFromCloud() {
+  let clouds = [];
+  try { clouds = (await api("clouds")).clouds || []; } catch (e) { toastErr(e.message); }
+  const v = await openCloud({ clouds, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
+  if (!v) return;
+  try {
+    if (v.create) {
+      toast("Making the memory in your cloud…");
+      const j = await api("createincloud", { conn: v.conn, ...v.create });
+      await refreshFolders();
+      await switchTo(j.folder.id);
+      if (currentFolder() === j.folder.id) await unlockCurrent(v.create.password);
+      toastOk(`Created "${j.folder.name}" in your cloud.`);
+      return;
+    }
+    const j = await api("fromcloud", { conn: v.conn, path: v.path });
+    await refreshFolders();
+    toastOk(`Added "${j.folder.name}". Unlock it with its password.`);
+    await switchTo(j.folder.id);
+  } catch (e) { toastErr(e.message); }
+}
+
 async function openOtherFolder() {
   try {
     const p = await pickFolder("Choose a locked notes folder");
@@ -325,7 +348,8 @@ function drawUnlock() {
     if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, `Back to ${b.name}`));
   }
   links.push(el("button", { class: "link-btn", type: "button", onclick: openOtherFolder }, "Open folder…"),
-    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New folder…"));
+    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New folder…"),
+    el("button", { class: "link-btn", type: "button", onclick: openFromCloud }, "Open from cloud…"));
   kids.push(el("div", { class: "unlock-links" }, ...links));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(unlockDrag, form);
@@ -357,7 +381,7 @@ async function openSwitcher() {
   await refreshFolders();
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
-  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub,
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud,
     createNew: createNewFolder, manage: openManage, rename: () => renameFolder(), lockThis: () => lockFolder(), lockAll,
     home: () => goHome(),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
@@ -565,7 +589,7 @@ function openSettingsHere() {
     toggleFinder: async () => { await toggleFinder(); return finder.shown; },
     rename: () => renameFolder(), storage: openStoragePanel, lock: () => lockFolder(),
     lockAll: folderList.filter((f) => unlocked(f.id)).length > 1 ? lockAll : null,
-    revealVault: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
+    revealVault: info.cloudOnly ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
   } : null);
 }
 
