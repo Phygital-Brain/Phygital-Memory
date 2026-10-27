@@ -4,7 +4,7 @@ import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
 import { el, icon } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
-import { askText, askPassword, confirmDialog } from "./shell/dialogs.js";
+import { askText, askPassword, confirmDialog, choiceDialog } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
@@ -1234,8 +1234,11 @@ async function addDropped(entries, dir) {
   const what = folderDrop ? `the folder "${entries[0].name}" (${files.length} file${files.length === 1 ? "" : "s"})`
     : files.length === 1 ? `"${baseName(files[0].rel)}"` : `${files.length} files`;
   const one = files.length === 1;
-  if (!await confirmDialog(`Add ${what} to ${where}?`, "Add", false,
-    `${one ? "It's" : "They're"} encrypted as ${one ? "it comes" : "they come"} in. The original${one ? " stays" : "s stay"} where ${one ? "it is" : "they are"}.`)) return;
+  const how = await choiceDialog(`Add ${what} to ${where}?`,
+    `${one ? "It's" : "They're"} encrypted as ${one ? "it comes" : "they come"} in. The original${one ? " stays" : "s stay"} where ${one ? "it is" : "they are"}.`,
+    [["ai", "Let AI sort them"], ["add", "Add", "primary"]]);
+  if (!how) return;
+  if (how === "ai") dir = "Inbox";   // AI sorting: everything waits in Inbox, with one task to sort it
   const big = files.filter((f) => f.file.size > 25 * 1024 * 1024);
   let added = 0;
   toast(`Adding ${files.length - big.length} file${files.length - big.length === 1 ? "" : "s"}`);
@@ -1243,9 +1246,18 @@ async function addDropped(entries, dir) {
     if (big.includes(f)) continue;
     try { await uploadFile((dir ? dir + "/" : "") + f.rel, f.file); added++; } catch (e) { toastErr(`${baseName(f.rel)}: ${e.message}`); }
   }
+  if (how === "ai" && added) {
+    const list = `# Files to sort\n\nAdded ${new Date().toLocaleString()}.\n\n` + files.filter((f) => !big.includes(f)).map((f) => `- [[Inbox/${f.rel}]]`).join("\n") + "\n";
+    try {
+      const note = (await api("save", { path: `Inbox/Files to sort ${(() => { const d = new Date(), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}.${z(d.getMinutes())}`; })()}.md`, text: list, new: true })).path;
+      await api("handtoai", { path: note, ask: "Move each file listed here into the folder where it belongs (make a folder if none fits). Then put this list in the trash." });
+      watchTodo();
+    } catch (e) { toastErr(e.message); }
+  }
   if (dir) state.open.add(dir);
   await loadFiles();
-  if (added) toastOk(`Added ${added} file${added === 1 ? "" : "s"}, encrypted.`);
+  if (added) toastOk(how === "ai" ? `Added ${added} file${added === 1 ? "" : "s"} to Inbox. Ask your AI: \u201cDo my Phygital Memory tasks.\u201d`
+                                  : `Added ${added} file${added === 1 ? "" : "s"}, encrypted.`);
   if (big.length) toastErr(`${big.length} file${big.length === 1 ? " is" : "s are"} over 25 MB. Use Import files for ${big.length === 1 ? "it" : "them"}.`);
 }
 

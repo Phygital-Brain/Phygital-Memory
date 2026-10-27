@@ -43,6 +43,17 @@ export function askPassword(title, okLabel) {
   });
 }
 
+// A question with several answers: buttons [[key, label, cls]], the last one is the main one (Enter). Resolves the key, or null.
+export function choiceDialog(message, detail, buttons) {
+  return modal((done) => {
+    const els = buttons.map(([k, label, cls]) => el("button", { class: "btn " + (cls || ""), onclick: () => done(k) }, label));
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, message),
+      detail ? el("div", { class: "mf-hint" }, detail) : null,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Cancel"), ...els));
+    return { card, focus: els[els.length - 1], submit: () => done(buttons[buttons.length - 1][0]) };
+  });
+}
+
 export function confirmDialog(message, okLabel, danger, detail) {
   return modal((done) => {
     const ok = el("button", { class: "btn " + (danger ? "danger" : "primary"), onclick: () => done(true) }, okLabel);
