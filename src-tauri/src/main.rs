@@ -101,9 +101,10 @@ fn quit(app: &tauri::AppHandle) {
 // The window is closing (or Cmd+Q). If a folder is open, the window hides and the small question window shows at
 // once (it was made, hidden, at start): lock all, or keep open. No answer in 30 seconds locks everything. Keeping it
 // leaves the app in the Dock; the server remembers that answer for 72 hours, and closing then skips the question.
-fn handle_close(app: tauri::AppHandle) {
+// Quit (Cmd+Q, or Quit in the Dock) always asks, even while "Keep open" is remembered; there Keep open cancels the quit.
+fn handle_close(app: tauri::AppHandle, quitting: bool) {
     if CLOSING.swap(true, Ordering::SeqCst) { return; }
-    let reply = shell(&app, "close").unwrap_or_default().replace(' ', "");
+    let reply = shell_with(&app, "close", if quitting { "{\"quit\":true}" } else { "{}" }).unwrap_or_default().replace(' ', "");
     if !reply.contains("\"keep\":true") && !reply.contains("\"ask\":true") { return quit(&app); }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.eval("window.phygitalSaveAll && window.phygitalSaveAll()");   // nothing just typed is lost
@@ -111,7 +112,7 @@ fn handle_close(app: tauri::AppHandle) {
     }
     let ask = if reply.contains("\"ask\":true") { app.get_webview_window("closeask") } else { None };
     if let Some(q) = &ask {
-        let _ = q.eval("window.startAsk && window.startAsk()");
+        let _ = q.eval(if quitting { "window.startAsk && window.startAsk('quit')" } else { "window.startAsk && window.startAsk()" });
         let _ = q.center();
         let _ = q.show();
         let _ = q.set_focus();
@@ -202,7 +203,7 @@ fn main() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" && !MAY_EXIT.load(Ordering::SeqCst) {
                     api.prevent_close();
-                    handle_close(window.app_handle().clone());
+                    handle_close(window.app_handle().clone(), false);
                 }
             }
         })
@@ -222,7 +223,7 @@ fn main() {
     app.run(|h, e| match e {
         RunEvent::ExitRequested { api, .. } if !MAY_EXIT.load(Ordering::SeqCst) => {
             api.prevent_exit();
-            handle_close(h.clone());
+            handle_close(h.clone(), true);
         }
         RunEvent::Reopen { .. } => {   // clicking the Dock icon brings the hidden window back and cancels the timer
             if let Some(w) = h.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
