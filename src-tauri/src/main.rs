@@ -7,13 +7,14 @@ use std::{
     time::Duration,
 };
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
+use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 struct Server(Mutex<Option<CommandChild>>);
 // A secret only this app and the program it starts share, for the /shell/* calls (closing the window).
 struct ShellToken(String);
 static CLOSING: AtomicBool = AtomicBool::new(false);
 static MAY_EXIT: AtomicBool = AtomicBool::new(false);
+static SERVER_ENDED: AtomicBool = AtomicBool::new(false);   // the server stopped (it couldn't start, say)
 
 fn folder() -> PathBuf {
     std::env::var("PHYGITAL_MEMORY_FOLDER").map(PathBuf::from).unwrap_or_else(|_| {
@@ -37,15 +38,22 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
         .env("PHYGITAL_MEMORY_SHELL_TOKEN", token)
         .env("PHYGITAL_MEMORY_APP_PID", std::process::id().to_string());
     let (mut rx, child) = cmd.spawn().map_err(|e| e.to_string())?;
-    tauri::async_runtime::spawn(async move { while rx.recv().await.is_some() {} });
+    tauri::async_runtime::spawn(async move {
+        while let Some(ev) = rx.recv().await {
+            if matches!(ev, CommandEvent::Terminated(_)) { SERVER_ENDED.store(true, Ordering::SeqCst); }
+        }
+    });
     *app.state::<Server>().0.lock().unwrap() = Some(child);
     for _ in 0..150 {
         if TcpStream::connect_timeout(&"127.0.0.1:8790".parse().unwrap(), Duration::from_millis(200)).is_ok() {
             return Ok(());
         }
+        if SERVER_ENDED.load(Ordering::SeqCst) {   // no point waiting: say so at once
+            return Err("Its notes service stopped while starting.".into());
+        }
         std::thread::sleep(Duration::from_millis(50));
     }
-    Err("The server did not start.".into())
+    Err("Its notes service didn't answer.".into())
 }
 
 // One small local request to our own program: POST /shell/<action>, returns the reply body.
@@ -220,7 +228,7 @@ fn main() {
             let h = app.handle().clone();
             std::thread::spawn(move || {
                 if let Err(e) = start_server(&h) {
-                    let msg = format!("Phygital Memory couldn't start: {e} Quit and open it again.").replace('\'', "’");
+                    let msg = format!("Phygital Memory couldn't start. {e} Quit and open it again.").replace('\'', "’");
                     let h2 = h.clone();
                     let _ = h.run_on_main_thread(move || {
                         if let Some(w) = h2.get_webview_window("main") {
