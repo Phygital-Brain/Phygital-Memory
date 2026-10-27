@@ -295,13 +295,13 @@ async function forgetFolder(id) {
 async function lockFolder(id) {
   const fid = typeof id === "string" ? id : currentFolder();
   if (loadedFolder === fid) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-  try { await api("lock", { folder: fid }); } catch {}
+  try { const r = await api("lock", { folder: fid }); if (r.warning) toastErr(r.warning); } catch {}
   lockedLocally(fid);
 }
 
 async function lockAll() {
   if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-  for (const f of folderList) if (hasPass(f.id)) { try { await api("lock", { folder: f.id }); } catch {} lockedLocally(f.id); }
+  for (const f of folderList) if (hasPass(f.id)) { try { const r = await api("lock", { folder: f.id }); if (r.warning) toastErr(r.warning); } catch {} lockedLocally(f.id); }
   showUnlock();
 }
 
@@ -629,6 +629,7 @@ async function watchChanges() {
   lastGen = g;
 }
 
+let cloudWarned = "";
 async function refreshBar() {
   if (!openOnScreen()) return;
   watchTodo();
@@ -638,6 +639,14 @@ async function refreshBar() {
   barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 16, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
   barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}. The cloud only sees encrypted files.` : "Only on this Mac.";
+  const h = b.cloudHealth;   // a cloud memory whose cloud refuses saves (full): say so once, keep the icon amber
+  barEls.cloud.classList.toggle("warn", !!(h && h.problem));
+  if (h && h.problem) {
+    const msg = `${h.problem} ${h.waiting} save${h.waiting === 1 ? " is" : "s are"} kept on this Mac until there's room.`;
+    barEls.cloud.title = msg;
+    if (msg !== cloudWarned) toastErr(msg);
+    cloudWarned = msg;
+  } else cloudWarned = "";
   aiApps = b.ai || [];
   drawAI();
 }
@@ -654,6 +663,19 @@ function drawAI() {
     + (openTasks ? `${openTasks} task${openTasks === 1 ? "" : "s"} waiting\n` : "No tasks waiting\n")
     + (aiApps.length ? "Using your notes: " + aiApps.map((a) => `${a.name}, ${ago(a.ago)}`).join("; ") : "No AI app is using your notes right now.");
   barEls.ai.setAttribute("aria-label", openTasks ? `AI, ${openTasks} tasks waiting` : "AI");
+}
+
+// Move a memory from this Mac into the cloud: pick the cloud and the place, then it locks and uploads.
+async function moveToCloud(info) {
+  let clouds = [];
+  try { clouds = (await api("clouds")).clouds || []; } catch {}
+  const v = await openCloud({ clouds, move: { name: info.name }, connect: (x) => api("cloudconnect", x), memories: (conn) => api("cloudmemories", { conn }) });
+  if (!v) return false;
+  if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+  toast(`Locking "${info.name}" and uploading its encrypted files…`);
+  await api("tocloud", { folder: info.id, conn: v.conn, parent: v.move.parent });
+  toastOk(`"${info.name}" now lives in your cloud. Unlock it again to keep working.`);
+  return true;
 }
 
 async function openStoragePanel() {
@@ -705,7 +727,10 @@ async function openStoragePanel() {
       return true;
     },
   });
-  if (moved === "moved") { lockedLocally(info.id); await refreshFolders(); showUnlock(); }   // a move locks it
+  if (moved === "tocloud") {   // the panel closes first, then the cloud steps
+    try { if (await moveToCloud(info)) { lockedLocally(info.id); await refreshFolders(); showUnlock(); } }
+    catch (e) { toastErr(e.message); }
+  } else if (moved === "moved") { lockedLocally(info.id); await refreshFolders(); showUnlock(); }   // a move locks it
   else if (moved) { await refreshFolders(); refreshBar(); }   // GitHub on or off: it stays open
 }
 

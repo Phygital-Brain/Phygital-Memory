@@ -6,9 +6,10 @@ and writes the encrypted files there exactly as it does on disk. Only encrypted 
 keeps a small cache of them (also encrypted) while saving.
 
 - Nothing talks to the cloud until the person presses a button: connecting, or unlocking a cloud memory.
-- The cloud password lives in the Keychain. rclone gets the connection in its environment (seen only by this Mac
-  user), never in a file.
-- Locking waits until every saved file has reached the cloud, then removes the drive.
+- The cloud password lives in the Keychain (in rclone's own "obscured" form, so its cache keeps the same name
+  every time). rclone gets the connection in its environment (seen only by this Mac user), never in a file.
+- Locking waits until every saved file has reached the cloud, then removes the drive. If the cloud refuses (full),
+  the saves wait in the cache and go up the next time the memory is unlocked.
 """
 from __future__ import annotations
 
@@ -78,7 +79,13 @@ def _account(conn: dict) -> str:
     return f"{conn['user']}@{conn['url']}"
 
 
+def _obscure(password: str) -> str:
+    return subprocess.run([rclone(), "obscure", "-"], input=password, capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
 def save_password(conn: dict, password: str) -> None:
+    password = _obscure(password)   # once: rclone names its cache after the connection, password included
     # shortcut: the password is passed to `security` as an argument (seen only by this Mac user, for a moment), as
     # with the GitHub key. A small Keychain helper in the Mac app would avoid even that; worth doing before release.
     subprocess.run(["security", "add-generic-password", "-U", "-a", _account(conn), "-s", KEYCHAIN, "-w", password],
@@ -100,11 +107,9 @@ def _password(conn: dict) -> str | None:
 
 
 def _env(conn: dict, password: str | None = None) -> dict:
-    password = password if password is not None else _password(conn)
-    if password is None:
+    obscured = _obscure(password) if password is not None else _password(conn)
+    if obscured is None:
         raise CloudError(f"Connect to {label(conn)} again: its password isn't on this Mac any more.")
-    obscured = subprocess.run([rclone(), "obscure", "-"], input=password, capture_output=True, text=True,
-                              check=True).stdout.strip()
     p = f"RCLONE_CONFIG_{REMOTE}_"
     return {**os.environ, p + "TYPE": "webdav", p + "URL": conn["url"], p + "USER": conn["user"], p + "PASS": obscured,
             p + "VENDOR": "nextcloud" if conn["kind"] == "nextcloud" else "other",
@@ -128,6 +133,8 @@ def _run(conn: dict, *args: str, password: str | None = None, timeout: int = 120
 
 def _plain(err: str, conn: dict) -> str:
     e = err.lower()
+    if "507" in e or "insufficient storage" in e or "quota" in e:
+        return f"Your {label(conn)} is full."
     if "401" in e or "unauthorized" in e:
         return "The user name or password is wrong. On Nextcloud, use an app password (Settings › Security)."
     if "no such host" in e or "connection refused" in e or "dial tcp" in e or "timeout" in e:
@@ -154,6 +161,39 @@ def find_memories(conn: dict, depth: int = 4) -> list[dict]:
         seen.setdefault(parent, set()).add(name)
     return sorted(({"path": p, "name": p.rsplit("/", 1)[-1] or label(conn)} for p, names in seen.items()
                    if names == {"masterkey.cryptomator", "vault.cryptomator"}), key=lambda m: m["name"].lower())
+
+
+def free_space(conn: dict) -> int | None:
+    """Free bytes in the cloud, or None if the cloud doesn't say."""
+    try:
+        d = json.loads(_run(conn, "about", "--json", _remote(""), timeout=60))
+    except (CloudError, ValueError):
+        return None
+    return d.get("free")
+
+
+def upload(conn: dict, src: Path, path: str) -> None:
+    """Copy a locked memory (encrypted files only) up to the cloud, then check every file arrived."""
+    skip = ["--exclude", ".DS_Store", "--exclude", "._*"]
+    _run(conn, "copy", str(src), _remote(path), *skip, "--transfers", "8", timeout=24 * 3600)
+    try:
+        _run(conn, "check", str(src), _remote(path), "--one-way", "--size-only", *skip, timeout=3600)
+    except CloudError:
+        raise CloudError("Not every file arrived in the cloud, so nothing was moved. Try again.")
+
+
+def remove_folder(conn: dict, path: str) -> None:
+    try:
+        _run(conn, "purge", _remote(path), timeout=3600)
+    except CloudError:
+        pass
+
+
+def human(n: int) -> str:
+    for unit in ("bytes", "KB", "MB", "GB", "TB"):
+        if n < 1000 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "bytes" else f"{n:.1f} {unit}"
+        n /= 1000
 
 
 def make_folder(conn: dict, path: str) -> None:
@@ -188,6 +228,17 @@ class Drive:
         self.proc: subprocess.Popen | None = None
         self.rc: tuple[int, str] | None = None
 
+    @property
+    def left(self) -> int:
+        """Saves still waiting in the cache for the cloud (read from rclone's own notes, so it survives a restart)."""
+        n = 0
+        for meta in (self.cache / "vfsMeta").rglob("*"):
+            try:
+                n += meta.is_file() and json.loads(meta.read_text()).get("Dirty") is True
+            except (OSError, ValueError):
+                pass
+        return n
+
     def start(self, timeout: float = 45) -> None:
         if self.proc and self.proc.poll() is None and is_mounted(self.point):
             return
@@ -213,29 +264,40 @@ class Drive:
         self.stop()
         raise CloudError(f"{label(self.conn)} took too long to answer. Try again.")
 
+    def _ask(self, what: str) -> dict:
+        port, secret = self.rc
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/{what}", data=b"{}", method="POST",
+                                     headers={"Content-Type": "application/json",
+                                              "Authorization": "Basic " + b64encode(f"app:{secret}".encode()).decode()})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r)
+
     def pending(self) -> int:
         """How many saved files haven't reached the cloud yet (0 if the drive isn't running)."""
         if not self.rc or not self.proc or self.proc.poll() is not None:
             return 0
-        port, secret = self.rc
-        req = urllib.request.Request(f"http://127.0.0.1:{port}/vfs/stats", data=b"{}", method="POST",
-                                     headers={"Content-Type": "application/json",
-                                              "Authorization": "Basic " + b64encode(f"app:{secret}".encode()).decode()})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            d = json.load(r).get("diskCache", {})
+        d = self._ask("vfs/stats").get("diskCache", {})
         return int(d.get("uploadsInProgress", 0)) + int(d.get("uploadsQueued", 0))
 
+    def health(self) -> dict:
+        """{waiting, problem}: saves not in the cloud yet, and why, in plain words, if the cloud refused them."""
+        try:
+            waiting = self.pending()
+            err = self._ask("core/stats").get("lastError", "") if waiting else ""
+        except (OSError, ValueError, TypeError):
+            return {"waiting": 0, "problem": None}
+        return {"waiting": waiting, "problem": _plain(err, self.conn) if err else None}
+
     def stop(self, wait: float = 600) -> int:
-        """Wait (up to `wait` seconds) for saved files to reach the cloud, then remove the drive. Returns how many
-        files were still waiting when it gave up (they stay in the cache and go up next time it's unlocked)."""
+        """Wait (up to `wait` seconds, or 20 once the cloud refuses a save) for saved files to reach the cloud, then
+        remove the drive. Returns how many were still waiting: they stay in the cache and go up the next time it's
+        unlocked."""
         left = 0
-        end = time.time() + wait
+        start = time.time()
         while True:
-            try:
-                left = self.pending()
-            except OSError:
-                break
-            if not left or time.time() > end:
+            h = self.health()
+            left = h["waiting"]
+            if not left or time.time() - start > (20 if h["problem"] else wait):
                 break
             time.sleep(0.5)
         unmount(self.point)

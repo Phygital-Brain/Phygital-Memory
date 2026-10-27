@@ -482,6 +482,7 @@ async def api(request: Request) -> Response:
             now = time.time()
             return _ok({"open": bool(st.get("open")),
                         "cloud": "GitHub" if f.github else f.info()["cloudOnly"] or cloud_place(f.path),
+                        "cloudHealth": await asyncio.to_thread(f.drive.health) if f.drive and st.get("open") else None,
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})
         # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
@@ -498,6 +499,9 @@ async def api(request: Request) -> Response:
         m = f.memory
         if action == "lock":
             await asyncio.to_thread(f.lock)   # a cloud memory waits here until its saves reached the cloud
+            if f.drive and f.drive.left:
+                return _ok({"open": False, "warning": f"{f.drive.left} save{'s' if f.drive.left > 1 else ''} couldn't "
+                            f"reach {cloud.label(f.cloud_at)} yet. They're kept on this Mac and go up the next time you unlock."})
             return _ok({"open": False})
         if action == "storage" and f.cloud_at:   # cloud only: nothing on this Mac to look at or move
             return _ok({"path": f.info()["path"], "cloud": None, "cloudOnly": cloud.label(f.cloud_at), "places": [],
@@ -519,6 +523,9 @@ async def api(request: Request) -> Response:
                 return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id, body.get("reuse") or None)})
             except gitsync.SameMemoryRepo as e:   # connected before: ask whether to use that repo again
                 return _ok({"existing": e.repo})
+        if action == "tocloud":   # move it from this Mac into the cloud (locks first; the page asks for the password again)
+            return _ok({"folder": await asyncio.to_thread(folders.to_cloud, f.id, body.get("conn") or {},
+                                                          str(body.get("parent", "")))})
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
         if action == "movefolder" and f.github:

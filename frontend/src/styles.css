@@ -440,6 +440,8 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
            background: none; color: var(--text-3); font: inherit; font-size: 11.5px; cursor: default; font-variant-numeric: tabular-nums; }
 .sb-stat:hover { background: var(--bg-subtle); color: var(--text-2); }
 .st-cloud.on { color: var(--link); }
+.st-cloud.warn { color: var(--warning); }
+.cl-body { display: flex; flex-direction: column; gap: 8px; }
 .st-ai.on { color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 35%, transparent);
             animation: st-pulse 2.4s ease-in-out infinite; }
 @keyframes st-pulse { 50% { box-shadow: 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); } }

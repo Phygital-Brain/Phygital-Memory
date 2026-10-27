@@ -73,7 +73,9 @@ export function openStorage(ctx) {
       option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github, githubBody)]),
       option("sparkle", "Cloud only", s.cloudOnly
         ? `Nothing on this Mac: the app opens it straight from ${s.cloudOnly}, which only gets encrypted files.`
-        : "Nothing on this Mac: the app opens the memory straight from your cloud (Nextcloud or WebDAV). Use Open from cloud… in the folder menu.", !!s.cloudOnly),
+        : "Nothing on this Mac: the app opens the memory straight from your cloud (Nextcloud or WebDAV). The cloud only gets encrypted files.", !!s.cloudOnly,
+        s.cloudOnly || s.github ? null : el("button", { class: "btn small", type: "button", onclick: () => done("tocloud") },
+          "Move to cloud…")),
       el("div", { class: "st-note" }, s.cloudOnly ? "A cloud memory stays in the cloud. Moving it to this Mac comes later."
         : "Moving locks the folder first, so only encrypted files move. Unlock it again after."),
       err,
@@ -299,14 +301,15 @@ export function pickRepo(repos) {
 // Open from cloud: a memory that lives only in the person's cloud (Nextcloud or WebDAV for now). Steps: pick a cloud
 // (one connected before, or a new login), see the memories in it, pick one or make a new one there.
 // ctx: {clouds:[{kind,url,user,name,where}], connect({kind,server,user,password}) -> {conn, memories},
-//       memories(conn) -> {conn, memories}}
-// Resolves {conn, path} (open), {conn, create: {parent, name, password}} (new), or null.
+//       memories(conn) -> {conn, memories}, move?: {name}}
+// Resolves {conn, path} (open), {conn, create: {parent, name, password}} (new), {conn, move: {parent}}, or null.
 export function openCloud(ctx) {
   return modal((done) => {
     const body = el("div", { class: "cl-body" });
     const err = el("div", { class: "dlg-err" });
     const actions = el("div", { class: "dlg-actions" });
-    const title = el("div", { class: "dlg-title" }, "Open from cloud");
+    const top = ctx.move ? `Move "${ctx.move.name}" to your cloud` : "Open from cloud";
+    const title = el("div", { class: "dlg-title" }, top);
     let submit = null;
     const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
     const busy = (b) => card.classList.toggle("busy", b);
@@ -317,9 +320,11 @@ export function openCloud(ctx) {
       el("div", { class: "act-main" }, el("div", { class: "act-line" }, main), el("div", { class: "act-folder" }, sub)));
 
     const pick = () => {
-      title.textContent = "Open from cloud"; err.textContent = ""; submit = null;
+      title.textContent = top; err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, "Use a memory that lives in your cloud, with nothing kept on this Mac. The cloud only ever gets encrypted files."),
+        el("div", { class: "mf-hint" }, ctx.move
+          ? "Pick the cloud. Only encrypted files go up, and the copy on this Mac goes to the Trash once every file has arrived."
+          : "Use a memory that lives in your cloud, with nothing kept on this Mac. The cloud only ever gets encrypted files."),
         el("div", { class: "act-list" },
           ...ctx.clouds.map((c) => row("cloud", c.where, `Connected as ${c.user}`, () => look(c))),
           row("cloud", "Nextcloud", "Your Nextcloud server address, user name and an app password", () => login("nextcloud")),
@@ -341,7 +346,7 @@ export function openCloud(ctx) {
         err.textContent = ""; busy(true);
         try {
           const j = await ctx.connect({ kind, server: server.value, user: user.value, password: pw.value });
-          pw.value = ""; busy(false); list(j.conn, j.memories);
+          pw.value = ""; busy(false); (ctx.move ? moveTo : list)(j.conn, j.memories);
         } catch (e) { err.textContent = e.message; busy(false); }
       };
       body.replaceChildren(server, user, pw,
@@ -354,6 +359,7 @@ export function openCloud(ctx) {
 
     const look = async (c) => {
       err.textContent = ""; busy(true);
+      if (ctx.move) { moveTo(c); return; }
       try { const j = await ctx.memories(c); busy(false); list(j.conn, j.memories); }
       catch (e) {
         busy(false);
@@ -370,6 +376,16 @@ export function openCloud(ctx) {
           ? memories.map((m) => row("lock", m.name, m.path, () => done({ conn, path: m.path })))
           : [el("div", { class: "act-empty" }, "No memories found in this cloud yet.")])));
       actions.replaceChildren(btn("Back", pick), btn("New memory here…", () => create(conn, memories), "primary"));
+    };
+
+    const moveTo = (conn) => {
+      title.textContent = top; err.textContent = "";
+      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder in the cloud (empty: the top)", "aria-label": "Folder in the cloud" });
+      submit = () => done({ conn, move: { parent: parent.value.trim().replace(/^\/+|\/+$/g, "") } });
+      body.replaceChildren(parent,
+        el("div", { class: "st-gh-note" }, "It locks first. Uploading can take a while for a big memory. Unlock it again when it's done; the password stays the same."));
+      actions.replaceChildren(btn("Back", pick), btn("Move", submit, "primary"));
+      parent.focus();
     };
 
     const create = (conn, memories) => {

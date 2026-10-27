@@ -245,6 +245,38 @@ class Folders:
             self._save()
         return f.info()
 
+    def to_cloud(self, fid: str, conn: dict, parent: str) -> dict:
+        """Move a memory from this Mac into the cloud: it locks, its encrypted files go up and are checked, then the
+        Mac's copy goes to the Trash (so it can come back) and the memory opens from the cloud from now on."""
+        f = self.get(fid)
+        if f.cloud_at:
+            raise ValueError("This memory is already in the cloud.")
+        if f.github:
+            raise ValueError("Stop GitHub sync first: a memory shouldn't be in GitHub and a cloud at once.")
+        conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
+        if not cloud.has_password(conn):
+            raise ValueError(f"Connect to {cloud.label(conn)} first.")
+        f.lock()
+        size = sum(p.stat().st_size for p in f.path.rglob("*") if p.is_file() and p.name != ".DS_Store")
+        free = cloud.free_space(conn)
+        if free is not None and size > free:
+            raise ValueError(f"Not enough room: your {cloud.label(conn)} has {cloud.human(free)} free, and this memory "
+                             f"needs {cloud.human(size)}. Nothing was moved.")
+        path = "/".join(p for p in (parent.strip().strip("/"), f.path.name) if p)
+        cloud.make_folder(conn, path)
+        try:
+            cloud.upload(conn, f.path, path)
+        except Exception:
+            cloud.remove_folder(conn, path)   # only the half-copied folder this move just made
+            raise
+        trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
+        shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
+        with self._lock:
+            moved = Folder(f.id, f.name, Path(), None, {**conn, "path": path})
+            self.items[fid] = moved
+            self._save()
+        return moved.info()
+
     # ---------- a private GitHub repo ----------
 
     def to_github(self, fid: str, reuse: str | None = None) -> dict:
@@ -351,6 +383,12 @@ class Folders:
             self.items.pop(fid, None)
             self._save()
         if f.cloud_at:   # its cache goes; the cloud password goes too if no other memory uses that cloud
+            if f.drive.left:
+                with self._lock:
+                    self.items[fid] = f
+                    self._save()
+                raise ValueError(f"{f.drive.left} save{'s' if f.drive.left > 1 else ''} haven't reached "
+                                 f"{cloud.label(f.cloud_at)} yet. Unlock it once the cloud has room, then remove it.")
             shutil.rmtree(CLOUDS / f"{fid}.cache", ignore_errors=True)
             if not any(g.cloud_at and cloud.make_key(g.cloud_at) == cloud.make_key(f.cloud_at) for g in self.items.values()):
                 cloud.forget_password(f.cloud_at)
