@@ -1399,7 +1399,7 @@ async function setUpApprover(chip) {
 }
 
 // A short "sealed" moment after a signed yes: wires run in from you and from them, the lock between closes, a ring
-// draws round it and scrambled characters settle into words. Under two seconds; a plain fade with motion turned down.
+// draws round it and scrambled characters settle into the app's name. Under two seconds; a plain fade with motion turned down.
 function sealAnimation() {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -1412,7 +1412,7 @@ function sealAnimation() {
     + '<path class="pk-shackle" d="M24 29v-6a8 8 0 0 1 16 0v6"/>'
     + '<rect class="pk-body" x="19" y="29" width="26" height="19" rx="4"/>'
     + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/></g>';
-  const words = "Signed with Phygital Key";
+  const words = "Phygital Memory";
   const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
   const box = el("div", { class: "pk-seal", "aria-hidden": "true" }, el("div", { class: "pk-card" }, svg, text));
   document.body.append(box);
