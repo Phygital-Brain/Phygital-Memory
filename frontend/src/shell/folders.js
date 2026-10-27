@@ -28,7 +28,7 @@ function actionRow(iconName, label, onClick, right) {
   return { node: row };
 }
 
-// ctx: {list, currentId, unlocked(id), switchTo(id), openOther(), createNew(), manage(), rename(), lockThis(),
+// ctx: {list, currentId, unlocked(id), switchTo(id), openOther(), createNew(), manage(), storage(), ai(), settings(), lockThis(),
 //       lockAll(), home(), finder?: {shown, toggle()}}
 export function switcherItems(ctx) {
   const rows = ctx.list.map((f, i) => {
@@ -57,9 +57,10 @@ export function switcherItems(ctx) {
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
-      actionRow("gear", "Rename memory", ctx.rename),
+      ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", "Where it's stored", ctx.storage)] : []),
+      ...(ctx.ai ? [actionRow("pulse", "AI tasks and activity", ctx.ai)] : []),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
-      actionRow("home", "Home", ctx.home, { label: "⇧⌘H" }),
+      ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),
       actionRow("lock", "Lock memory", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
   }
   return items;

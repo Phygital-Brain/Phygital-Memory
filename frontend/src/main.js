@@ -401,8 +401,8 @@ async function openSwitcher() {
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud,
-    createNew: createNewFolder, manage: openManage, rename: () => renameFolder(), lockThis: () => lockFolder(), lockAll,
-    home: () => goHome(),
+    createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 
