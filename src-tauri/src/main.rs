@@ -98,42 +98,59 @@ fn quit(app: &tauri::AppHandle) {
     app.exit(0);
 }
 
-// The window is closing (or Cmd+Q). If a folder is open, the page asks: lock all, or keep open. Keeping it hides
-// the window and the app stays in the Dock; the server remembers that answer for 72 hours.
+// The window is closing (or Cmd+Q). If a folder is open, the window hides and a small box of its own asks: lock
+// all, or keep open. No answer in 30 seconds locks everything. Keeping it leaves the app in the Dock; the server
+// remembers that answer for 72 hours, and closing then skips the question.
 fn handle_close(app: tauri::AppHandle) {
     if CLOSING.swap(true, Ordering::SeqCst) { return; }
     std::thread::spawn(move || {
         let reply = shell(&app, "close").unwrap_or_default().replace(' ', "");
-        let mut keep: Option<u64> = None;
-        if reply.contains("\"keep\":true") {
-            keep = Some(1);   // "Keep open" was chosen in the last 72 hours: no question
-        } else if !reply.contains("\"ask\":true") {
-            return quit(&app);
-        } else {
-            if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
-            for _ in 0..150 {   // the page locks by itself after 30 s with no answer; 45 s here is the backstop
-                std::thread::sleep(Duration::from_millis(300));
-                let a = shell(&app, "answer").unwrap_or_default().replace(' ', "");
-                if let Some(i) = a.find("\"keep\":") {
-                    keep = a[i + 7..].chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse().ok();
-                    break;
-                }
-            }
+        if !reply.contains("\"keep\":true") && !reply.contains("\"ask\":true") { return quit(&app); }
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.eval("window.phygitalSaveAll && window.phygitalSaveAll()");   // nothing just typed is lost
+            let _ = w.hide();
         }
-        match keep {
-            Some(n) if n > 0 => {
-                if let Some(w) = app.get_webview_window("main") { let _ = w.hide(); }
-                CLOSING.store(false, Ordering::SeqCst);
-                loop {
-                    std::thread::sleep(Duration::from_secs(5));
-                    if shell(&app, "should-exit").unwrap_or_default().replace(' ', "").contains("\"exit\":true") {
-                        return quit(&app);
-                    }
-                }
+        let keep = reply.contains("\"keep\":true") || {
+            let keep = ask_keep_open();
+            let _ = shell_with(&app, "decide", if keep { "{\"keep\":true}" } else { "{\"keep\":false}" });
+            keep
+        };
+        if !keep {
+            std::thread::sleep(Duration::from_millis(800));   // let the last save land before everything locks
+            return quit(&app);
+        }
+        CLOSING.store(false, Ordering::SeqCst);
+        loop {
+            std::thread::sleep(Duration::from_secs(5));
+            if shell(&app, "should-exit").unwrap_or_default().replace(' ', "").contains("\"exit\":true") {
+                return quit(&app);
             }
-            _ => quit(&app),   // "close and lock now", or no answer
         }
     });
+}
+
+// The closing question, in the Mac's own small box with the app's icon. True only for "Keep open"; no answer in
+// 30 seconds, or any error, means lock.
+fn ask_keep_open() -> bool {
+    let icon = std::env::current_exe().ok()
+        .and_then(|exe| exe.parent()?.parent().map(|c| c.join("Resources/icon.icns")))
+        .filter(|p| p.exists())
+        .map(|p| format!(" with icon POSIX file \"{}\"", p.to_string_lossy().replace('"', "")))
+        .unwrap_or_default();
+    let script = format!("display dialog \"Lock your notes before closing?\" & return & return & \
+        \"Lock all: everything locks and the app quits.\" & return & \
+        \"Keep open: your AI apps can still reach your notes, and the app stays in the Dock. Remembered for 3 days.\" & return & return & \
+        \"With no answer, everything locks in 30 seconds.\" \
+        with title \"Phygital Memory\" buttons {{\"Keep open\", \"Lock all and close\"}} \
+        default button \"Lock all and close\"{icon} giving up after 30");
+    let out = std::process::Command::new("osascript").args(["-e", "activate", "-e", &script]).output();
+    match out {
+        Ok(o) => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            text.contains("button returned:Keep open") && !text.contains("gave up:true")
+        }
+        Err(_) => false,
+    }
 }
 
 // The window may only ever show our own local page. A note, a link or injected HTML that tries to send it
