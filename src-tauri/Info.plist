@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The opener file inside each locked folder ("Open in Phygital Memory.phygitalmemory") shows the app's own
+	     icon. It points at icon.icns in this app, so a new app icon shows on every opener file by itself. -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>io.phygital.memory.folder</string>
+			<key>UTTypeDescription</key>
+			<string>Phygital Memory folder</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeIconFile</key>
+			<string>icon.icns</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>phygitalmemory</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-phygitalmemory</string>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Phygital Memory folder</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>io.phygital.memory.folder</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>icon.icns</string>
+		</dict>
+	</array>
+</dict>
+</plist>
