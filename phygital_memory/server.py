@@ -33,7 +33,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity
+from . import activity, gitsync
 from . import finder as finder_links
 from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
                       pick_save, write_guides)
@@ -419,6 +419,11 @@ async def api(request: Request) -> Response:
                      "canUndo": bool(a.get("undo")) and a["undo"] in activity.undo}
                     for a in reversed(activity.log) if a["folder"] in mine]
             return _ok({"activity": rows[:200]})
+        if action == "fromgithub":   # another Mac: bring a private Phygital Memory repo down and add it
+            parent = await asyncio.to_thread(pick_folder, "Choose where to keep it on this Mac")
+            if not parent:
+                return _ok({"cancelled": True})
+            return _ok({"folder": await asyncio.to_thread(folders.from_github, str(body.get("repo", "")), Path(parent))})
         if action == "closeanswer":   # from the closing question's window, only while that question is open
             if not closing["asked"]:
                 return _ok({"error": "Nothing to answer."}, 409)
@@ -435,7 +440,7 @@ async def api(request: Request) -> Response:
             st = f.memory.status() if _has_pass(request, f) else {"open": False}
             now = time.time()
             return _ok({"open": bool(st.get("open")),
-                        "cloud": cloud_place(f.path),
+                        "cloud": "GitHub" if f.github else cloud_place(f.path),
                         "ai": [{"name": n, "ago": int(now - t)} for n, t in sorted(activity.seen.items(), key=lambda x: -x[1])
                                if now - t < 30 * 60]})
         # shortcut: test-only door so Claude can drive the app (macOS blocks automated typing into password
@@ -453,9 +458,15 @@ async def api(request: Request) -> Response:
             return _ok({"open": False})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
-                        "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path)})
+                        "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
+                        "github": f.github, "githubStatus": f.sync.status() if f.sync else None,
+                        "githubAccount": None if f.github else await asyncio.to_thread(gitsync.signed_in)})
+        if action == "togithub":   # keep it in a new private GitHub repo (scrambled files only)
+            return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id)})
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
+        if action == "movefolder" and f.github:
+            return _ok({"error": "This folder is kept in GitHub, so it stays where it is."}, 400)
         if action == "movefolder":   # move it (locked) to another place; the page then asks for the password again
             return _ok({"folder": await asyncio.to_thread(folders.relocate, f.id, body["parent"])})
         if action == "renamefolder":

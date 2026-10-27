@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 import secrets
+import shutil
 import sqlite3
 import threading
 import time
@@ -358,11 +359,55 @@ class Memory:
                 return f"{p.lstrip('/')}/{name}"
         return None
 
+    def _adopt_lost_folders(self) -> None:
+        """GitHub sync: two Macs made the same folder, each with its own ID, and git kept one. What's inside the
+        other one is moved into the kept folder, so nothing is lost (see gitsync.py)."""
+        store = self.folder / ".git" / "phygital-lost-folders.json"
+        if not store.exists():
+            return
+        try:
+            items = json.loads(store.read_text())
+        except (OSError, ValueError):
+            items = []
+        for it in items:
+            try:
+                kept_id = (self.folder / it["dir"] / "dir.c9r").read_bytes()
+                self._fold_in(it["id"].encode("ascii"), kept_id)
+            except Exception:
+                continue
+        store.unlink(missing_ok=True)
+
+    def _fold_in(self, lost_id: bytes, kept_id: bytes) -> None:
+        lost_at = self._tree.dir_location(lost_id)
+        if lost_id == kept_id or not lost_at.is_dir():
+            return
+        kept = Entry("", "dir", self._tree.dir_location(kept_id), kept_id)
+        here = {e.name: e for e in self._tree.list_dir(kept_id)}
+        for e in self._tree.list_dir(lost_id):
+            other = here.get(e.name)
+            if other is None:
+                self._writer.move(e, kept, e.name)
+            elif e.kind == "dir" and other.kind == "dir":
+                self._fold_in(e.dir_id, other.dir_id)
+            elif e.kind == "file" and other.kind == "file" and self._tree.read_file(e) == self._tree.read_file(other):
+                self._writer.remove(e)
+            else:   # same name, different content: keep both
+                stem, dot, ext = e.name.rpartition(".") if "." in e.name else (e.name, "", "")
+                taken, n = set(here), 1
+                name = f"{stem} (conflict {time.strftime('%Y-%m-%d')}){dot}{ext}"
+                while name in taken:
+                    n += 1
+                    name = f"{stem} (conflict {time.strftime('%Y-%m-%d')} {n}){dot}{ext}"
+                self._writer.move(e, kept, name)
+        if all(p.name == "dirid.c9r" for p in lost_at.iterdir()):
+            shutil.rmtree(lost_at, ignore_errors=True)
+
     def _sync(self) -> None:
         """Pick up notes a cloud drive (or Finder) changed on disk: at most every few seconds, only what changed."""
         if time.time() - self._synced < SYNC_EVERY:
             return
         self._synced = time.time()
+        self._adopt_lost_folders()
         self._tree.conflicts = []
         disk = {}
         for path, entry in self._tree.walk():

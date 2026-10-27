@@ -191,6 +191,20 @@ async function pickFolder(prompt, start) {
   return (await api("pickfolder", { prompt, ...(start ? { start } : {}) })).path || null;
 }
 
+// Another Mac: bring a private "…-Phygital-Memory" repo down from GitHub, then unlock it with its password.
+async function openFromGithub() {
+  const repo = await askText("Open from GitHub", "", "Open", (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
+  if (repo == null) return;
+  try {
+    toast("Choose where to keep it on this Mac, in the window that opens…");
+    const j = await api("fromgithub", { repo });
+    if (j.cancelled) return;
+    await refreshFolders();
+    toastOk(`Brought "${j.folder.name}" down from GitHub. Unlock it with its password.`);
+    await switchTo(j.folder.id);
+  } catch (e) { toastErr(e.message); }
+}
+
 async function openOtherFolder() {
   try {
     const p = await pickFolder("Choose a locked notes folder");
@@ -328,7 +342,7 @@ async function openSwitcher() {
   await refreshFolders();
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
-  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder,
+  showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub,
     createNew: createNewFolder, manage: openManage, rename: () => renameFolder(), lockThis: () => lockFolder(), lockAll,
     home: () => goHome(),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
@@ -606,6 +620,15 @@ async function openStoragePanel() {
   const moved = await openStorage({
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
+    toGithub: async () => {
+      const sure = await confirmDialog(`Keep "${info.name}" in a new private GitHub repo? Only scrambled files go up, and the app keeps them in step. The repo always stays private.`, "Use private GitHub", false);
+      if (!sure) return false;
+      toast("Making the private repo and sending the scrambled files…");
+      await api("togithub");
+      toastOk("Kept in a private GitHub repo. Changes go up a few seconds after you make them.");
+      refreshBar();
+      return true;
+    },
     download: async () => { const j = await api("download"); toastOk(`Asked your cloud app for ${j.asked} file${j.asked === 1 ? "" : "s"}. They download in the background.`); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     move: async (parent, label) => {

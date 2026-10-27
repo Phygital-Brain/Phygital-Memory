@@ -16,6 +16,7 @@ from pathlib import Path
 
 from . import activity
 from .finder import Finder
+from .gitsync import GitSync, repo_name
 from .memory import Memory
 
 STATE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser()
@@ -68,16 +69,23 @@ def write_guides(path: Path) -> None:
 
 
 class Folder:
-    def __init__(self, fid: str, name: str, path: Path):
+    def __init__(self, fid: str, name: str, path: Path, github: str | None = None):
         self.id, self.name, self.path = fid, name, Path(path)
         self.memory = Memory(self.path)
         self.finder = Finder(self.memory, volume=name)
         self.passes: set[str] = set()
         self.fails = {"n": 0, "until": 0.0}
+        self.github, self.sync = github, None   # "owner/repo" when kept in a private GitHub repo
+        if github and (self.path / ".git").is_dir():
+            self.start_sync()
+
+    def start_sync(self) -> None:
+        self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen)
+        self.sync.start()
 
     def info(self) -> dict:
         return {"id": self.id, "name": self.name, "path": str(self.path), "open": self.memory.is_open,
-                "exists": is_vault(self.path), "finder": bool(self.finder.where())}
+                "exists": is_vault(self.path), "finder": bool(self.finder.where()), "github": self.github}
 
     def lock(self) -> None:
         activity.forget(self.id)   # the AI's activity lines for this folder go with the lock
@@ -97,7 +105,8 @@ class Folders:
             pass
         for e in entries:
             if isinstance(e, dict) and e.get("id") and e.get("path"):
-                self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]))
+                self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
+                                             e.get("github"))
         if default and is_vault(default) and not any(f.path == default for f in self.items.values()):
             self._add(default, default.name, first=True)
 
@@ -105,7 +114,8 @@ class Folders:
 
     def _save(self) -> None:
         STATE.mkdir(parents=True, exist_ok=True)
-        data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path)} for f in self.items.values()]}
+        data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {})}
+                            for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1))
         os.replace(tmp, REGISTRY)
@@ -154,6 +164,39 @@ class Folders:
         write_guides(target)
         with self._lock:
             return self._add(target, name).info()
+
+    # ---------- a private GitHub repo ----------
+
+    def to_github(self, fid: str) -> dict:
+        """Keep this folder in step with a new private GitHub repo named "FOLDER-Phygital-Memory"."""
+        f = self.get(fid)
+        if f.github:
+            raise ValueError("This folder is already kept in GitHub.")
+        if any(str(f.path).startswith(p["path"] + "/") for p in cloud_places()):
+            raise ValueError("Move it to a place on this Mac first: a folder shouldn't be in a cloud and GitHub at once.")
+        f.github = GitSync(f.path, repo_name(f.name)).create()
+        with self._lock:
+            self._save()
+        f.start_sync()
+        return f.info()
+
+    def from_github(self, repo: str, parent: Path) -> dict:
+        """Another Mac: bring a private "…-Phygital-Memory" repo down into parent, and add it to the list."""
+        repo = repo.strip().removeprefix("https://github.com/").removesuffix(".git").strip("/")
+        if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repo):
+            raise ValueError('Write it like "your-name/Notes-Phygital-Memory".')
+        name = repo.split("/")[1].removesuffix("-Phygital-Memory") or repo.split("/")[1]
+        dest = Path(parent).expanduser() / name
+        if dest.exists():
+            raise ValueError(f'There is already a "{name}" in that place.')
+        GitSync.clone(repo, dest)
+        if not is_vault(dest):
+            raise ValueError("That repo isn't a Phygital Memory folder.")
+        with self._lock:
+            f = Folder(secrets.token_hex(4), name, dest, repo)
+            self.items[f.id] = f
+            self._save()
+        return f.info()
 
     def rename(self, fid: str, name: str) -> dict:
         name = name.strip()

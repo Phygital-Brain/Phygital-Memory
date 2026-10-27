@@ -467,6 +467,9 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .st-place.on { border-color: var(--accent); color: var(--accent); cursor: default; }
 .st-here { font-size: 11px; color: var(--text-3); }
 .st-none { color: var(--text-3); font-size: 12px; }
+.st-gh { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--text-2); }
+.st-gh-note { font-size: 12.5px; color: var(--text-3); margin-bottom: 6px; }
+.st-gh-err { color: var(--danger); }
 .st-warn { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r-s); background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--text-2); font-size: 12.5px; }
 .st-note { color: var(--text-3); font-size: 11.5px; margin: 4px 0 8px; }
 /* AI activity panel */

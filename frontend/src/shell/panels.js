@@ -26,7 +26,20 @@ export function openStorage(ctx) {
         on ? el("span", { class: "st-opt-now" }, "Now") : null),
       body || null);
 
-    const local = !s.cloud;
+    const local = !s.cloud && !s.github;
+    const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : `${Math.round(sec / 3600)} h ago`;
+    const gs = s.githubStatus;
+    const githubBody = s.github
+      ? el("div", { class: "st-gh" },
+          el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · synced ${ago(gs && gs.ago)}`),
+          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null)
+      : s.githubAccount
+        ? el("div", {}, el("div", { class: "st-gh-note" }, `Signed in to GitHub as ${s.githubAccount}.`),
+            el("button", { class: "btn small", type: "button", onclick: async () => {
+              err.textContent = ""; busy(true);
+              try { if (await ctx.toGithub()) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
+            } }, "Keep it in a private GitHub repo"))
+        : el("div", { class: "st-gh-note" }, "Sign in to GitHub on this Mac first (for now with the GitHub app for the Terminal: gh auth login).");
     const cloudCards = el("div", { class: "st-places" }, ...s.places.map((p) => {
       const here = s.cloud && s.path.startsWith(p.path + "/");
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
@@ -50,11 +63,12 @@ export function openStorage(ctx) {
         local ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
           const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) moveTo(p, "this Mac");
         } }, "Move to a place on this Mac…")),
-      option("cloud", "This Mac + cloud", "Kept on this Mac and synced by your cloud app. The cloud only ever sees scrambled files.", !local,
+      option("cloud", "This Mac + cloud", "Kept on this Mac and synced by your cloud app. The cloud only ever sees scrambled files.", !!s.cloud && !s.github,
         el("div", {}, cloudCards,
           el("button", { class: "btn small st-other", type: "button", onclick: async () => {
             const p = await ctx.pick("Choose any synced folder"); if (p) moveTo(p, "that folder");
           } }, "Other synced folder…"))),
+      option("lock", "This Mac + private GitHub", "Kept on this Mac and in a private GitHub repo, in step every few seconds. GitHub only ever sees scrambled files. Best for notes and documents: files over 95 MB stay on this Mac.", !!s.github, githubBody),
       option("sparkle", "Cloud only", "Nothing kept on this Mac: the app talks to your cloud directly (Nextcloud, WebDAV, S3). Coming next.", false),
       el("div", { class: "st-note" }, "Moving locks the folder first, so only scrambled files move. You unlock it again after."),
       err,
