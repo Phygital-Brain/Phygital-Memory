@@ -597,7 +597,7 @@ async function refreshBar() {
   try { b = await api("bar"); } catch { return; }
   barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 16, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
-  barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}, encrypted. The cloud only sees scrambled files.` : "Only on this Mac.";
+  barEls.cloud.title = b.cloud ? `Saved in ${b.cloud}. The cloud only sees encrypted files.` : "Only on this Mac.";
   aiApps = b.ai || [];
   drawAI();
 }
@@ -625,11 +625,11 @@ async function openStoragePanel() {
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
     stopGithub: async (repo) => {
-      const sure = await confirmDialog(`Stop keeping "${info.name}" in GitHub? It becomes Mac only: your notes stay here, untouched, and nothing more goes to GitHub. The repo ${repo} is NOT deleted by the app: its scrambled copy stays on GitHub until you delete it there.`, "Stop GitHub sync", true);
+      const sure = await confirmDialog(`Stop GitHub sync for "${info.name}"? Your notes stay on this Mac, unchanged. The copy on GitHub (${repo}) stays there until you delete it yourself.`, "Stop GitHub sync", true);
       if (!sure) return false;
       await api("stopgithub");
       refreshBar();
-      if (await confirmDialog(`GitHub sync stopped. "${info.name}" is on this Mac only. Open ${repo} on GitHub to delete it? (Settings, at the bottom: Delete this repository.)`, "Open on GitHub", false)) {
+      if (await confirmDialog(`GitHub sync stopped. "${info.name}" is now on this Mac only. Open the repo on GitHub to delete it? (Settings, at the bottom: Delete this repository.)`, "Open on GitHub", false)) {
         await api("openrepo", { repo });
       }
       return true;
@@ -640,18 +640,18 @@ async function openStoragePanel() {
         account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
         if (!account) return false;
       }
-      const sure = await confirmDialog(`Keep "${info.name}" in a new private repo on the GitHub account ${account}? Only scrambled files go up, and the app keeps them in step. The repo always stays private.`, "Use private GitHub", false);
+      const sure = await confirmDialog(`Save "${info.name}" in a new private repo on GitHub (${account})? Only encrypted files go up. The repo stays private.`, "Use private GitHub", false);
       if (!sure) return false;
-      toast("Making the private repo and sending the scrambled files…");
+      toast("Making the private repo and uploading the encrypted files…");
       await api("togithub");
-      toastOk("Kept in a private GitHub repo. Changes go up a few seconds after you make them.");
+      toastOk("Saved in your private GitHub repo. Changes upload a few seconds after you make them.");
       refreshBar();
       return true;
     },
     download: async () => { const j = await api("download"); toastOk(`Asked your cloud app for ${j.asked} file${j.asked === 1 ? "" : "s"}. They download in the background.`); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     move: async (parent, label) => {
-      const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then only the scrambled files move. You unlock it again after.`, `Move to ${label}`, false);
+      const sure = await confirmDialog(`Move "${info.name}" to ${label}? It locks first, so only encrypted files move. Unlock it again after.`, `Move to ${label}`, false);
       if (!sure) return false;
       if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
       await api("movefolder", { parent });
@@ -707,7 +707,7 @@ async function revealInFinder(path) {
 async function toggleFinder() {
   if (finder.shown) { hideFinder(); return; }
   if (!finder.confirmed) {
-    const ok = await confirmDialog("While the folder is open in Finder, any app on this Mac can read your notes, including AI tools that run commands. It closes when you lock.", "Show in Finder", false);
+    const ok = await confirmDialog("While the folder is open in Finder, any app on this Mac can read your notes, AI tools too. It closes when you lock.", "Show in Finder", false);
     if (!ok) return;
     finder.confirmed = true;
   }
@@ -1188,7 +1188,7 @@ function makeFileTab(path) {
   const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, `Can't open this file: ${e.message}`)); };
   const tab = { path, kind: "image", make: "file", pane, dirty: false, folder: currentFolder() };
   if (tooBigToOpen(path)) {   // never pulled into the app whole: it opens from Finder, or as an exported copy
-    body.replaceChildren(el("p", { class: "file-note" }, "This file is over 25 MB, too big to open inside the app. It's safe and encrypted. Open it from Finder, or export a copy."),
+    body.replaceChildren(el("p", { class: "file-note" }, "This file is over 25 MB, too big to open here. It stays encrypted and safe. Open it from Finder, or export a copy."),
       el("div", { class: "sel-btns" },
         el("button", { class: "btn", type: "button", onclick: () => revealInFinder(path) }, "Show in Finder"),
         el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, "Export…")));
@@ -1763,7 +1763,7 @@ async function openAI(start, path) {
       give: async (ask) => {
         const j = await api("handtoai", { path, ask });
         navigator.clipboard.writeText("Do my Phygital Memory tasks.").catch(() => {});
-        toastOk("Added to AI tasks. \u201cDo my Phygital Memory tasks.\u201d is copied, to paste in your AI chat.");
+        toastOk("Added to AI tasks. Copied \u201cDo my Phygital Memory tasks.\u201d Paste it in your AI chat.");
         return j.todo || [];
       },
       set: async (id, done) => (await api("aitodoset", { id, done })).todo || [],

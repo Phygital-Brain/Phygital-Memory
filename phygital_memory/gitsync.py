@@ -32,19 +32,67 @@ IGNORE = ".DS_Store\n._*\n.encryptor-*\n*.tmp\n"
 # Every file is scrambled: git must never merge inside one (a small one can look like text to it and get spliced).
 ATTRIBUTES = "* binary\n"
 LOST = "phygital-lost-folders.json"   # in .git: folder IDs that lost a clash, for the app to fold back in
-README = """# {name} · Phygital Memory
+README_MARK = "<!-- phygital-memory-readme 3 -->"   # the app updates its own README when this goes up
+README = README_MARK + """
+# {name} · Phygital Memory
 
-This repo holds an encrypted Phygital Memory folder. Everything in it is scrambled: note names and contents can
-only be read with the folder's password, in the Phygital Memory app.
+For you, if this repo holds your notes. It explains what the files are and how to keep them safe.
 
-**Please don't delete or change these files.** The app keeps them in step by itself. Editing, moving or deleting a
-file here by hand can break notes.
+This repo is a copy of a Phygital Memory folder: encrypted notes that live on your Mac and are kept in step here.
+Your notes, their names and the folders are encrypted. They can only be read with the folder's password, in the
+Phygital Memory app.
 
-**Keep this repo private.** Even scrambled, a public repo shows how many files there are, their sizes and when they
-change, and anyone could copy them and try to guess the password. The app checks before every upload and stops
-syncing if the repo ever becomes public.
+> [!IMPORTANT]
+> Keep this repo private. The app checks before every upload and stops syncing if the repo ever becomes
+> public. Please don't change that on GitHub.
 
-To open the notes on another Mac: in Phygital Memory, open the folder menu and choose "Open from GitHub…".
+## What is in this repo
+
+| What | What it is |
+|---|---|
+| `d/` | Your notes, files and folders, encrypted. Names and contents are unreadable without the password. |
+| `masterkey.cryptomator` | The folder's key, locked with your password. Without the password it is useless. |
+| `vault.cryptomator` | Settings for the encryption. |
+| `AGENTS.md`, `CLAUDE.md` | Short notes for AI apps: use Phygital Memory, don't open these files directly. |
+| `Open in Phygital Memory.phygitalmemory` | Double-click it on a Mac to open the folder in the app. |
+| `README.md`, `.gitignore`, `.gitattributes` | This page, and two small files that tell git how to handle the encrypted files. |
+
+## What GitHub can see
+
+GitHub never sees your note names or what you wrote. It can see how many files there are, how big they are, how
+the folders nest, and when things change. Keep the repo private for that reason.
+
+> [!WARNING]
+> Don't edit, move, rename or delete files here by hand, on GitHub or in a copy of the repo. The app keeps them in
+> step by itself. A change made by hand can break notes.
+
+## Open your notes on another Mac
+
+1. Install Phygital Memory on that Mac.
+2. Open the folder menu at the top of the sidebar and choose **Open from GitHub…**.
+3. Sign in with GitHub if the app asks, type `{repo}` and choose where to keep it.
+4. Unlock it with the folder's password.
+
+## Stop syncing, or delete this repo
+
+In the app, open **Where it's stored** and press **Stop GitHub sync…**. Your notes stay on your Mac and nothing more
+is sent here. The app never deletes this repo. To delete it, open **Settings** on this repo's GitHub page and press
+**Delete this repository** at the bottom.
+
+> [!CAUTION]
+> Deleting this repo removes this copy for good. Make sure your Mac still has the folder first.
+
+## If something goes wrong
+
+- **The same note was changed on two Macs:** both versions are kept. The other one appears next to the note as
+  "name (conflict date)", and your AI apps get a task to merge them.
+- **A file is over 95 MB:** GitHub doesn't take files that big, so it stays on your Mac only. The app lists it.
+- **Syncing stopped:** open **Where it's stored** in the app. It says why, for example when the repo became public.
+
+> [!CAUTION]
+> If the password is lost, nobody can open these notes, including you, GitHub and the app's makers. There is no
+> reset. Keep the password somewhere safe, like a password manager.
+
 """
 EXTRA_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"   # an app from the Dock has a short PATH
 
@@ -124,7 +172,7 @@ class GitSync:
             raise RuntimeError("This folder is already a git repo.")
         if signed_in() is None:
             raise RuntimeError("Sign in with GitHub first.")
-        about = "Phygital Memory: an encrypted notes folder (scrambled files only)."
+        about = "Phygital Memory: an encrypted notes folder."
         if _own():
             code, made = github_auth.api("/user/repos", method="POST", body={
                 "name": self.repo, "private": True, "has_issues": False, "has_wiki": False, "has_projects": False,
@@ -150,8 +198,15 @@ class GitSync:
         """The plain files the repo needs next to the scrambled ones: what to leave out, binary only, a README."""
         (self.folder / ".gitignore").write_text(IGNORE)
         (self.folder / ".gitattributes").write_text(ATTRIBUTES)
-        if not (self.folder / "README.md").exists():
-            (self.folder / "README.md").write_text(README.format(name=name))
+        self.update_readme(name)
+
+    def update_readme(self, name: str) -> None:
+        """Write the README, or bring the app's own older one up to date. A README someone wrote is left alone."""
+        p = self.folder / "README.md"
+        old = p.read_text(errors="replace") if p.exists() else None
+        if old is None or (old.startswith("# ") and "Phygital Memory" in old[:200]) or \
+                (old.startswith("<!-- phygital-memory-readme") and not old.startswith(README_MARK)):
+            p.write_text(README.format(name=name, repo=self.repo))
 
     @staticmethod
     def clone(repo: str, dest: Path, branch: str = "main") -> "GitSync":

@@ -65,14 +65,14 @@ export function openStorage(ctx) {
         local ? null : el("button", { class: "btn small", type: "button", onclick: async () => {
           const p = await ctx.pick("Choose a place on this Mac for the folder"); if (p) moveTo(p, "this Mac");
         } }, "Move to a place on this Mac…")),
-      option("cloud", "This Mac + cloud", "Kept on this Mac and synced by your cloud app. The cloud only ever sees scrambled files.", !!s.cloud && !s.github,
+      option("cloud", "This Mac + cloud", "On this Mac, and synced by your cloud app. The cloud only sees encrypted files.", !!s.cloud && !s.github,
         el("div", {}, cloudCards,
           el("button", { class: "btn small st-other", type: "button", onclick: async () => {
             const p = await ctx.pick("Choose any synced folder"); if (p) moveTo(p, "that folder");
           } }, "Other synced folder…"))),
-      option("lock", "This Mac + private GitHub", "Kept on this Mac and in a private GitHub repo, in step every few seconds. GitHub only ever sees scrambled files. Best for notes and documents: files over 95 MB stay on this Mac.", !!s.github, githubBody),
-      option("sparkle", "Cloud only", "Nothing kept on this Mac: the app talks to your cloud directly (Nextcloud, WebDAV, S3). Coming next.", false),
-      el("div", { class: "st-note" }, "Moving locks the folder first, so only scrambled files move. You unlock it again after."),
+      option("lock", "This Mac + private GitHub", "On this Mac, and in a private GitHub repo, synced every few seconds. GitHub only sees encrypted files. Files over 95 MB stay on this Mac.", !!s.github, githubBody),
+      option("sparkle", "Cloud only", "Nothing on this Mac: the app reads straight from your cloud (Nextcloud, WebDAV, S3). Not ready yet.", false),
+      el("div", { class: "st-note" }, "Moving locks the folder first, so only encrypted files move. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };
@@ -232,7 +232,7 @@ export function openGithubSignIn(ctx) {
     const card = el("div", { class: "dlg gh-signin", role: "dialog" },
       el("div", { class: "dlg-title" }, "Sign in with GitHub"),
       line, code, el("div", { class: "gh-row" }, copy),
-      el("div", { class: "mf-hint" }, "The app gets its own key from GitHub, kept in this Mac's Keychain. You can take it back any time on GitHub, under Settings › Applications."),
+      el("div", { class: "mf-hint" }, "The app gets its own GitHub key and keeps it in this Mac's Keychain. You can remove it on GitHub any time: Settings › Applications."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => finish(null) }, "Cancel")));
     (async () => {

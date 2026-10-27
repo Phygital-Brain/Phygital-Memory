@@ -35,7 +35,7 @@ def is_vault(path: Path) -> bool:
 OPENER = "Open in Phygital Memory.phygitalmemory"
 GUIDE = """# This folder is locked
 
-Everything in this folder is encrypted. The files under `d/` are scrambled, and `masterkey.cryptomator` holds the
+Everything in this folder is encrypted. The files under `d/` are encrypted and unreadable without the password, and `masterkey.cryptomator` holds the
 key, locked with the owner's password. Nothing here can be read by opening the files.
 
 ## How an AI tool reads these notes
@@ -57,15 +57,16 @@ key, locked with the owner's password. Nothing here can be read by opening the f
 
 
 def write_guides(path: Path) -> None:
-    """Add the guide (AGENTS.md, and CLAUDE.md pointing to it) and the opener file if they are missing."""
+    """Add the guide (AGENTS.md, and CLAUDE.md pointing to it) and the opener file if they are missing, and bring
+    the app's older guide up to date."""
     path = Path(path)
     files = {"AGENTS.md": GUIDE, "CLAUDE.md": "@AGENTS.md\n",
              OPENER: json.dumps({"app": "Phygital Memory", "kind": "locked folder", "version": 1}) + "\n"}
     for name, text in files.items():
         f = path / name
         try:
-            if not f.exists():
-                f.write_text(text)
+            if not f.exists() or (name == "AGENTS.md" and "are scrambled" in f.read_text(errors="replace")):
+                f.write_text(text)   # missing, or the app's older guide: write the current one
         except OSError:
             pass   # a read-only place: the folder still works without them
 
@@ -83,6 +84,10 @@ class Folder:
 
     def start_sync(self) -> None:
         self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen)
+        try:
+            self.sync.update_readme(self.name)   # an older README from the app goes up to date with the next sync
+        except OSError:
+            pass
         self.sync.start()
 
     def info(self) -> dict:
@@ -147,7 +152,7 @@ class Folders:
     def add_existing(self, path: str) -> dict:
         p = Path(path).expanduser().resolve()
         if not is_vault(p):
-            raise ValueError("That folder isn't a locked Phygital Memory (or Cryptomator) folder.")
+            raise ValueError("That folder isn't a locked Phygital Memory folder.")
         with self._lock:
             for f in self.items.values():
                 if f.path == p:
