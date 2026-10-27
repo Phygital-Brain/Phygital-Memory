@@ -82,7 +82,23 @@ class Memory:
                 keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password).wipe()
                 self._touch()
                 return self.status()
-            key = keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password)
+            self.read_only = False   # the password is the owner's way in: full access
+            return self._open_with(keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password))
+
+    def unlock_with_key(self, key, read_only: bool = False) -> dict:
+        """Open with the memory's key itself: a shared memory opened with the person's own key (no password).
+        read_only: they may view it, not change it."""
+        with self._lock:
+            if self._con is not None:
+                key.wipe()
+                self.read_only = read_only
+                self._touch()
+                return self.status()
+            self.read_only = read_only
+            return self._open_with(key)
+
+    def _open_with(self, key) -> dict:
+        with self._lock:
             try:
                 config = keys.verify_vault_config((self.folder / "vault.cryptomator").read_bytes(), key)
                 tree = Tree(self.folder, key, config)
@@ -91,7 +107,8 @@ class Memory:
             except BaseException:
                 key.wipe()
                 raise
-            self._key, self._tree, self._writer, self._con = key, tree, Writer(tree), con
+            self._key, self._tree, self._con = key, tree, con
+            self._writer = _NoWrites() if getattr(self, "read_only", False) else Writer(tree)
             self._touch()
             self._fix_clash_copies()
             try:
@@ -916,7 +933,16 @@ class Memory:
             except (NotFound, ValueError):
                 return {}
 
+    @property
+    def key_raw(self) -> bytes:
+        """The memory's key (both halves), for locking a copy to a person's own key when sharing. Unlocked only."""
+        with self._lock:
+            self._need_open()
+            return self._key.raw
+
     def save_prefs(self, prefs: dict) -> dict:
+        if getattr(self, "read_only", False):   # view only: settings live for this session, the memory stays as it is
+            return prefs
         data = json.dumps(prefs, ensure_ascii=False).encode()
         if len(data) > 200_000:
             raise ValueError("Settings too big.")
@@ -1075,3 +1101,12 @@ def _clean_path(rel: str, md: bool = True) -> str:
     if any(re.search(r'[<>:"|?*\x00-\x1f]', p) for p in parts):
         raise ValueError("That name has characters a note name can't use.")
     return "/".join(parts)
+
+
+class _NoWrites:
+    """The writer of a shared memory opened view only: every change is refused."""
+
+    def __getattr__(self, name):
+        def refuse(*a, **k):
+            raise ValueError("You can view this shared memory, not change it.")
+        return refuse
