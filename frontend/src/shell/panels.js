@@ -59,7 +59,7 @@ export function openStorage(ctx) {
       : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), "Back up to GitHub"));
 
     const card = el("div", { class: "dlg storage", role: "dialog" },
-      el("div", { class: "dlg-title" }, `Where "${ctx.name}" is stored`),
+      el("div", { class: "dlg-title" }, `Storage and backup: ${ctx.name}`),
       el("div", { class: "st-where" }, icon(s.cloudOnly || s.cloud || s.webdav ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
         s.cloudOnly ? null : btn("Show encrypted files", () => ctx.reveal())),
       s.offline ? el("div", { class: "st-warn" },

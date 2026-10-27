@@ -59,7 +59,7 @@ export function switcherItems(ctx) {
     actionRow("grid", "Manage memories", ctx.manage)];
   if (cur) {
     items.push({ sep: true },
-      ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", "Where it's stored", ctx.storage)] : []),
+      ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", "Storage and backup", ctx.storage)] : []),
       ...(ctx.ai ? [actionRow("pulse", "AI tasks and activity", ctx.ai)] : []),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
       ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),
