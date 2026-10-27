@@ -31,11 +31,12 @@ class Exists(VaultError):
     pass
 
 
-def _write_atomic(path: Path, data: bytes) -> None:
+def _write_atomic(path: Path, data) -> None:
+    """data is bytes, or a function that writes into the open file (for big files, a part at a time)."""
     tmp = path.parent / f"{TEMP_PREFIX}{uuid.uuid4().hex}.tmp"
     try:
         with open(tmp, "xb") as f:
-            f.write(data)
+            data(f) if callable(data) else f.write(data)
             f.flush()
             os.fsync(f.fileno())
         for attempt in range(20):   # Windows refuses while another program (a sync app, an editor) has it open
@@ -92,6 +93,25 @@ class Writer:
                 raise
         else:
             _write_atomic(stored, ciphertext)
+        return Entry(name, "file", stored, None, parent.dir_id)
+
+    def write_file_from(self, parent: Entry, name: str, src: Path) -> Entry:
+        """A new file, encrypted straight from a file on disk a part at a time, so its size doesn't matter."""
+        stored, full, short = self._free(parent, name)
+
+        def fill(f):
+            with open(src, "rb") as s:
+                self.tree.content.encrypt_stream(s, f)
+        if short:
+            stored.mkdir()
+            try:
+                _write_atomic(stored / "name.c9s", full.encode("ascii"))
+                _write_atomic(stored / "contents.c9r", fill)
+            except BaseException:
+                shutil.rmtree(stored, ignore_errors=True)
+                raise
+        else:
+            _write_atomic(stored, fill)
         return Entry(name, "file", stored, None, parent.dir_id)
 
     def copy_file(self, entry: Entry, parent: Entry, name: str) -> Entry:

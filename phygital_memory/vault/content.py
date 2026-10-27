@@ -153,6 +153,28 @@ class Content:
             f.seek(self._c.header_size + last * self.chunk_size)
             self._c.open(content_key, nonce, last, f.read(self.chunk_size))
 
+    def encrypt_stream(self, src, dst) -> None:
+        """Encrypt from one open file into another, 32 KiB at a time: any size, little memory."""
+        content_key = os.urandom(32)
+        nonce = os.urandom(self._c.nonce_size)
+        dst.write(self._c.header(content_key, nonce))
+        index, part = 0, src.read(CLEAR_CHUNK)
+        while True:
+            dst.write(self._c.seal(content_key, nonce, index, part))
+            index += 1
+            part = src.read(CLEAR_CHUNK)
+            if not part:
+                break
+
+    def decrypt_stream(self, src, dst, size: int) -> None:
+        """Decrypt from one open file into another, a part at a time. Every part is checked before it is written."""
+        self.cleartext_size(size)
+        nonce, content_key = self._c.open_header(src.read(self._c.header_size))
+        index = 0
+        while chunk := src.read(self.chunk_size):
+            dst.write(self._c.open(content_key, nonce, index, chunk))
+            index += 1
+
     def encrypt(self, clear: bytes) -> bytes:
         content_key = os.urandom(32)
         nonce = os.urandom(self._c.nonce_size)

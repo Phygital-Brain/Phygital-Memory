@@ -129,6 +129,14 @@ class Tree:
         path = entry.stored / "contents.c9r" if entry.stored.is_dir() else entry.stored
         return self.content.decrypt(path.read_bytes())
 
+    def read_file_to(self, entry: Entry, dst) -> None:
+        """Decrypt a file into an open file, a part at a time (for files too big to hold in memory)."""
+        if entry.kind != "file":
+            raise VaultError(f"'{entry.name}' isn't a file.")
+        path = self.contents_path(entry)
+        with open(path, "rb") as src:
+            self.content.decrypt_stream(src, dst, path.stat().st_size)
+
     @staticmethod
     def contents_path(entry: Entry) -> Path:
         """The encrypted contents file of a file entry (inside the .c9s folder for long names)."""

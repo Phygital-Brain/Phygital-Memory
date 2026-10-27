@@ -2,6 +2,7 @@
 
 Run: uv run python test_import_export.py
 """
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -33,10 +34,23 @@ try:
     (src / "Trip" / ".hidden").mkdir()
     (src / "Trip" / ".hidden" / "x.md").write_text("hidden\n")
     (src / "note.md").write_text("loose note\n")
-    (src / "big.bin").write_bytes(b"0" * (25_000_000 + 1))
+    big = os.urandom(1 << 20) * 40 + b"tail"   # about 42 MB, over the old 25 MB limit
+    (src / "big.bin").write_bytes(big)
+    for n in (0, 1, 32 * 1024, 32 * 1024 + 1, 3 * 32 * 1024):   # sizes around the 32 KiB parts
+        (src / f"edge-{n}.bin").write_bytes(os.urandom(n))
 
     j = m.import_paths("Projects", [str(src / "note.md"), str(src / "big.bin")])
-    check(j["imported"] == ["Projects/note.md"] and j["skipped"] == 1, "files: the note comes in, the 25 MB+ file is skipped", j)
+    check(j["imported"] == ["Projects/note.md", "Projects/big.bin"] and j["skipped"] == 0, "files: the note and a 42 MB file come in", j)
+    check(m._tree.file_size(m._tree.resolve("Projects/big.bin")) == len(big), "the big file has the right size inside")
+    try:
+        m.read_bytes("Projects/big.bin")
+        check(False, "a file over 25 MB isn't pulled into the app whole")
+    except ValueError:
+        check(True, "a file over 25 MB isn't pulled into the app whole")
+    edges = [str(src / f"edge-{n}.bin") for n in (0, 1, 32 * 1024, 32 * 1024 + 1, 3 * 32 * 1024)]
+    j = m.import_paths("", edges)
+    check(all(m.read_bytes(f"edge-{n}.bin") == (src / f"edge-{n}.bin").read_bytes() for n in (0, 1, 32 * 1024, 32 * 1024 + 1, 3 * 32 * 1024)),
+          "files of every size around the 32 KiB parts read back exactly")
     j = m.import_paths("Projects", [str(src / "note.md")])
     check(j["imported"] == ["Projects/note 2.md"] and m.read("Projects/note.md") == "loose note\n",
           "a taken name gets ' 2', nothing replaced", j)
@@ -54,6 +68,8 @@ try:
 
     out = tmp / "out"
     out.mkdir()
+    m.export("Projects/big.bin", str(out / "big.bin"))
+    check((out / "big.bin").read_bytes() == big, "export the 42 MB file: exactly the same bytes")
     check(m.export("Projects/Trip/Plan.md", str(out / "Plan.md")) == 1 and (out / "Plan.md").read_text() == "# Plan\n\nwombat itinerary\n",
           "export a note: a readable copy")
     n = m.export("Projects/Trip", str(out))

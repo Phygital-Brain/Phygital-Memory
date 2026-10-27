@@ -933,8 +933,8 @@ async function importInto(dir, wholeFolder) {
     if (dir) state.open.add(dir);
     await loadFiles();
     const n = j.imported.length;
-    if (n) toastOk(`Imported ${n} file${n === 1 ? "" : "s"}, encrypted.` + (j.skipped ? ` Skipped ${j.skipped} (hidden or over 25 MB).` : ""));
-    else toastErr(j.skipped ? `Nothing imported: ${j.skipped} skipped (hidden or over 25 MB).` : "Nothing to import there.");
+    if (n) toastOk(`Imported ${n} file${n === 1 ? "" : "s"}, encrypted.` + (j.skipped ? ` Skipped ${j.skipped} hidden.` : ""));
+    else toastErr(j.skipped ? `Nothing imported: only hidden files there.` : "Nothing to import there.");
   } catch (e) { toastErr(e.message); }
 }
 
@@ -1111,7 +1111,7 @@ async function openPath(path, opts = {}) {
   if (!tab) {
     try {
       if (isMd(path)) tab = await withLoading(makeNoteTab(path));
-      else if (isImg(path)) tab = makeImageTab(path);
+      else if (isImg(path) && !tooBigToOpen(path)) tab = makeImageTab(path);
       else tab = makeFileTab(path);
     } catch (e) { toastErr(e.message); return; }
     if (state.tabs.some((t) => t.path === path)) { tab.pane.remove(); tab = state.tabs.find((t) => t.path === path); }
@@ -1130,6 +1130,8 @@ function makeImageTab(path) {
 
 // Other files open in a tab: CSV/TSV as an editable table, plain text and code in an editable box (both autosave
 // like notes), PDF, video and audio as previews, anything else as a card. Decrypted into memory only.
+const MAX_OPEN = 25_000_000;   // same as the server's limit for opening a file in the app
+const tooBigToOpen = (path) => (state.files.find((f) => f.path === path)?.size || 0) > MAX_OPEN;
 const TEXT_EXT = /\.(txt|json|js|mjs|ts|py|rb|go|rs|java|c|h|cpp|css|html|xml|yml|yaml|toml|ini|sh|log|sql)$/i;
 function makeFileTab(path) {
   const body = el("div", { class: "file-view" });
@@ -1137,6 +1139,13 @@ function makeFileTab(path) {
   paneHost.append(pane);
   const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, `Can't open this file: ${e.message}`)); };
   const tab = { path, kind: "image", make: "file", pane, dirty: false, folder: currentFolder() };
+  if (tooBigToOpen(path)) {   // never pulled into the app whole: it opens from Finder, or as an exported copy
+    body.replaceChildren(el("p", { class: "file-note" }, "This file is over 25 MB, too big to open inside the app. It's safe and encrypted. Open it from Finder, or export a copy."),
+      el("div", { class: "sel-btns" },
+        el("button", { class: "btn", type: "button", onclick: () => revealInFinder(path) }, "Show in Finder"),
+        el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, "Export…")));
+    return tab;
+  }
   if (CSV.test(path) || TEXT_EXT.test(path)) {
     editableFile(tab, body, fail);
     return tab;

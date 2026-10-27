@@ -415,7 +415,10 @@ class Memory:
     def read_bytes(self, rel: str) -> bytes:
         with self._lock:
             self._need_open()
-            return self._tree.read_file(self._tree.resolve(_clean_path(rel, md=False)))
+            entry = self._tree.resolve(_clean_path(rel, md=False))
+            if self._tree.file_size(entry) > MAX_FILE_BYTES:
+                raise ValueError("Too big to open in the app (over 25 MB). Use Show in Finder, or Export a copy.")
+            return self._tree.read_file(entry)
 
     def write_bytes(self, rel: str, data: bytes, base: bytes | None = None) -> str:
         """Write any file at exactly this path (replacing it). Notes go through save(), so they keep versions
@@ -475,19 +478,31 @@ class Memory:
             raise ValueError("That file is too big (25 MB at most).")
         with self._lock:
             self._need_open()
-            parent, name = self._make_parents(rel)
-            taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
-            stem, dot, ext = name.rpartition(".") if "." in name else (name, "", "")
-            n = 1
-            while name in taken:
-                n += 1
-                name = f"{stem} {n}{dot}{ext}"
+            parent, name = self._free_name(rel)
             self._writer.write_file(parent, name, data)
             return "/".join(rel.split("/")[:-1] + [name])
 
+    def _free_name(self, rel: str):
+        """The folder for rel, and rel's name or "name 2.ext" (3, 4...) if that's taken."""
+        parent, name = self._make_parents(rel)
+        taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
+        stem, dot, ext = name.rpartition(".") if "." in name else (name, "", "")
+        n = 1
+        while name in taken:
+            n += 1
+            name = f"{stem} {n}{dot}{ext}"
+        return parent, name
+
+    def _import_file(self, rel: str, src: Path) -> str:
+        """A file from the Mac, encrypted straight from disk a part at a time: any size."""
+        parent, name = self._free_name(_clean_path(rel, md=False))
+        self._writer.write_file_from(parent, name, src)
+        return "/".join(rel.split("/")[:-1] + [name])
+
     def import_paths(self, into: str, sources: list[str]) -> dict:
         """Copy files and folders from the Mac into this folder, encrypted. Never replaces anything: a name that is
-        taken gets " 2". Hidden files, links and files over 25 MB are skipped. Returns what came in."""
+        taken gets " 2". Any size works (big files are encrypted a part at a time). Hidden files and links are
+        skipped. Returns what came in."""
         into = _clean_path(into, md=False) if into else ""
         done, skipped = [], 0
         with self._lock:
@@ -505,15 +520,15 @@ class Memory:
                             continue
                         if f.is_dir():
                             self.make_folder(f"{top}/{rel.as_posix()}")
-                        elif f.stat().st_size > MAX_FILE_BYTES or len(done) >= MAX_IMPORT:
+                        elif len(done) >= MAX_IMPORT:
                             skipped += 1
                         else:
-                            done.append(self.save_bytes(f"{top}/{rel.as_posix()}", f.read_bytes()))
+                            done.append(self._import_file(f"{top}/{rel.as_posix()}", f))
                 elif src.is_file():
-                    if src.stat().st_size > MAX_FILE_BYTES or len(done) >= MAX_IMPORT:
+                    if len(done) >= MAX_IMPORT:
                         skipped += 1
                     else:
-                        done.append(self.save_bytes(f"{into}/{src.name}".lstrip("/"), src.read_bytes()))
+                        done.append(self._import_file(f"{into}/{src.name}".lstrip("/"), src))
             self._synced = 0   # index the new notes now
             self._sync()
         return {"imported": done, "skipped": skipped}
@@ -536,7 +551,8 @@ class Memory:
             self._need_open()
             entry = self._tree.resolve(rel)
             if entry.kind == "file":
-                Path(dest).write_bytes(self._tree.read_file(entry))
+                with open(dest, "wb") as out_file:
+                    self._tree.read_file_to(entry, out_file)
                 return 1
             out, n = Path(dest) / entry.name, 1
             while out.exists():
@@ -552,7 +568,8 @@ class Memory:
                     target.mkdir(parents=True, exist_ok=True)
                 elif e.kind == "file":
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_bytes(self._tree.read_file(e))
+                    with open(target, "wb") as out_file:
+                        self._tree.read_file_to(e, out_file)
                     count += 1
             out.mkdir(parents=True, exist_ok=True)   # an empty folder still comes out as a folder
             return count
