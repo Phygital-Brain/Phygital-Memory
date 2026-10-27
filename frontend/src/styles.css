@@ -226,8 +226,6 @@ input:focus-visible { outline: none; }
 /* tab bar extras */
 .tab > svg { color: var(--text-3); flex: none; }
 .tab-graph { margin-right: 4px; flex: none; }
-.banner-host:empty { display: none; }
-.banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 16px; background: color-mix(in srgb, var(--warning) 16%, var(--bg-app)); border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); font-size: 12.5px; }
 
 /* toasts */
 .toasts { position: fixed; z-index: 90; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }

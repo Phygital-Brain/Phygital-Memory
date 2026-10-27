@@ -310,7 +310,7 @@ function showUnlock() {
 }
 
 // ---------- app shell ----------
-let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, bannerHost, noteTools, blPill, sbName, sbBadge, sbPath, sbTile, graphRowEl = null;
+let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, noteTools, blPill, sbName, sbBadge, sbPath, sbTile, graphRowEl = null;
 
 function drawSwitcher() {
   if (!sbName) return;
@@ -399,7 +399,7 @@ function buildApp() {
     treeEl,
     el("div", { class: "sb-foot" },
       statusBar(),
-      el("span", { class: "sb-foot-btns" }, ib("trash", "Trash", openTrashPanel), finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere))),
+      el("span", { class: "sb-foot-btns" }, ib("unlock", "Unlocked. Click to lock this folder", () => lockFolder()), ib("trash", "Trash", openTrashPanel), finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -425,7 +425,6 @@ function buildApp() {
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
   paneHost.append(statusEl, noteTools, blPill);
 
-  bannerHost = el("div", { class: "banner-host" });
   // A small search bar beside the graph button: typing here opens the search page with what you typed.
   const topSearchInput = el("input", { class: "top-search-input", type: "search", placeholder: "Search", spellcheck: "false", "aria-label": "Search notes" });
   topSearchInput.addEventListener("keydown", (e) => {
@@ -438,7 +437,7 @@ function buildApp() {
   });
   const searchBtn = el("label", { class: "top-search", title: "Search every note (⇧⌘F)" },
     icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
-  appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, bannerHost, el("div", { class: "tabbar" }, tabsEl,
+  appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, el("div", { class: "tabbar" }, tabsEl,
     el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 17)),
     el("span", { class: "tabbar-gap", "data-tauri-drag-region": "" }), searchBtn), paneHost));
 }
@@ -526,9 +525,6 @@ function drawFinder() {
   finderBtn.classList.toggle("hidden", !finder.available);
   finderBtn.classList.toggle("on", finder.shown);
   finderBtn.title = finder.shown ? "Close the Finder folder" : "Show in Finder";
-  bannerHost.replaceChildren(...(finder.shown ? [el("div", { class: "banner", role: "alert" },
-    el("span", {}, el("b", {}, "Open in Finder"), " · any app can read these files", curInfo() && folderList.length > 1 ? ` · ${curInfo().name}` : ""),
-    el("button", { class: "btn small", onclick: hideFinder }, "Close"))] : []));
   clearInterval(finderTimer); finderTimer = null;
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
 }
