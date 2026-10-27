@@ -32,7 +32,11 @@ export function openStorage(ctx) {
     const githubBody = s.github
       ? el("div", { class: "st-gh" },
           el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · synced ${ago(gs && gs.ago)}`),
-          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null)
+          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB, so ${gs.too_big.length === 1 ? "it stays" : "they stay"} on this Mac only.`) : null,
+          el("div", {}, el("button", { class: "btn small st-stop", type: "button", onclick: async () => {
+            err.textContent = ""; busy(true);
+            try { if (await ctx.stopGithub(s.github)) done(true); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
+          } }, "Stop GitHub sync…")))
       : el("div", {}, el("div", { class: "st-gh-note" }, "Nothing talks to GitHub until you press the button."),
           el("button", { class: "btn gh-btn", type: "button", onclick: async () => {
             err.textContent = ""; busy(true);

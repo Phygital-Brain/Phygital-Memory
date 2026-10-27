@@ -478,6 +478,14 @@ async def api(request: Request) -> Response:
             return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
+        if action == "stopgithub":   # Mac only from now on; the repo on GitHub stays until the person deletes it there
+            return _ok({"repo": await asyncio.to_thread(folders.stop_github, f.id)})
+        if action == "openrepo":   # the repo's settings on github.com (where it can be deleted), in the browser
+            repo = str(body.get("repo", ""))
+            if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repo):
+                return _ok({"error": "Bad repo name."}, 400)
+            await asyncio.to_thread(subprocess.run, ["open", f"https://github.com/{repo}/settings"], timeout=30)
+            return _ok({"ok": True})
         if action == "togithub":   # keep it in a new private GitHub repo (scrambled files only)
             return _ok({"folder": await asyncio.to_thread(folders.to_github, f.id)})
         if action == "download":   # fetch the files a cloud app left only in the cloud

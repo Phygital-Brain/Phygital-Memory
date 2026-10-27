@@ -10,8 +10,10 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 from . import activity
@@ -179,6 +181,30 @@ class Folders:
             self._save()
         f.start_sync()
         return f.info()
+
+    def stop_github(self, fid: str) -> str:
+        """Stop keeping this folder in GitHub: it becomes Mac only. The repo on GitHub is left alone (the person deletes
+        it there if they want). The sync's own files here (.git and the plain helper files) go to the Mac's Trash, so
+        nothing is erased; the notes themselves don't change. Returns the repo, "owner/name"."""
+        f = self.get(fid)
+        if not f.github:
+            raise ValueError("This folder isn't kept in GitHub.")
+        repo = f.github
+        if f.sync:
+            f.sync.stop()
+            f.sync = None
+        trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
+        stamp = time.strftime("%Y-%m-%d %H.%M.%S")
+        for name in (".git", ".gitignore", ".gitattributes", "README.md"):
+            p = f.path / name
+            if not p.exists() or (name == "README.md" and "Phygital Memory" not in p.read_text(errors="replace")[:200]):
+                continue
+            dest = trash / f"{f.name} {name} (GitHub sync, {stamp})"
+            shutil.move(str(p), str(dest))
+        f.github = None
+        with self._lock:
+            self._save()
+        return repo
 
     def from_github(self, repo: str, parent: Path) -> dict:
         """Another Mac: bring a private "…-Phygital-Memory" repo down into parent, and add it to the list."""

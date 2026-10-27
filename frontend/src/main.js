@@ -624,6 +624,16 @@ async function openStoragePanel() {
   const moved = await openStorage({
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
+    stopGithub: async (repo) => {
+      const sure = await confirmDialog(`Stop keeping "${info.name}" in GitHub? It becomes Mac only: your notes stay here, untouched, and nothing more goes to GitHub. The repo ${repo} is NOT deleted by the app: its scrambled copy stays on GitHub until you delete it there.`, "Stop GitHub sync", true);
+      if (!sure) return false;
+      await api("stopgithub");
+      refreshBar();
+      if (await confirmDialog(`GitHub sync stopped. "${info.name}" is on this Mac only. Open ${repo} on GitHub to delete it? (Settings, at the bottom: Delete this repository.)`, "Open on GitHub", false)) {
+        await api("openrepo", { repo });
+      }
+      return true;
+    },
     toGithub: async () => {
       let account = (await api("githubaccount")).account;   // the first time the app talks to GitHub
       if (!account) {
