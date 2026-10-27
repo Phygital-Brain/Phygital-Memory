@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 
+from . import keychain
 from .folders import STATE
 
 FILE = STATE / "approvals.jsonl"
@@ -23,13 +24,10 @@ _key: bytes | None = None
 def _seal_key() -> bytes:
     global _key
     if _key is None:
-        r = subprocess.run(["security", "find-generic-password", "-a", "seal", "-s", KEYCHAIN, "-w"],
-                           capture_output=True, text=True)
-        k = r.stdout.strip() if r.returncode == 0 else ""
+        k = (keychain.read(KEYCHAIN, "seal") or "").strip()
         if not k:
             k = secrets.token_hex(32)
-            subprocess.run(["security", "add-generic-password", "-U", "-a", "seal", "-s", KEYCHAIN, "-w", k],
-                           capture_output=True, check=True)
+            keychain.save(KEYCHAIN, "seal", k)
         _key = bytes.fromhex(k)
     return _key
 

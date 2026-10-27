@@ -6,7 +6,7 @@ case "$1" in
   can) [ ! -f "$D/none" ] ;;
   ask) yes "$2" ;;
   save) cat > "$D/kept-$3" ;;
-  get) yes "$4" || exit 3; [ -f "$D/kept-$3" ] && cat "$D/kept-$3" ;;
+  get) yes unlock || exit 3; [ -f "$D/kept-$3" ] && cat "$D/kept-$3" ;;
   has) [ -f "$D/kept-$3" ] ;;
   forget) rm -f "$D/kept-$3" ;;
   *) exit 2 ;;

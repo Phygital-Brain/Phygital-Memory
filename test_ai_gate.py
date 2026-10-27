@@ -129,6 +129,19 @@ api("aiappremove", {"id": aid}, P, fid)
 code, _, _ = http("POST", "/mcp", {}, {"Authorization": f"Bearer {key}", "Accept": "application/json, text/event-stream"})
 check(code == 401, "a removed app is cut off at once")
 
+# ---- sign-in codes only go back to an app on this Mac; pages run only their own scripts ----
+code, _, raw = http("POST", "/register", {"redirect_uris": ["https://evil.example/cb"], "client_name": "Claude Code",
+                                          "token_endpoint_auth_method": "none", "grant_types": ["authorization_code"],
+                                          "response_types": ["code"]})
+check(code == 400 and b"invalid_redirect_uri" in raw, "a sign-in that would return to a website is refused", raw[:200])
+code, _, raw = http("POST", "/register", {"redirect_uris": ["claude://claude.ai/mcp-auth-callback/sdk"], "client_name": "C",
+                                          "token_endpoint_auth_method": "none", "grant_types": ["authorization_code"],
+                                          "response_types": ["code"]})
+check(code == 201, "an app's own link (claude://) is fine", raw[:200])
+code, hdrs, raw = http("GET", "/")
+csp = hdrs.get("Content-Security-Policy", "")
+check("'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";")[0] and "nonce-" in csp, "the page allows only its own scripts", csp)
+
 # ---- MCP sign-in: the AI app registers, the person presses Allow in the app ----
 code, _, raw = http("POST", "/register", {"redirect_uris": ["http://127.0.0.1:9/cb"], "client_name": "Test AI",
                                           "token_endpoint_auth_method": "none",

@@ -99,7 +99,10 @@ EXTRA_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"   # an app from th
 
 
 def _env() -> dict:
-    return {**os.environ, "PATH": os.environ.get("PATH", "") + ":" + EXTRA_PATH, "GIT_TERMINAL_PROMPT": "0"}
+    env = {**os.environ, "PATH": os.environ.get("PATH", "") + ":" + EXTRA_PATH, "GIT_TERMINAL_PROMPT": "0"}
+    if _own():   # the GitHub key, only for git's own run (git's credential helper below reads it from here)
+        env["PM_GITHUB_KEY"] = github_auth.saved_token() or ""
+    return env
 
 
 def gh() -> str | None:
@@ -124,7 +127,7 @@ def credential_helper() -> str:
     """How git gets GitHub's password for a push or pull, without it ever being written down or passed around."""
     if _own():
         return ("!f() { test \"$1\" = get || exit 0; echo username=x-access-token; "
-                f"echo \"password=$(security find-generic-password -s '{github_auth.KEYCHAIN}' -w)\"; }}; f")
+                "echo \"password=$PM_GITHUB_KEY\"; }; f")
     return f"!{gh()} auth git-credential" if gh() else ""
 
 

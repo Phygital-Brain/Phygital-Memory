@@ -17,10 +17,11 @@ import os
 import secrets
 import threading
 import time
+from urllib.parse import urlparse
 from pathlib import Path
 
 from mcp.server.auth.provider import (AccessToken, AuthorizationCode, AuthorizationParams, AuthorizeError,
-                                      RefreshToken, TokenError, construct_redirect_uri)
+                                      RefreshToken, RegistrationError, TokenError, construct_redirect_uri)
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
 STATE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser()
@@ -145,6 +146,14 @@ class Gate:
         return OAuthClientInformationFull.model_validate(c) if c else None
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
+        # Sign-in codes may only go back to an app on this Mac: a loopback address (Claude Code's own little server)
+        # or an app's own link scheme (claude://), never a website, which could catch the code.
+        for uri in client_info.redirect_uris or []:
+            u = urlparse(str(uri))
+            loopback = u.scheme == "http" and u.hostname in ("127.0.0.1", "localhost", "::1")
+            if not loopback and u.scheme in ("http", "https", "javascript", "data", "file", ""):
+                raise RegistrationError(error="invalid_redirect_uri",
+                                        error_description="Sign-in can only return to an app on this Mac.")
         with self._lock:
             if len(self.clients) > 200:   # registrations are free to make: keep the newest
                 for cid in sorted(self.clients, key=lambda c: self.clients[c].get("client_id_issued_at") or 0)[:50]:

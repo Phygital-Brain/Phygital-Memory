@@ -15,6 +15,7 @@ import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
+from . import keychain
 
 CLIENT_ID = "Ov23liiRpMQVPucCB73y"   # the "Phygital Memory" OAuth app on GitHub (public, not a password)
 SCOPE = "repo"   # needed to make and sync a private repo
@@ -55,19 +56,15 @@ def api(path: str, token: str | None = None, method: str = "GET", body: dict | N
 def saved_token() -> str | None:
     if os.environ.get("PHYGITAL_MEMORY_OFFLINE"):   # tests: never use the person's real GitHub sign-in
         return None
-    r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN, "-w"], capture_output=True, text=True)
-    return r.stdout.strip() or None if r.returncode == 0 else None
+    return (keychain.read(KEYCHAIN, "github") or "").strip() or None
 
 
 def _save_token(token: str) -> None:
-    # shortcut: the key is passed to `security` as an argument (seen only by this Mac user, for a moment). A small
-    # Keychain helper in the Mac app would avoid even that; worth doing before release.
-    subprocess.run(["security", "add-generic-password", "-U", "-a", "github", "-s", KEYCHAIN, "-w", token],
-                   capture_output=True, check=True)
+    keychain.save(KEYCHAIN, "github", token)
 
 
 def sign_out() -> None:
-    subprocess.run(["security", "delete-generic-password", "-s", KEYCHAIN], capture_output=True)
+    keychain.delete(KEYCHAIN, "github")
 
 
 # ---------- the sign-in itself ----------

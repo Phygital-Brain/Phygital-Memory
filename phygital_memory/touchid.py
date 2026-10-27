@@ -5,11 +5,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-SERVICE = os.environ.get("PHYGITAL_MEMORY_TOUCHID_KEYCHAIN", "Phygital Memory Touch ID")
+SERVICE = os.environ.get("PHYGITAL_MEMORY_TOUCHID_KEYCHAIN", "Phygital Memory Touch ID (app only)")
+
+
+def bundled() -> Path | None:
+    """The helper inside the built app (Resources/server/touchid/Phygital Memory), the only one it ever uses."""
+    p = Path(sys.executable).parent / "touchid" / "Phygital Memory"
+    return p if getattr(sys, "frozen", False) and p.is_file() else None
 
 
 def _helper() -> Path | None:
-    here = Path(sys.executable).parent   # the built app: Resources/server/touchid/Phygital Memory
+    if getattr(sys, "frozen", False):   # the built app: never a helper named by the environment
+        return bundled()
+    here = Path(sys.executable).parent
     for p in (os.environ.get("PHYGITAL_MEMORY_TOUCHID"), here / "touchid" / "Phygital Memory",
               Path(__file__).parent.parent / "packaging" / "touchid" / "bin" / "Phygital Memory"):
         if p and Path(p).is_file():
@@ -32,8 +40,9 @@ def available() -> bool:
     return bool(r) and r.returncode == 0
 
 
-def ask(reason: str) -> bool:
-    r = _run("ask", reason)
+def ask(kind: str) -> bool:
+    """kind: "unlock" or "allow". The helper has its own fixed wording for each, so nobody can make it say anything else."""
+    r = _run("ask", kind)
     return bool(r) and r.returncode == 0
 
 
@@ -43,9 +52,9 @@ def save(folder_id: str, password: str) -> None:
         raise RuntimeError("Couldn't keep it in the Keychain.")
 
 
-def get(folder_id: str, reason: str) -> str | None:
+def get(folder_id: str) -> str | None:
     """The memory's password after the person confirmed, or None (said no, or nothing kept)."""
-    r = _run("get", SERVICE, folder_id, reason)
+    r = _run("get", SERVICE, folder_id)
     return r.stdout.decode() if r and r.returncode == 0 and r.stdout else None
 
 

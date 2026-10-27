@@ -28,6 +28,8 @@ from base64 import b64encode
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
+from . import keychain
+
 KEYCHAIN = os.environ.get("PHYGITAL_MEMORY_CLOUD_KEYCHAIN", "Phygital Memory cloud")   # tests use their own
 REMOTE = "PMCLOUD"
 KINDS = {"nextcloud": "Nextcloud", "webdav": "WebDAV", "s3": "Amazon S3", "r2": "Cloudflare R2"}
@@ -141,10 +143,7 @@ def _obscure(password: str) -> str:
 def save_password(conn: dict, password: str) -> None:
     if conn.get("kind") not in S3_KINDS:   # S3 wants its secret as it is; WebDAV's is kept obscured
         password = _obscure(password)   # once: rclone names its cache after the connection, password included
-    # shortcut: the password is passed to `security` as an argument (seen only by this Mac user, for a moment), as
-    # with the GitHub key. A small Keychain helper in the Mac app would avoid even that; worth doing before release.
-    subprocess.run(["security", "add-generic-password", "-U", "-a", _account(conn), "-s", KEYCHAIN, "-w", password],
-                   capture_output=True, check=True)
+    keychain.save(KEYCHAIN, _account(conn), password)
 
 
 def has_password(conn: dict) -> bool:
@@ -152,13 +151,11 @@ def has_password(conn: dict) -> bool:
 
 
 def forget_password(conn: dict) -> None:
-    subprocess.run(["security", "delete-generic-password", "-a", _account(conn), "-s", KEYCHAIN], capture_output=True)
+    keychain.delete(KEYCHAIN, _account(conn))
 
 
 def _password(conn: dict) -> str | None:
-    r = subprocess.run(["security", "find-generic-password", "-a", _account(conn), "-s", KEYCHAIN, "-w"],
-                       capture_output=True, text=True)
-    return r.stdout.rstrip("\n") or None if r.returncode == 0 else None
+    return keychain.read(KEYCHAIN, _account(conn))
 
 
 def _env(conn: dict, password: str | None = None) -> dict:

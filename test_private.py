@@ -63,11 +63,14 @@ check(code == 200 and j["paths"] == ["People"], "People is private now", j)
 
 search, nothing, status = run(("search_notes", {"question": "Tom Becker sound designer"}),
                               ("search_notes", {"question": "Tom Becker zebra"}), ("status", {}))
-line = next((l for l in search.splitlines() if "People/Tom-Becker" in l), "")
-check("🔒 private" in line, "search shows the private note locked", search)
+line0 = next((l for l in search.splitlines() if "People/Tom-Becker" in l), "")
+check("🔒 private" in line0, "search shows the private note locked", search)
 check("Berlin" not in search and "freelance" not in search, "and none of its text")
 check("Tom-Becker" not in nothing, "a question with a word not in it shows no private note", nothing)
 check("Private, ask first: People" in status, "status names the private folders", status)
+asked = run(("search_notes", {"question": "Tom Becker sound designer", "private": True}))[0]
+line = next((l for l in asked.splitlines() if "People/Tom-Becker" in l), "")
+check(line and "Berlin" in asked, "with private=true (the person asked), search finds it", asked)
 rid = re.search(r"\[([^\]]+)\]", line).group(1)
 
 out = run(("open_result", {"id": rid}), ("open_result", {"id": rid, "private": True}),

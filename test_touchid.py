@@ -77,7 +77,7 @@ finger(True)
 code, j = api("touchidunlock", folder=fid)
 check(code == 200 and j.get("pass") and j.get("open"), "a finger unlocks it", j)
 P = j["pass"]
-check("unlock “" in (D / "asked").read_text(), "the ask names what it's for")
+check((D / "asked").read_text().splitlines()[-1] == "unlock", "the ask uses the fixed unlock wording")
 
 (D / f"kept-{fid}").write_text("old-password")   # the password changed since
 api("lock", {}, P, fid)
@@ -115,7 +115,7 @@ rid = http("GET", f"/authorize?{q}")[1].get("Location", "").rsplit("/", 1)[-1]
 finger(False)
 code, j = api("allowanswer", {"id": rid, "allow": True, "folders": "all"}, P, fid)
 check(code == 403 and json.loads(http("GET", f"/allow/{rid}/state")[2])["next"] is None, "Allow without the finger lets nobody in", j)
-check("“Finger AI”" in (D / "asked").read_text().splitlines()[-1], "the ask names the AI app")
+check((D / "asked").read_text().splitlines()[-1] == "allow", "the ask uses the fixed allow wording (not a name the AI app picked)")
 finger(True)
 code, j = api("allowanswer", {"id": rid, "allow": True, "folders": "all"}, P, fid)
 check(code == 200 and "code=" in (json.loads(http("GET", f"/allow/{rid}/state")[2])["next"] or ""), "Allow with the finger lets it in")

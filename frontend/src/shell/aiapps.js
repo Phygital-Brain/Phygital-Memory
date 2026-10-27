@@ -153,7 +153,8 @@ export function allowDialog(name, folders) {
     setTimeout(() => { deny.disabled = allow.disabled = false; }, 1000);
     const card = el("div", { class: "dlg storage ai-apps", role: "dialog" },
       el("div", { class: "dlg-title" }, `“${name}” wants to use your notes`),
-      el("div", { class: "mf-hint" }, "The app picked this name. It only reaches unlocked memories. Change or remove it in Settings › AI apps."),
+      el("div", { class: "st-warn" }, el("span", {}, "Unverified name: the app chose it itself. Allow it only if you just started connecting an AI app.")),
+      el("div", { class: "mf-hint" }, "It only reaches unlocked memories. Change or remove it in Settings › AI apps."),
       access.node,
       el("div", { class: "dlg-actions" }, deny, allow));
     return { card };
