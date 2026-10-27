@@ -95,11 +95,15 @@ class Writer:
             _write_atomic(stored, ciphertext)
         return Entry(name, "file", stored, None, parent.dir_id)
 
-    def write_file_from(self, parent: Entry, name: str, src: Path) -> Entry:
-        """A new file, encrypted straight from a file on disk a part at a time, so its size doesn't matter."""
+    def write_file_from(self, parent: Entry, name: str, src) -> Entry:
+        """A new file, encrypted a part at a time, so its size doesn't matter. src: a file on disk, or anything with
+        read(n) (a file dropped into the app, arriving over the connection)."""
         stored, full, short = self._free(parent, name)
 
         def fill(f):
+            if hasattr(src, "read"):
+                self.tree.content.encrypt_stream(src, f)
+                return
             with open(src, "rb") as s:
                 self.tree.content.encrypt_stream(s, f)
         if short:
@@ -112,6 +116,35 @@ class Writer:
                 raise
         else:
             _write_atomic(stored, fill)
+        return Entry(name, "file", stored, None, parent.dir_id)
+
+    def encrypt_to_temp(self, src) -> Path:
+        """Encrypt a stream (read(n)) into a temporary file at the vault's top, a part at a time. Nothing in the
+        folder tree changes yet, so this can run while the memory goes on being used; place_temp() puts it in."""
+        tmp = self.tree.root / f"{TEMP_PREFIX}{uuid.uuid4().hex}.tmp"
+        try:
+            with open(tmp, "xb") as f:
+                self.tree.content.encrypt_stream(src, f)
+                f.flush()
+                os.fsync(f.fileno())
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        return tmp
+
+    def place_temp(self, parent: Entry, name: str, tmp: Path) -> Entry:
+        """Put a file made by encrypt_to_temp() into a folder under its name."""
+        stored, full, short = self._free(parent, name)
+        if short:
+            stored.mkdir()
+            try:
+                _write_atomic(stored / "name.c9s", full.encode("ascii"))
+                os.replace(tmp, stored / "contents.c9r")
+            except BaseException:
+                shutil.rmtree(stored, ignore_errors=True)
+                raise
+        else:
+            os.replace(tmp, stored)
         return Entry(name, "file", stored, None, parent.dir_id)
 
     def copy_file(self, entry: Entry, parent: Entry, name: str) -> Entry:

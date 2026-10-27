@@ -55,6 +55,17 @@ export function forgetFiles() {   // on lock or folder switch: drop every decryp
   blobCache.clear();
 }
 
+// A file dropped into the app, sent as it is and encrypted as it arrives: any size.
+export async function uploadStream(path, file, folder = current) {
+  const headers = { "Content-Type": "application/octet-stream" };
+  const pass = passes.get(folder);
+  if (pass) headers["X-App-Pass"] = pass;
+  const r = await fetch(`/upload?folder=${encodeURIComponent(folder)}&path=${encodeURIComponent(path)}`, { method: "POST", headers, body: file });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  return j.path;
+}
+
 export async function uploadFile(path, file) {
   const buf = new Uint8Array(await file.arrayBuffer());
   let bin = "";

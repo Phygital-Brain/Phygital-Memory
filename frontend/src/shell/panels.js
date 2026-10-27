@@ -79,8 +79,8 @@ export function openStorage(ctx) {
         sub("WebDAV", "A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server.",
           !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns)),
       el("div", { class: "set-section" }, "Backup"),
-      option("lock", "GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above.",
-        !!s.github, github),
+      option("lock", "GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB.",
+        !!s.github, el("div", { class: "st-gh-note" }, "Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup."), github),
       el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));

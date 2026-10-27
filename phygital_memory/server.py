@@ -16,6 +16,7 @@ import base64
 import hashlib
 import json
 import os
+import queue
 import re
 import secrets
 import subprocess
@@ -646,6 +647,63 @@ def _unlock(f, password: str, how: str = "password"):
     return _ok({**s, "pass": p, "folder": f.id})
 
 
+class _Incoming:
+    """read(n) for the vault writer, fed by the upload as it arrives (the writer runs in its own thread)."""
+
+    def __init__(self):
+        self.q = queue.Queue(maxsize=16)
+        self.buf = b""
+        self.done = False
+
+    def read(self, n: int = -1) -> bytes:
+        while not self.done and (n < 0 or len(self.buf) < n):
+            part = self.q.get()
+            if part is None:
+                self.done = True
+            else:
+                self.buf += part
+        out, self.buf = (self.buf, b"") if n < 0 else (self.buf[:n], self.buf[n:])
+        return out
+
+
+@mcp.custom_route("/upload", methods=["POST"])
+async def upload(request: Request) -> Response:
+    """A file dropped into the app, sent as it is (not in JSON), encrypted as it arrives: no size limit. Same rules
+    as /api: only this Mac's page, and only with the pass of an unlocked memory."""
+    if not _local(request) or request.headers.get("content-type", "").split(";")[0] != "application/octet-stream":
+        return JSONResponse({"error": "Not allowed."}, status_code=403)
+    try:
+        f = folders.get(request.query_params.get("folder"))
+    except LookupError:
+        return _ok({"error": "Unknown folder."}, 404)
+    if not _has_pass(request, f):
+        return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
+    rel = request.query_params.get("path", "")
+    src = _Incoming()
+    job = asyncio.create_task(asyncio.to_thread(f.memory.import_stream, rel, src))
+
+    async def feed(part) -> bool:   # wait for room, but never for a writer that already stopped (an error)
+        while not job.done():
+            try:
+                src.q.put_nowait(part)
+                return True
+            except queue.Full:
+                await asyncio.sleep(0.01)
+        return False
+    try:
+        async for part in request.stream():
+            if part and not await feed(part):
+                break
+    finally:
+        await feed(None)
+    try:
+        return _ok({"path": await job})
+    except (ValueError, LookupError, OSError) as e:
+        return _ok({"error": str(e)}, 400)
+
+
+picked: dict[str, list[str]] = {}   # what the Mac's own chooser picked, by token (the page never names a path itself)
+
 # Documents the app may open in their own Mac app (Open in Word and similar). Nothing that can run code.
 OPENABLE = {".docx", ".doc", ".rtf", ".odt", ".pages", ".xlsx", ".xls", ".ods", ".numbers", ".pptx", ".ppt", ".odp",
             ".key", ".pdf", ".txt", ".csv", ".tsv", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".mp3",
@@ -911,6 +969,27 @@ async def api(request: Request) -> Response:
         if action == "aitodoremove":
             m.todo_remove(body["id"])
             return _ok({"todo": m.todo()})
+        if action == "pickimport":   # the Mac's own chooser picks what comes in; the page gets names and a token
+            if body.get("folder"):
+                one = await asyncio.to_thread(pick_folder, "Choose a folder to add", str(Path.home()))
+                chosen = [one] if one else []
+            else:
+                chosen = await asyncio.to_thread(pick_files, "Choose files to add")
+            if not chosen:
+                return _ok({"cancelled": True})
+            token = secrets.token_urlsafe(12)
+            picked.clear()
+            picked[token] = chosen
+            items = []
+            for c in map(Path, chosen):
+                n = sum(1 for x in c.rglob("*") if x.is_file() and not any(p.startswith(".") for p in x.relative_to(c).parts)) if c.is_dir() else 1
+                items.append({"name": c.name, "folder": c.is_dir(), "files": n})
+            return _ok({"token": token, "items": items})
+        if action == "importpicked":
+            chosen = picked.pop(str(body.get("token")), None)
+            if not chosen:
+                return _ok({"error": "Choose the files again."}, 400)
+            return _ok(await asyncio.to_thread(m.import_paths, str(body.get("into") or ""), chosen))
         if action in ("importfiles", "importfolder"):   # the Mac's own picker chooses what comes in, never the page
             into = str(body.get("into") or "")
             if action == "importfiles":

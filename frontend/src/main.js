@@ -1,4 +1,5 @@
-import { api, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
+import { openAddFiles } from "./shell/addfiles.js";
+import { api, uploadStream, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
 import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
 import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
@@ -1179,17 +1180,8 @@ function rowMenu(n, x, y) {
 }
 
 // Bring files or a whole folder from the Mac into this folder, encrypted. The Mac's own picker chooses them.
-async function importInto(dir, wholeFolder) {
-  try {
-    const j = await api(wholeFolder ? "importfolder" : "importfiles", { into: dir });
-    if (j.cancelled) return;
-    if (dir) state.open.add(dir);
-    await loadFiles();
-    const n = j.imported.length;
-    if (n) toastOk(`Imported ${n} file${n === 1 ? "" : "s"}, encrypted.` + (j.skipped ? ` Skipped ${j.skipped} hidden.` : ""));
-    else toastErr(j.skipped ? `Nothing imported: only hidden files there.` : "Nothing to import there.");
-  } catch (e) { toastErr(e.message); }
-}
+// Import files / Import folder: the same window as a drop, with the Mac's chooser opening at once.
+function importInto(dir, wholeFolder) { return addToMemory({ dir, start: wholeFolder }); }
 
 // Files dragged in from Finder: dropped on a folder they go in there, anywhere else in the list at the top. The person
 // says yes first. They're encrypted as they come in; the originals stay where they are.
@@ -1225,40 +1217,57 @@ async function readDropped(entry, prefix, out) {
   }
 }
 
-async function addDropped(entries, dir) {
-  const files = [];
-  try { for (const en of entries) await readDropped(en, "", files); } catch (e) { toastErr("Couldn't read what was dropped."); return; }
-  if (!files.length) { toastErr("Nothing to add: only hidden files or empty folders."); return; }
-  const where = dir ? `the "${baseName(dir)}" folder` : "the top of your memory";
-  const folderDrop = entries.length === 1 && entries[0].isDirectory;
-  const what = folderDrop ? `the folder "${entries[0].name}" (${files.length} file${files.length === 1 ? "" : "s"})`
-    : files.length === 1 ? `"${baseName(files[0].rel)}"` : `${files.length} files`;
-  const one = files.length === 1;
-  const how = await choiceDialog(`Add ${what} to ${where}?`,
-    `${one ? "It's" : "They're"} encrypted as ${one ? "it comes" : "they come"} in. The original${one ? " stays" : "s stay"} where ${one ? "it is" : "they are"}.`,
-    [["ai", "Let AI sort them"], ["add", "Add", "primary"]]);
-  if (!how) return;
-  if (how === "ai") dir = "Inbox";   // AI sorting: everything waits in Inbox, with one task to sort it
-  const big = files.filter((f) => f.file.size > 25 * 1024 * 1024);
-  let added = 0;
-  toast(`Adding ${files.length - big.length} file${files.length - big.length === 1 ? "" : "s"}`);
-  for (const f of files) {
-    if (big.includes(f)) continue;
-    try { await uploadFile((dir ? dir + "/" : "") + f.rel, f.file); added++; } catch (e) { toastErr(`${baseName(f.rel)}: ${e.message}`); }
+function addDropped(entries, dir) { return addToMemory({ dir, entries }); }
+
+// The one way files come in: dropped from Finder (entries) or picked with the Mac's chooser (start: false for files,
+// true for a folder). The window says what and asks where; then they're added, encrypted, or put in Inbox for the AI.
+async function addToMemory({ dir = "", entries = null, start = null }) {
+  let files = null, token = null;
+  if (entries) {
+    files = [];
+    try { for (const en of entries) await readDropped(en, "", files); } catch { toastErr("Couldn't read what was dropped."); return; }
+    if (!files.length) { toastErr("Nothing to add: only hidden files or empty folders."); return; }
   }
-  if (how === "ai" && added) {
-    const list = `# Files to sort\n\nAdded ${new Date().toLocaleString()}.\n\n` + files.filter((f) => !big.includes(f)).map((f) => `- [[Inbox/${f.rel}]]`).join("\n") + "\n";
+  const count = (n) => `${n} file${n === 1 ? "" : "s"}`;
+  const dropLabel = files && (entries.length === 1 && entries[0].isDirectory ? `The folder "${entries[0].name}" (${count(files.length)})`
+    : files.length === 1 ? baseName(files[0].rel) : count(files.length));
+  const folderPaths = [...new Set(state.files.filter((f) => f.kind === "folder" && !isDot(f.path)).map((f) => f.path))].sort((a, b) => a.localeCompare(b));
+  const v = await openAddFiles({
+    folders: folderPaths, dir, what: dropLabel, start,
+    pick: async (folder) => {
+      const j = await api("pickimport", { folder });
+      if (j.cancelled) return null;
+      token = j.token;
+      const n = j.items.reduce((t, i) => t + i.files, 0);
+      return { label: j.items.length === 1 && j.items[0].folder ? `The folder "${j.items[0].name}" (${count(n)})` : j.items.length === 1 ? j.items[0].name : count(n) };
+    },
+  });
+  if (!v) return;
+  const into = v.how === "ai" ? "Inbox" : v.dir;
+  let added = [];
+  if (files) {
+    toast(`Adding ${count(files.length)}`);
+    for (const f of files) {
+      try { added.push(await uploadStream((into ? into + "/" : "") + f.rel, f.file)); } catch (e) { toastErr(`${baseName(f.rel)}: ${e.message}`); }
+    }
+  } else if (token) {
+    toast("Adding");
+    try { added = (await api("importpicked", { token, into })).imported || []; } catch (e) { toastErr(e.message); }
+  }
+  if (v.how === "ai" && added.length) {
+    const z = (n) => String(n).padStart(2, "0"), d = new Date();
+    const stamp = `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}.${z(d.getMinutes())}`;
+    const list = `# Files to sort\n\nAdded ${d.toLocaleString()}.\n\n` + added.map((p) => `- [[${p}]]`).join("\n") + "\n";
     try {
-      const note = (await api("save", { path: `Inbox/Files to sort ${(() => { const d = new Date(), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}.${z(d.getMinutes())}`; })()}.md`, text: list, new: true })).path;
+      const note = (await api("save", { path: `Inbox/Files to sort ${stamp}.md`, text: list, new: true })).path;
       await api("handtoai", { path: note, ask: "Move each file listed here into the folder where it belongs (make a folder if none fits). Then put this list in the trash." });
       watchTodo();
     } catch (e) { toastErr(e.message); }
   }
-  if (dir) state.open.add(dir);
+  if (into) state.open.add(into);
   await loadFiles();
-  if (added) toastOk(how === "ai" ? `Added ${added} file${added === 1 ? "" : "s"} to Inbox. Ask your AI: \u201cDo my Phygital Memory tasks.\u201d`
-                                  : `Added ${added} file${added === 1 ? "" : "s"}, encrypted.`);
-  if (big.length) toastErr(`${big.length} file${big.length === 1 ? " is" : "s are"} over 25 MB. Use Import files for ${big.length === 1 ? "it" : "them"}.`);
+  if (added.length) toastOk(v.how === "ai" ? `Added ${count(added.length)} to Inbox. Ask your AI: \u201cDo my Phygital Memory tasks.\u201d`
+                                           : `Added ${count(added.length)}, encrypted.`);
 }
 
 // A readable (not encrypted) copy of a note, file or folder, to a place picked in the Mac's own box.

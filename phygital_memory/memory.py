@@ -101,6 +101,14 @@ class Memory:
             self._synced = time.time()
             return self.status()
 
+    def recovery_words(self, password: str) -> str:
+        """The recovery key (44 words), after checking the password again."""
+        with self._lock:
+            self._need_open()
+            keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password).wipe()
+            from .vault.manage import recovery_key
+            return recovery_key(self._key)
+
     def lock(self) -> None:
         with self._lock:
             if self._con is not None:
@@ -562,6 +570,26 @@ class Memory:
         self._writer.write_file_from(parent, name, src)
         self._gen += 1
         return "/".join(rel.split("/")[:-1] + [name])
+
+    def import_stream(self, rel: str, reader) -> str:
+        """One file arriving over the connection (dropped into the app), encrypted as it comes: any size. The memory
+        stays usable meanwhile: the encrypting happens outside the lock, and only putting it in place takes it."""
+        rel = _clean_path(rel, md=False)
+        with self._lock:
+            self._need_open()
+            writer = self._writer
+        tmp = writer.encrypt_to_temp(reader)
+        try:
+            with self._lock:
+                self._need_open()
+                parent, name = self._free_name(rel)
+                self._writer.place_temp(parent, name, tmp)
+                self._gen += 1
+                self._synced = 0
+                self._sync()
+                return "/".join(rel.split("/")[:-1] + [name])
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def import_paths(self, into: str, sources: list[str]) -> dict:
         """Copy files and folders from the Mac into this folder, encrypted. Never replaces anything: a name that is

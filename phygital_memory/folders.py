@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 from . import activity, cloud
@@ -417,6 +418,85 @@ class Folders:
             f.mirror_at = None
             self._save()
         return where
+
+    # ---------- a backup file (zip) ----------
+
+    def save_backup(self, fid: str, dest: str) -> int:
+        """One zip of the memory's encrypted files, at dest (the person chose it). It opens with the same password
+        (or the recovery key), so it's safe to keep anywhere. Returns its size."""
+        f = self.get(fid)
+        if f.cloud_at and not f.memory.is_open:
+            raise ValueError("Unlock it first.")
+        dest = Path(dest).expanduser()
+        if dest.suffix.lower() != ".zip":
+            dest = dest.with_suffix(dest.suffix + ".zip")
+        top = re.sub(r'[/\\:*?"<>|]', "-", f.name).strip() or "Memory"
+        tmp = dest.with_name(f".{dest.name}.part")
+        try:
+            with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED, allowZip64=True) as z:   # encrypted files don't shrink
+                for p in sorted(f.path.rglob("*")):
+                    rel = p.relative_to(f.path)
+                    if p.is_symlink() or not p.is_file() or rel.parts[0] in (".git", ".github") \
+                            or p.name in (".DS_Store", ".gitignore", ".gitattributes") or p.name.startswith(("._", ".encryptor-")):
+                        continue
+                    z.write(p, f"{top}/{rel.as_posix()}")
+            os.replace(tmp, dest)
+        finally:
+            tmp.unlink(missing_ok=True)
+        return dest.stat().st_size
+
+    def _same(self, folder: Path):
+        """A memory already in the list that is this same memory (its vault.cryptomator, the memory's own ID, matches)."""
+        mine = (folder / "vault.cryptomator").read_bytes()
+        return next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
+                     and (x.path / "vault.cryptomator").read_bytes() == mine), None)
+
+    def open_backup(self, src: str, parent: str | None) -> dict:
+        """A backup back into the list: a zip the app saved (unzipped into parent), or a masterkey.cryptomator /
+        vault.cryptomator file (its folder is used where it is). Refused if that memory is already here."""
+        src = Path(src).expanduser()
+        if src.name in ("masterkey.cryptomator", "vault.cryptomator"):
+            folder = src.parent
+            if not is_vault(folder):
+                raise ValueError("That folder isn't a whole memory.")
+            same = self._same(folder)
+            if same:
+                raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
+            with self._lock:
+                return self._add(folder, folder.name).info()
+        if src.suffix.lower() != ".zip" or not zipfile.is_zipfile(src):
+            raise ValueError("Pick a backup .zip, or a memory's masterkey.cryptomator file.")
+        if not parent:
+            raise ValueError("Choose where to put it.")
+        with zipfile.ZipFile(src) as z:
+            names = [n for n in z.namelist() if not n.endswith("/")]
+            tops = {n.split("/")[0] for n in names}
+            if len(tops) != 1 or not any(n.endswith("/vault.cryptomator") and n.count("/") == 1 for n in names):
+                raise ValueError("That zip isn't a Phygital Memory backup.")
+            top = tops.pop()
+            if top in (".", "..") or any(".." in n.split("/") or n.startswith("/") for n in names):
+                raise ValueError("That zip isn't a Phygital Memory backup.")
+            mine = z.read(f"{top}/vault.cryptomator")
+            same = next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
+                         and (x.path / "vault.cryptomator").read_bytes() == mine), None)
+            if same:
+                raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
+            dest = Path(parent).expanduser() / top
+            if dest.exists():
+                raise ValueError(f'There\'s already a "{top}" there. Choose another place.')
+            try:
+                for n in names:
+                    out = dest / n.split("/", 1)[1]
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    with z.open(n) as r, open(out, "xb") as w:
+                        shutil.copyfileobj(r, w, 1024 * 1024)
+                if not is_vault(dest):
+                    raise ValueError("That zip isn't a whole memory.")
+            except Exception:
+                shutil.rmtree(dest, ignore_errors=True)
+                raise
+        with self._lock:
+            return self._add(dest, top).info()
 
     # ---------- a private GitHub repo ----------
 

@@ -636,3 +636,8 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .info-pop { position: fixed; z-index: 200; max-width: 260px; padding: 8px 10px; border-radius: var(--r-s); background: var(--bg-surface); border: 1px solid var(--border); box-shadow: var(--shadow); color: var(--text); font-size: 12px; line-height: 1.45; }
 .menu-item.fo-menu-item { justify-content: flex-start; gap: 12px; padding: 7px 10px; border-radius: 8px; font-size: 13px; color: var(--text); }
 .menu-item.fo-menu-item .mi-main { flex: 1; }
+.af-row { display: flex; align-items: center; gap: 12px; }
+.af-label { width: 52px; flex: none; color: var(--text-3); font-size: 12px; }
+.af-what { flex: 1; font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.af-where { flex: 1; min-width: 0; padding: 6px 8px; background: var(--bg-app); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-s); font: inherit; font-size: 13px; }
+.dlg.add-files { width: min(440px, calc(100vw - 32px)); }
