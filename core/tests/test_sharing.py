@@ -68,7 +68,7 @@ try:
         reqs = sharing.requests(shared, m.key_raw)
         check([r["name"] for r in reqs] == ["Ana"], "Max sees Ana's request, not Bo's (no valid invite)", reqs)
         sharing.answer(shared, m.key_raw, reqs[0]["id"], True)
-        check(sorted(x["name"] for x in sharing.members(shared, m.key_raw)) == ["Max", "Ana"], "Ana is in")
+        check(sorted(x["name"] for x in sharing.members(shared, m.key_raw)) == ["Ana", "Max"], "Ana is in")
 
     with ana:
         raw = sharing.my_key(shared)
