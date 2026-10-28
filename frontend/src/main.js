@@ -2391,11 +2391,72 @@ function renderHome(tab) {
     f.mtime ? el("span", { class: "hi-time" }, whenDate(new Date(f.mtime * 1000))) : null);
   const recent = [...notes].sort((a, b) => (b.mtime || 0) - (a.mtime || 0)).slice(0, 8);
   const pinned = getPref("pins", []).map((p) => state.files.find((f) => f.path === p)).filter(Boolean);
+  const status = el("div", { class: "home-status" }), ai = el("div", { class: "home-ai" }), leaving = el("div", { class: "home-leaving" });
   tab.body.replaceChildren(
     el("h1", { class: "home-title" }, "Home"),
+    status,
     ...(pinned.length ? [el("h2", { class: "home-h" }, "Pinned"), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
+    ai,
     el("h2", { class: "home-h" }, "Recent notes"),
-    recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write one."));
+    recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write one."),
+    leaving);
+  homeExtras(status, ai, leaving);
+}
+
+// Home's live parts: one status line (a problem stands out, all well stays quiet), your AI's open tasks and latest
+// work, and what leaves the trash soon. Each part shows only when it has something to say.
+const TRASH_DAYS = 7;
+async function homeExtras(status, ai, leaving) {
+  const get = (a) => api(a).catch(() => ({}));
+  const [bar, store, todo, act, trash, reqs] = await Promise.all([get("bar"), get("storage"), get("aitodo"), get("aiactivity"), get("trashlist"), get("sharerequests")]);
+  if (!status.isConnected) return;
+  const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
+  const bits = [el("span", { class: "hs-ok" }, "Locked on disk"),
+    el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : "This Mac only")];
+  const problems = [];
+  for (const [name, st] of [["GitHub backup", store.github && store.githubStatus], ["S3 backup", store.s3 && store.s3Status]]) {
+    if (!st) continue;
+    if (st.error) problems.push([`${name} stopped: ${st.error}`, "Storage", openStoragePanel]);
+    else bits.push(el("span", {}, `${name} saved ${ago(st.ago)}`));
+  }
+  if (bar.cloudHealth && bar.cloudHealth.problem) problems.push([bar.cloudHealth.problem, "Storage", openStoragePanel]);
+  for (const r of reqs.requests || []) problems.push([`${r.name || "Someone"} asks to join ${r.what || "this memory"}`, "Share", () => openShareHere()]);
+  status.replaceChildren(el("div", { class: "hs-line" }, ...bits.flatMap((b, i) => (i ? [el("span", { class: "hs-dot" }, "·"), b] : [b]))),
+    ...problems.map(([text, btn, fn]) => el("div", { class: "hs-problem" }, el("span", {}, text),
+      el("button", { class: "btn small", type: "button", onclick: fn }, btn))));
+
+  const open = (todo.todo || []).filter((t) => !t.done);
+  const work = (act.activity || []).slice(0, 3);
+  if (open.length || work.length) {
+    ai.replaceChildren(el("h2", { class: "home-h" }, "Your AI"),
+      el("div", { class: "home-list" },
+        ...open.slice(0, 3).map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("sparkle", 15),
+          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.ask || "Read it"), el("span", { class: "hi-time hi-wait" }, "waiting"))),
+        ...work.map((r) => {
+          const row = el("div", { class: "home-item hi-work" }, icon("pulse", 15),
+            el("span", { class: "hi-name" }, `${r.app} ${r.what}`), r.path ? el("span", { class: "hi-dir" }, r.path) : null,
+            el("span", { class: "hi-time" }, ago(r.ago)));
+          if (r.canUndo) row.append(el("button", { class: "btn small", type: "button", onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            try { await api("undoai", { id: r.undo, folder: r.folder }); await syncFromDisk(); toastOk("Undone. The AI's version is kept in version history."); refreshHome(); }
+            catch (x) { toastErr(x.message); }
+          } }, "Undo"));
+          return row;
+        }),
+        el("button", { class: "home-more", type: "button", onclick: () => openAI(open.length ? "tasks" : "activity") }, "All AI tasks and activity")));
+  }
+
+  const soon = (trash.items || []).map((i) => ({ ...i, left: TRASH_DAYS - (Date.now() / 1000 - i.t) / 86400 })).filter((i) => i.t && i.left < 2);
+  if (soon.length) {
+    leaving.replaceChildren(el("h2", { class: "home-h" }, "Leaving the trash soon"),
+      el("div", { class: "home-list" }, ...soon.slice(0, 5).map((i) => el("div", { class: "home-item" }, icon("trash", 15),
+        el("span", { class: "hi-name" }, i.name.replace(/\.md$/i, "")), el("span", { class: "hi-dir" }, dirOf(i.path)),
+        el("span", { class: "hi-time" }, i.left < 1 ? "goes today" : "goes tomorrow"),
+        el("button", { class: "btn small", type: "button", onclick: async () => {
+          try { await api("trashrestore", { id: i.id }); await syncFromDisk(); toastOk(`"${i.name.replace(/\.md$/i, "")}" is back.`); refreshHome(); }
+          catch (x) { toastErr(x.message); }
+        } }, "Restore")))));
+  }
 }
 
 // ---------- Graph ----------

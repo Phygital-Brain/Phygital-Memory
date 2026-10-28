@@ -844,3 +844,17 @@ body { font-family: var(--font-body); font-size: 14px; }
 .st-e2e { background: var(--bg-rec); color: var(--text-3); font-size: 12px; }
 .ai-row { grid-template-columns: 20px minmax(0, 1fr) auto; }   /* room for Change and Remove */
 .dlg.ai-apps { width: min(560px, 94vw); }
+
+/* Home: the status line, your AI, leaving the trash */
+.home-status { margin: -2px 0 6px; display: flex; flex-direction: column; gap: 6px; }
+.hs-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: 11.5px var(--font-mono); color: var(--text-3); }
+.hs-ok { color: var(--accent); }
+.hs-dot { color: var(--text-faint); }
+.hs-problem { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: var(--r-s);
+  background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--text); font-size: 13px; }
+.hi-work { cursor: default; }
+.hi-work .btn { flex: none; }
+.hi-wait { color: var(--agent); }
+.home-ai .home-item > svg { color: var(--agent); }
+.home-more { align-self: flex-start; margin: 2px 0 0 8px; font: 11.5px var(--font-mono); color: var(--text-3); padding: 2px 0; }
+.home-more:hover { color: var(--text); }
