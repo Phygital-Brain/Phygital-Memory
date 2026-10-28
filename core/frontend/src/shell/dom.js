@@ -12,6 +12,9 @@ export function el(tag, props = {}, ...kids) {
   return n;
 }
 
+// Some of these shapes (file, plus, close, and the sidebar's look) are adapted from Baalda
+// (https://github.com/naveedharri/baalda), Copyright 2026 Baalda and the Baalda contributors, Apache License 2.0:
+// see core/packaging/third-party/baalda.txt.
 const ICONS = {
   file: ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5"],
   folder: ["M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"],

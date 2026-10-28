@@ -50,8 +50,11 @@ Inside the app
   Engine: Python and its libraries (PSF-2.0, MIT, BSD, Apache-2.0)
   App window: Tauri and the Rust crates it uses (MIT, Apache-2.0, MPL-2.0 and others)
 
+  Some sidebar icons: adapted from Baalda (Apache-2.0)
+
 Thanks
-  Baalda (github.com/naveedharri/baalda, Apache-2.0), for design and feature ideas. No Baalda code is included.
+  Baalda (github.com/naveedharri/baalda, Apache-2.0), for design and feature ideas and a few sidebar icon
+  shapes. Its license and notice are in this list.
 """
 
 
@@ -145,6 +148,7 @@ def main() -> None:
     subprocess.run([sys.executable, str(CORE / "packaging" / "compact_licences.py"), str(LIC), "3-libraries-and-fonts.txt",
                     "4-engine-python.txt", "5-app-window.txt", "3-open-source-parts.txt"], check=True, capture_output=True)
     (LIC / "0-overview.txt").write_text(OVERVIEW)
+    shutil.copy(CORE / "packaging" / "third-party" / "baalda.txt", LIC / "6-baalda.txt")   # the icons' source, Apache-2.0
     (LIC / "9-phygital-memory-agpl.txt").write_text((TOP / "NOTICE").read_text() + "\n\n" + (TOP / "LICENSE").read_text())
     print(json.dumps({"server": str(SERVER), "syncthing": st_ver, "rclone": rc_ver}))
 
