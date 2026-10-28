@@ -116,9 +116,13 @@ def _osascript(lines: list[str], *args: str) -> subprocess.CompletedProcess:
 def _powershell(script: str, **env: str) -> subprocess.CompletedProcess:
     """A Windows dialog. What the person sees (the prompt, a start folder) goes in the environment, never into the
     script, so a name can't break out of its quotes."""
-    full = "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::EnableVisualStyles(); " + script
+    # $owner: a hidden window that stays on top. The engine has no window of its own, so a dialog without an owner
+    # opens behind the app, where nobody sees it (seen on Windows 11).
+    full = ("Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::EnableVisualStyles(); "
+            "$owner = New-Object System.Windows.Forms.Form -Property @{TopMost = $true; ShowInTaskbar = $false}; " + script)
     return subprocess.run(["powershell", "-NoProfile", "-STA", "-Command", full], capture_output=True, text=True,
-                          timeout=600, env={**os.environ, **{f"PM_{k.upper()}": v for k, v in env.items()}})
+                          timeout=600, env={**os.environ, **{f"PM_{k.upper()}": v for k, v in env.items()}},
+                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))   # no console flashing up
 
 
 def _linux_dialog(zenity: list[str], kdialog: list[str]) -> subprocess.CompletedProcess | None:
@@ -137,7 +141,7 @@ def pick_files(prompt: str) -> list[str]:
                           "end repeat", "return out"], prompt)
     elif WINDOWS:
         out = _powershell("$d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = $env:PM_PROMPT; "
-                          "$d.Multiselect = $true; if ($d.ShowDialog() -eq 'OK') { $d.FileNames -join \"`n\" }",
+                          "$d.Multiselect = $true; if ($d.ShowDialog($owner) -eq 'OK') { $d.FileNames -join \"`n\" }",
                           prompt=prompt)
     else:
         out = _linux_dialog(["--file-selection", "--multiple", "--separator=\n", f"--title={prompt}"],
@@ -153,7 +157,7 @@ def pick_save(prompt: str, name: str) -> str | None:
     elif WINDOWS:
         out = _powershell("$d = New-Object System.Windows.Forms.SaveFileDialog; $d.Title = $env:PM_PROMPT; "
                           "$d.FileName = $env:PM_NAME; $d.OverwritePrompt = $true; "
-                          "if ($d.ShowDialog() -eq 'OK') { $d.FileName }", prompt=prompt, name=name)
+                          "if ($d.ShowDialog($owner) -eq 'OK') { $d.FileName }", prompt=prompt, name=name)
     else:
         out = _linux_dialog(["--file-selection", "--save", "--confirm-overwrite", f"--title={prompt}", f"--filename={name}"],
                             ["--getsavefilename", str(Path.home() / name), "--title", prompt])
@@ -172,7 +176,7 @@ def pick_folder(prompt: str, start: str | None = None) -> str | None:
     elif WINDOWS:
         out = _powershell("$d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = $env:PM_PROMPT; "
                           "if ($env:PM_START) { $d.SelectedPath = $env:PM_START }; "
-                          "if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }", prompt=prompt, start=start or "")
+                          "if ($d.ShowDialog($owner) -eq 'OK') { $d.SelectedPath }", prompt=prompt, start=start or "")
     else:
         out = _linux_dialog(["--file-selection", "--directory", f"--title={prompt}", *([f"--filename={start}/"] if start else [])],
                             ["--getexistingdirectory", start or str(Path.home()), "--title", prompt])

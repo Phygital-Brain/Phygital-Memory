@@ -1582,7 +1582,12 @@ async def api(request: Request) -> Response:
                 return _ok({"card": await asyncio.to_thread(pka.set_up_chip)})
             return _ok({"card": await asyncio.to_thread(pka.set_up_password, str(body.get("password", "")))})
         if action == "places":   # a new memory's setup: the synced cloud folders on this Mac, and the home folder
-            return _ok({"places": await asyncio.to_thread(cloud_places), "home": str(Path.home())})
+            try:
+                places = await asyncio.to_thread(cloud_places)
+            except Exception as e:   # a cloud folder that can't be read must not stop a new memory (seen on Windows)
+                print(f"Phygital Memory: cloud folders: {e}", flush=True)
+                places = []
+            return _ok({"places": places, "home": str(Path.home())})
         if action == "pickfolder":   # the Mac's own folder chooser
             start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
             # Otherwise the Mac reopens wherever the last pick was (often inside a cloud): start at home instead.
