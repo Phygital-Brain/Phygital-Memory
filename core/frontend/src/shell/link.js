@@ -55,7 +55,13 @@ export function joinMacDialog(ctx) {
     const stop = (v) => { clearInterval(timer); done(v); };
     const link = el("textarea", { class: "dlg-input rk-input link-box", rows: "3", spellcheck: "false", placeholder: t("Paste the link from your other Mac"), "aria-label": t("Link") });
     const err = el("div", { class: "dlg-err" });
-    const body = el("div", {}, el("div", { class: "mf-hint" }, t("On your other Mac: Settings › Link a Mac. Paste the link it shows.")), link);
+    const body = el("div", {}, el("div", { class: "mf-hint" }, t("On your other Mac: Settings › Link a Mac. Paste the link it shows.")), link,
+      el("div", { class: "link-how" }, el("div", { class: "link-how-t" }, t("How linking works")),
+        el("ol", {},
+          el("li", {}, t("On your other Mac, open Phygital Memory, then Settings › Link a Mac. It shows a link that works once, for a few minutes.")),
+          el("li", {}, t("Copy that link, paste it here and press Next.")),
+          el("li", {}, t("Both Macs show the same four safety words. If they match, pick the memories on your other Mac and press Link there."))),
+        el("div", { class: "mf-hint" }, t("After that, this Mac is you too: the memories you picked stay in step between your Macs, each with its same password."))));
     const go = el("button", { class: "btn primary", type: "button" }, t("Next"));
     const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, t("Link to your other Mac")), body, err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => stop(null) }, t("Cancel")), go));
