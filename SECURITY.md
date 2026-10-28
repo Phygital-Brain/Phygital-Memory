@@ -1,6 +1,6 @@
 # Security policy
 
-Phygital Memory holds your notes and the keys to open them. It runs a small local program on your Mac that AI apps use as a door to your memories, it can lock a memory with a password, and it can back up or share a memory. Security reports are very welcome.
+Phygital Memory holds your notes and the keys to open them. It runs a small local program on your computer that AI apps use as a door to your memories, it can lock a memory with a password, and it can back up or share a memory. Security reports are very welcome.
 
 Works with Cryptomator vaults (it reads and writes their format 8). Not made by or affiliated with Cryptomator. Problems in Cryptomator, Syncthing, rclone, GitHub, your cloud provider or your AI app go to those projects.
 
@@ -10,7 +10,7 @@ Only the newest release gets security fixes. Updating is the fix. See [docs/upda
 
 | Version | Security fixes |
 |---|---|
-| 0.1.x (not released yet, see [Releases](https://github.com/Phygital-Brain/Phygital-Memory/releases/latest) once there is one) | Yes, from the first release |
+| 0.1.x, the [latest release](https://github.com/Phygital-Brain/Phygital-Memory/releases/latest) | Yes |
 | Anything older | No, please update |
 
 ## Reporting a problem
@@ -25,11 +25,11 @@ There is no email contact. Use private reporting.
 
 ## What to include
 
-- The version of the app (it is in the name of the `.dmg` you installed) and your Mac's macOS version.
-- The kind of memory (Open or Encrypted), where it lives (this Mac, a cloud folder, WebDAV, GitHub, S3 or R2), and your AI app, if it matters.
+- The version of the app (it is in the name of the file you installed), and your system and its version (for example macOS 15, Windows 11 or Ubuntu 24.04).
+- The kind of memory (Open or Encrypted), where it lives (this computer, a cloud folder, WebDAV, GitHub, S3 or R2), and your AI app, if it matters.
 - What you found, and which part of the code it is in, if you know.
 - The steps to reproduce it, on a test memory.
-- What an attacker could do with it, and what they need first (for example: a program running on the same Mac, or an invite link).
+- What an attacker could do with it, and what they need first (for example: a program running on the same computer, or an invite link).
 
 ## What happens next
 
@@ -50,7 +50,7 @@ If you like, you are named in the published advisory and in [CHANGELOG.md](CHANG
 
 If you follow this policy, we will not take any action against you for your research. Please:
 
-- test only on your own Mac and your own test memories, or ones you have permission to test
+- test only on your own computer and your own test memories, or ones you have permission to test
 - never open, read or change other people's notes
 - stop and report as soon as you see someone else's data
 - don't run denial-of-service tests against GitHub, a cloud provider or Syncthing's public servers
@@ -61,17 +61,18 @@ When an AI app reads your notes through Phygital Memory, the text goes to the co
 
 ## How releases are made
 
-No release exists yet. The plan is that GitHub builds the apps from a tag, with no stored tokens, and the app updates itself from GitHub Releases. This page will say more when the first release is made. The Mac app is not notarized by Apple, so macOS asks you to allow it once (see [docs/setup-computer.md](docs/setup-computer.md)).
+GitHub builds the Mac, Windows and Linux apps from a tag (`.github/workflows/release.yml`) into a draft release, which the maintainer publishes by hand. The app checks the latest GitHub Release and updates itself. Updates are signed with the project's update key, and the app installs only updates signed with it (see [docs/updates.md](docs/updates.md)). The Mac and Windows apps are not code-signed, so macOS and Windows ask you to allow them once (see [docs/setup-computer.md](docs/setup-computer.md)).
 
 ## In scope
 
 - Anything that could reveal a password, a recovery key, an AI app key, a cloud or GitHub secret, or readable notes from an Encrypted memory (in tool answers, screens, error messages, logs, the state folder or the memory folder).
 - Any way for an AI app to do more than it was allowed: reading a memory it was not given, reading a memory marked **AI can't see this**, opening **Private for AI** notes without the person asking, or editing when it may only read.
-- Any way to use the app's local program from another website or another program on the Mac without the window's token: unlocking, making AI keys, or testing cloud addresses.
+- Any way to use the app's local program from another website or another program on the computer without the window's token: unlocking, making AI keys, or testing cloud addresses.
 - Any way to read a shared memory, folder or file without being let in, to be let in without the owner's signed yes, or to see parts of a memory that were not shared.
 - Any change that damages the person's notes or cannot be undone, including AI changes that Undo or the trash cannot bring back.
 - Backups: anything that sends readable notes of an Encrypted memory to GitHub, WebDAV or S3, or makes a private GitHub repo public.
-- The Keychain and Touch ID helper in `core/packaging/touchid`.
+- Any way to make the app install an update that was not signed with the project's update key.
+- The Keychain and Touch ID helper in `core/packaging/touchid` (Mac only).
 
 ## Out of scope
 
@@ -79,15 +80,15 @@ No release exists yet. The plan is that GitHub builds the apps from a tag, with 
 - An **Open** memory being readable by any program or AI app that can open its folder. That is what Open means.
 - A person asking their AI to do something harmful to their own notes, after they allowed edits.
 - Weak passwords chosen by a person, or a lost password and recovery key.
-- Any program running as your Mac user while a memory is unlocked, or while the Finder view is shown. See "What it can't protect" in [docs/threat-model.md](docs/threat-model.md).
-- The macOS warning about an app Apple has not notarized. It is known and described in the setup guide.
+- Any program running as your user account while a memory is unlocked, or while the Finder view is shown. See "What it can't protect" in [docs/threat-model.md](docs/threat-model.md).
+- The macOS and Windows warnings about an app that is not code-signed. They are known and described in the setup guide.
 - Problems in Cryptomator, Syncthing, rclone, git, GitHub, your cloud or your AI app. Please report those to them.
 - Problems in a dependency that this project does not use in a harmful way.
 - Missing security headers or reports from automated scanners without a real attack that works.
 
 ## Keeping your own setup safe
 
-- Update when a new release comes out.
+- Keep the app updated. It updates itself from the latest release.
 - Use a strong, long password for an Encrypted memory, and keep the 44-word recovery key somewhere safe and offline. Without the password and the key, nobody can open it, including us.
 - Start with AI apps set to read only, and give each one only the memories it needs.
 - Use **Private for AI** for folders your AI should not open unless you ask.

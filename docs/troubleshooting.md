@@ -4,24 +4,42 @@ Find what you see, then follow the fix. Each part covers one place where things 
 
 ## Installing and opening the app
 
-**What you see:** macOS says the app "can't be opened because Apple cannot check it for malicious software", or that it is from an unidentified developer.
-**Why:** the app is distributed free and is not notarized by Apple.
-**Fix:**
+**What you see (Mac):** macOS says the app "can't be opened because Apple cannot check it for malicious software", or that it is from an unidentified developer.
+**Why:** the app is distributed free and is not code-signed or notarized by Apple.
+**Fix:** right-click the app in Applications, choose **Open**, then **Open** again. If macOS only offers **Done**:
 
 1. Click **Done** (not Move to Trash) on the warning.
 2. Open **System Settings › Privacy & Security**.
 3. Scroll down to the message about Phygital Memory and click **Open Anyway**.
 4. Type your Mac password or use Touch ID, then open the app again.
 
-You do this once for each version you install.
+You do this once for each version you install by hand.
+
+**What you see (Windows):** "Windows protected your PC", with "Unknown publisher".
+**Why:** SmartScreen warns about apps that are not code-signed. The Windows app is not code-signed yet.
+**Fix:** click **More info**, then **Run anyway**.
+
+**What you see (Linux):** the AppImage does not open, or says it needs FUSE.
+**Why:** an AppImage needs FUSE to run.
+**Fix:** install your system's FUSE 2 package (often called `libfuse2`), then open it again. Or use the `.deb` or `.rpm` instead.
+
+**What you see (Windows):** the app stops after **Show in folder**, a folder picker does not appear, or the close button does nothing.
+**Why:** these are known Windows issues, waiting for a retest. The folder picker may have opened hidden behind the app.
+**Fix:** look for the picker behind the app window or in the taskbar. If the app stopped, open it again. If it keeps happening, tell us in a [bug form](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=bug_report.yml).
 
 **What you see:** "Another program is using this app's port (8790). Quit it, then open Phygital Memory again."
-**Why:** the app's local program needs port 8790 on your Mac, and something else holds it. The app refuses to talk to a program on that port that cannot prove it is the app's own.
-**Fix:** quit the other program. If you do not know which it is, restart your Mac and open Phygital Memory first.
+**Why:** the app's local program needs port 8790 on your computer, and something else holds it. The app refuses to talk to a program on that port that cannot prove it is the app's own.
+**Fix:** quit the other program. If you do not know which it is, restart your computer and open Phygital Memory first.
 
 **What you see:** the window opens but stays blank, or says the program stopped.
 **Why:** the local program could not start.
-**Fix:** quit the app fully, wait a few seconds, and open it again. If it keeps happening, open a [bug form](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=bug_report.yml) and say what you did right before.
+**Fix:** quit the app fully, wait a few seconds, and open it again. If it keeps happening, open a [bug form](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=bug_report.yml) and say what you did right before. The app's error log, `engine.log` in the app folder (see [settings](settings.md#files-the-app-keeps)), helps too. Check it holds nothing private before you post it.
+
+## Updates
+
+**What you see:** the update didn't finish, or the app still shows the old version.
+**Why:** the download or the install failed, for example because the connection dropped. When that happens, nothing changes.
+**Fix:** nothing to do. The app tries again the next time you open it. You can also update by hand: see [updates](updates.md#update-by-hand).
 
 ## Unlocking
 
@@ -36,7 +54,7 @@ You do this once for each version you install.
 **What you see:** you forgot the password.
 **Fix:** use **Forgot it? Use your recovery key** on the unlock screen and type the 44 words. It lets you set a new password. If you have neither the password nor the recovery key, nobody can open that memory. An Open memory has no password, so this only applies to Encrypted ones.
 
-**What you see:** "Touch ID didn't confirm. Use your password."
+**What you see (Mac):** "Touch ID didn't confirm. Use your password."
 **Why:** the fingerprint did not match, or macOS has not allowed the app to read its Keychain item yet.
 **Fix:** use your password. If macOS asks about the Keychain, type your Mac login password and choose **Always Allow**. After an app update macOS may ask again.
 
@@ -71,8 +89,8 @@ You do this once for each version you install.
 **Fix:** ask the AI to read the note again and pick a longer piece of text. Nothing was changed.
 
 **What you see:** Claude on the web or on your phone cannot connect.
-**Why:** the door lives on your Mac at `127.0.0.1`, which a website or phone cannot reach. This is not supported yet.
-**Fix:** use Claude Code, Claude Desktop, Cursor or Codex on the Mac. See [connect your AI app](connect-your-ai.md).
+**Why:** the door lives on your computer at `127.0.0.1`, which a website or phone cannot reach. This is not supported yet.
+**Fix:** use Claude Code, Claude Desktop, Cursor or Codex on the computer. See [connect your AI app](connect-your-ai.md).
 
 ## Notes and search
 
@@ -100,25 +118,33 @@ You do this once for each version you install.
 
 **What you see:** a file is listed as not backed up.
 **Why:** GitHub does not take files over 95 MB in this backup.
-**Fix:** that file stays on your Mac. Use an S3 or R2 backup, or a backup file, for big files.
+**Fix:** that file stays on your computer. Use an S3 or R2 backup, or a backup file, for big files.
+
+**What you see:** the GitHub backup says git is missing, or will not start.
+**Why:** the GitHub backup uses your computer's own git, and it is not installed.
+**Fix:** install git. Mac: install Apple's Command Line Tools (run `xcode-select --install` in Terminal). Windows: install Git for Windows. Linux: install the `git` package. Then turn the backup on again.
+
+**What you see:** "WebDAV only" will not start.
+**Why:** WebDAV only (nothing kept on the computer) shows the server as a folder through a system helper. It is built in on Mac, but Windows needs WinFsp and Linux needs FUSE.
+**Fix:** Windows: install WinFsp, a free helper from `winfsp.dev`. Linux: install the `fuse3` package. Then try again.
 
 **What you see:** WebDAV or S3 will not connect.
 **Why:** the address, user name or password is wrong, or the server is down.
 **Fix:** check the address starts with `https://` and try the connection again from **Storage and backup**.
 
-**What you see:** "Sharing needs your sharing key from the Keychain, and macOS hasn't allowed it yet."
+**What you see (Mac):** "Sharing needs your sharing key from the Keychain, and macOS hasn't allowed it yet."
 **Why:** macOS has not let the app read the key it keeps for sharing.
 **Fix:** quit and reopen the app. When macOS asks, type your Mac login password and choose **Always Allow**.
 
-## Sharing and linking a Mac
+## Sharing and linking a computer
 
 **What you see:** the other person never gets in.
 **Why:** an invite works once and for 7 days, and nothing goes to them until you press **Let in**.
-**Fix:** check their request shows in the app and press **Let in**. Both Macs must be online. Make a new invite if the old one ran out.
+**Fix:** check their request shows in the app and press **Let in**. Both computers must be online with the app open at the same time. Make a new invite if the old one ran out.
 
 **What you see:** a shared change does not arrive.
-**Why:** the owner's Mac must be on, with the memory open, for changes to travel.
-**Fix:** open the memory on the owner's Mac and wait a few seconds.
+**Why:** both computers must be online with the app open at the same time for changes to travel. Changes wait until both are on.
+**Fix:** open the app on both computers and wait a few seconds.
 
 ## Still stuck?
 

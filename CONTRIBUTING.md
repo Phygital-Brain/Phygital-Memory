@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for wanting to help. Phygital Memory is a Mac app (Windows and Linux are coming) that keeps your notes as a memory your AI can use. License: AGPL-3.0-only. Bug reports, fixes, translations and clearer docs are all welcome. Small, focused changes are the easiest to review.
+Thanks for wanting to help. Phygital Memory is a desktop app for Mac, Windows and Linux that keeps your notes as a memory your AI can use. License: AGPL-3.0-only. Bug reports, fixes, translations and clearer docs are all welcome. Small, focused changes are the easiest to review.
 
 ## Reporting a problem
 
@@ -15,7 +15,7 @@ Click **New issue** on GitHub and pick a form:
 
 Each form asks for what is needed to help you, such as which kind of memory you use and which AI app.
 
-**Leave out passwords, recovery words, keys, tokens and the contents of your notes before posting.** Issues are public once the repository opens. For security problems, don't open an issue: follow [SECURITY.md](SECURITY.md).
+**Leave out passwords, recovery words, keys, tokens and the contents of your notes before posting.** Issues are public. For security problems, don't open an issue: follow [SECURITY.md](SECURITY.md).
 
 ## Changing the code
 
@@ -47,13 +47,12 @@ Tests that talk to WebDAV, S3, GitHub or Syncthing use offline stand-ins, set by
 
 ## Releases (maintainers)
 
-There is no release yet. When there is one:
-
 1. Set the new version in `core/pyproject.toml`, `app/src-tauri/tauri.conf.json`, `app/src-tauri/Cargo.toml`, `CITATION.cff` and the version in `server.py`. Move the notes in [CHANGELOG.md](CHANGELOG.md) under that version, with the date.
 2. Run the tests.
-3. Push to `main`, tag it `vX.Y.Z`, and publish a GitHub Release with the changelog notes.
+3. Push to `main`, then tag it `vX.Y.Z` and push the tag. GitHub builds the Mac, Windows and Linux apps (`.github/workflows/release.yml`) and puts them, with `latest.json` for the updater, in one draft release. You can also start it by hand: `gh workflow run release.yml`, or `gh workflow run release.yml -f only=<runner>` for one system.
+4. Check the draft, add the changelog notes, and publish it by hand. The apps already installed find it the next time they open.
 
-Building and publishing from the tag will be done by GitHub workflows, added in a separate step. Until then, `bash rebuild.sh` makes the `.dmg` by hand.
+On GitHub, a push to `main` runs only the Linux engine tests. The full test matrix runs when started by hand: `gh workflow run tests.yml -f full=true`. On a Mac, `bash rebuild.sh` still makes the `.dmg` locally.
 
 ## Writing docs
 

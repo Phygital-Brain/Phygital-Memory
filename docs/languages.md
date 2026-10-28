@@ -6,7 +6,7 @@ The screens of the app come in **41 languages**, and an AI agent can add more wi
 
 ## Which language you see
 
-The app follows your Mac. If there is no file for your Mac's language, you see English. To pick one yourself, open **Settings › General › Language** and choose it, or choose it on the lock screen. Only the app's own words change. Your note, folder and file names stay as you wrote them. Reopen the app after you change it so the new language shows everywhere.
+The app follows your computer. If there is no file for your computer's language, you see English. To pick one yourself, open **Settings › General › Language** and choose it, or choose it on the lock screen. Only the app's own words change. Your note, folder and file names stay as you wrote them. Reopen the app after you change it so the new language shows everywhere.
 
 | Language | Code | | Language | Code |
 |---|---|---|---|---|
@@ -36,7 +36,7 @@ Give an AI coding agent this request, in a copy of the repository:
 1. `translate ca` fills a new `ca.json` with a translation of every English text. It needs `ANTHROPIC_API_KEY` set in your environment. The key is never stored.
 2. Each `{0}` placeholder stays exactly as in English. A translation that loses one is skipped.
 3. `check` makes sure nothing is missing or broken.
-4. Build the app again (`bash rebuild.sh --install`). People whose Mac or app is set to Catalan now see it.
+4. Build the app again (`bash rebuild.sh --install`). People whose computer or app is set to Catalan now see it.
 
 Missing texts show in English, so a half-done file still works.
 

@@ -4,21 +4,21 @@ For when you want to know what happens inside Phygital Memory, in plain words.
 
 ## The pieces
 
-Four pieces work together on your Mac.
+Four pieces work together on your computer.
 
 - **The app window.** The screens you click: the editor, search, Settings. It is a small Tauri app (Rust) that shows a web page from the local program. It also draws the menu bar and asks before it closes.
-- **The local program.** A Python program the window starts. It does the real work: opens memories, searches, saves, keeps versions, backs up, shares. It listens only on your own Mac, at `127.0.0.1` port `8790`. Nothing outside your Mac can reach it.
-- **Your memories.** Folders of notes you chose. Each one is either **Open** (a plain folder) or **Encrypted** (a locked vault).
+- **The local program.** A Python program the window starts. It does the real work: opens memories, searches, saves, keeps versions, backs up, shares. It listens only on your own computer, at `127.0.0.1` port `8790`. Nothing outside your computer can reach it.
+- **Your memories.** Folders of notes you chose. Each one is either **Open** (a plain folder) or **Encrypted** (a vault opened with a password).
 - **The AI door.** A part of the local program at `/mcp` that speaks MCP (Model Context Protocol, the standard way AI apps use tools). An AI app with a key can call the 17 tools in [tools.md](tools.md). Nothing else.
 
-Helper programs the app ships with: Syncthing (sharing between Macs), rclone (WebDAV and S3 or R2), and git (the GitHub backup). They only run when you turn on the feature that needs them.
+Helper programs the app ships with: Syncthing (sharing between computers) and rclone (WebDAV and S3 or R2). The GitHub backup uses your computer's own git: a Mac has it with the Command Line Tools, Windows needs Git for Windows, Linux the `git` package. They only run when you turn on the feature that needs them.
 
 ## Two kinds of memory
 
 | | Open | Encrypted |
 |---|---|---|
 | What it is | A plain folder of readable files | A Cryptomator format 8 vault |
-| Password | None | Yours, or Touch ID |
+| Password | None | Yours, or Touch ID (Mac only) |
 | Who can read the files | Any program or AI app that can open the folder | Nobody without the password. AI apps only through the app's door |
 | Search and history | Added by the app | Added by the app, kept inside the lock |
 | On your phone | Yes, if the folder is in iCloud Drive, Dropbox or Google Drive | Not yet |
@@ -55,9 +55,9 @@ You choose the kind when you make a memory. You cannot switch it later.
 | Trash | Hidden `.trash` folder inside the memory, kept 7 days | Same as the memory |
 | AI tasks | Hidden `.ai-tasks/AI tasks.md` inside the memory | Same as the memory. Never shared |
 | Per-memory settings (home note, pins, colours, Private for AI list) | Hidden `.phygital` folder inside the memory | Same as the memory |
-| The list of your memories | `~/Library/Application Support/Phygital Memory/folders.json` (names and places, no passwords) | You |
+| The list of your memories | `folders.json` in the app folder (names and places, no passwords). See [settings](settings.md#files-the-app-keeps) | You |
 | AI app keys | Only a fingerprint, in `ai-apps.json` in that folder | Nobody can get the key back from it |
-| Secrets (cloud passwords, GitHub sign-in, S3 keys, your personal key) | The Mac's Keychain | You, and this app |
+| Secrets (cloud passwords, GitHub sign-in, S3 keys, your personal key) | The system's secret store: Keychain (Mac), Credential Manager (Windows), Secret Service (Linux) | You, and this app |
 | AI activity and Undo | Memory only, gone when the memory locks or the app quits | The running app |
 
 ## The code

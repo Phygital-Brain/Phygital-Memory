@@ -16,7 +16,7 @@ All the guides for Phygital Memory. Pick the one that answers your question.
 | Guide | Read it when |
 |---|---|
 | [Safety](safety.md) | You are about to let an AI read or change your notes |
-| [Privacy](privacy.md) | You want to know what leaves your Mac and who can see what |
+| [Privacy](privacy.md) | You want to know what leaves your computer and who can see what |
 | [Threat model](threat-model.md) | You want to know what the app protects against, and what it cannot |
 
 ## Using it

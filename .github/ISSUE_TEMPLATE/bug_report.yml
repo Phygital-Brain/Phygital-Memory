@@ -13,7 +13,7 @@ body:
     id: privacy
     attributes:
       label: Privacy check
-      description: This page is public once the repository opens. Anyone can read it.
+      description: This page is public. Anyone can read it.
       options:
         - label: I removed passwords, recovery words, keys, tokens and the contents of my notes from everything below.
           required: true
@@ -36,7 +36,7 @@ body:
       label: Which kind of memory?
       options:
         - Open (a plain folder)
-        - Encrypted (a locked vault)
+        - Encrypted (opened with a password)
         - Both
         - Not about a memory
     validations:
@@ -53,7 +53,7 @@ body:
         - Backed up to GitHub
         - Backed up to S3 or R2
         - Shared with someone
-        - Linked to my other Mac
+        - Linked to my other computer
   - type: dropdown
     id: app
     attributes:
@@ -66,11 +66,18 @@ body:
         - Codex
         - Another MCP app
         - Not about an AI app
-  - type: input
+  - type: dropdown
     id: os
     attributes:
       label: Operating system
-      placeholder: macOS 15, Windows 11, Ubuntu 24.04
+      options:
+        - macOS (Apple chip)
+        - macOS (Intel)
+        - Windows
+        - Windows on ARM
+        - Linux (x64)
+        - Linux (ARM)
+        - Other
   - type: input
     id: version
     attributes:

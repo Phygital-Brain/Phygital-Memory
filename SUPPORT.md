@@ -9,4 +9,4 @@
 | Ask a question or share an idea | [Question](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=question.yml) |
 | Report a security problem, privately | [Private report](https://github.com/Phygital-Brain/Phygital-Memory/security/advisories/new) ([SECURITY.md](SECURITY.md)) |
 
-Issues are public once the repository opens. Leave out passwords, keys, recovery words and the contents of your notes. This is a project run in spare time, so answers can take a few days.
+Issues are public. Leave out passwords, keys, recovery words and the contents of your notes. This is a project run in spare time, so answers can take a few days.

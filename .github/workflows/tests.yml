@@ -1,10 +1,9 @@
-# Tests on Mac, Windows and Linux at every push: the engine's tests that need no secret store or second app,
+# Tests on Mac, Windows and Linux (a push runs the Linux engine tests; the rest by hand): the engine's tests that need no secret store or second app,
 # then the built engine run and used for real, then a compile check of the app window. (The sharing and server tests run on the Mac for now; see AGENTS.md.
 # test_docx needs pandoc to make its sample files, so it runs on the Mac too.)
 name: tests
 
-# GitHub minutes cost money on a private repo, and a Mac minute counts as ten. A push runs only the engine tests on
-# Linux (cheap). Everything else (Mac, Windows, the built app, WebDAV, the window) runs when started by hand:
+# A push runs only the engine tests on Linux. Everything else (Mac, Windows, the built app, WebDAV, the window) runs when started by hand:
 #   gh workflow run tests.yml -f full=true
 on:
   push:

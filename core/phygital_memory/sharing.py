@@ -120,8 +120,11 @@ def my_name() -> str:
         name = ""
     if name:
         return name[:60]
-    r = subprocess.run(["id", "-F"], capture_output=True, text=True)
-    return (r.stdout.strip() or os.environ.get("USER", "Someone"))[:60]
+    try:   # the Mac account's full name; elsewhere, the account name
+        full = subprocess.run(["id", "-F"], capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        full = ""
+    return (full or os.environ.get("USER") or os.environ.get("USERNAME") or "Someone")[:60]
 
 
 def saved_name() -> str:

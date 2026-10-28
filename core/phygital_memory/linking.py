@@ -50,11 +50,16 @@ def folder_id(code: str) -> str:
 
 
 def computer_name() -> str:
-    try:
+    if os.environ.get("PHYGITAL_MEMORY_MAC_NAME"):
+        return os.environ["PHYGITAL_MEMORY_MAC_NAME"][:40]
+    try:   # the Mac's own name ("Max's MacBook"); elsewhere, the computer's network name
         r = subprocess.run(["scutil", "--get", "ComputerName"], capture_output=True, text=True, timeout=5)
-        return (os.environ.get("PHYGITAL_MEMORY_MAC_NAME") or r.stdout.strip() or "Mac")[:40]
+        if r.stdout.strip():
+            return r.stdout.strip()[:40]
     except (OSError, subprocess.TimeoutExpired):
-        return "Mac"
+        pass
+    import platform
+    return (platform.node().split(".")[0] or "Computer")[:40]
 
 
 def words(pub: bytes, code: str) -> str:

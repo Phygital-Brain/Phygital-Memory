@@ -1,37 +1,59 @@
 # Setup on your computer
 
-For when you want to try Phygital Memory on a Mac, free, with any AI app. About 5 minutes.
+For when you want to try Phygital Memory on a Mac, Windows or Linux computer, free, with any AI app. About 5 minutes.
 
 ## Before you start
 
-- A Mac. The first builds are for Apple silicon. Windows and Linux are not supported yet.
+- A Mac (Apple chip or Intel), a Windows computer (x64, or Windows on ARM through emulation), or a Linux computer (x64 or ARM). Windows is built but not fully tested yet. See [what we tested](#what-we-tested).
 - An AI app that can use MCP tools: Claude Code, Claude Desktop, Cursor or Codex. See [connect-your-ai.md](connect-your-ai.md).
-- No other program using port 8790 on your Mac.
+- No other program using port 8790 on your computer.
 
 ## 1. Get the app
 
-Releases will come from the GitHub Releases page of this repository, with auto-update. There is no release yet, and the repository is private. Until there is one, a developer builds the `.dmg`:
+Download it from the [Releases page](https://github.com/Phygital-Brain/Phygital-Memory/releases). Pick the file for your computer (`<version>` is the version number, for example `0.1.0`):
+
+| Computer | File |
+|---|---|
+| Mac (Apple chip and Intel, one download) | `Phygital Memory_<version>_universal.dmg` |
+| Windows | `Phygital Memory_<version>_x64-setup.exe` (or the `_x64_en-US.msi`) |
+| Linux, Debian or Ubuntu | `Phygital Memory_<version>_amd64.deb`, or `_arm64.deb` on ARM |
+| Linux, Fedora or openSUSE | the `.rpm` |
+| Linux, any other | the `.AppImage` |
+
+Then install it:
+
+- **Mac:** open the `.dmg` and drag **Phygital Memory** into **Applications**.
+- **Windows:** open the `setup.exe` (or the `.msi`) and follow the steps.
+- **Linux:** open the `.deb` or `.rpm` with your software installer, or in a terminal run `sudo apt install ./<file>.deb` (or `sudo dnf install ./<file>.rpm`). For the AppImage, make it runnable (`chmod +x <file>.AppImage`) and open it. The AppImage needs FUSE. If it does not open, install your system's FUSE 2 package (often called `libfuse2`).
+
+The Intel Mac build will be dropped in a later release.
+
+### Build it yourself
+
+A developer can also build the Mac app from this repository:
 
 ```bash
 bash rebuild.sh --install
 ```
 
-You should see a `.dmg` made in `release/` and, with `--install`, the app replaced in Applications and reopened. The first build takes longer, because it fetches the build tools. You need `uv`, `npm`, Rust with `cargo tauri`, `syncthing` and `rclone`.
-
-When a release exists: download the `.dmg`, open it, and drag **Phygital Memory** into **Applications**.
+You should see a `.dmg` made in `release/` and, with `--install`, the app replaced in Applications and reopened. The first build takes longer, because it fetches the build tools. You need `uv`, `npm`, Rust with `cargo tauri`, `syncthing` and `rclone`. The Windows and Linux apps are built on GitHub.
 
 ## 2. Open it the first time
 
-The app is distributed free and is not notarized by Apple, so macOS asks you to allow it once.
+The Mac and Windows apps are distributed free and are not code-signed, so your computer asks you to allow them once.
 
-1. Open **Phygital Memory** from Applications. macOS says it cannot check the app. Click **Done**.
+**Mac:** right-click **Phygital Memory** in Applications and choose **Open**, then **Open** again. If macOS only offers **Done**:
+
+1. Click **Done**.
 2. Open **System Settings › Privacy & Security**.
 3. Scroll down to the message about Phygital Memory and click **Open Anyway**.
 4. Type your Mac password or use Touch ID, then open the app again.
 
-You should see the setup page, **Set up your Phygital Memory**.
+**Windows:** SmartScreen says "Windows protected your PC" and shows "Unknown publisher". Click **More info**, then **Run anyway**.
 
-On Windows, when there is a Windows version, SmartScreen will show a warning once. Click **More info › Run anyway**.
+**Linux:** nothing extra. Open **Phygital Memory** from your app list.
+
+You should see the setup page, **Set up your Phygital Memory**.
 
 ## 3. Make your first memory
 
@@ -40,8 +62,8 @@ The setup page asks a few questions, one at a time. Each is only clicks, plus a 
 1. **What should your AI call you?** Your name, and the language for folders and rules. Your notes stay in whatever language you write.
 2. **What kind of memory?** Pick one. You cannot switch later.
    - **Open**: a normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.
-   - **Encrypted**: locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.
-3. **Name it and pick its place.** The name, and where to keep it: this Mac, a cloud folder the app found, WebDAV, or any other folder. For Encrypted, also a password of 8 or more characters, twice.
+   - **Encrypted**: opened with your password. Only the AI apps you allow get in, through this app. Not on phones yet.
+3. **Name it and pick its place.** The name, and where to keep it: this computer, a cloud folder the app found, WebDAV, or any other folder. For Encrypted, also a password of 8 or more characters, twice.
 4. **Back it up?** A private GitHub repo now, or **Later**. You can change this any time in **Storage and backup**.
 5. **What's this memory for?** Work, Personal, or both. This only decides which starter notes the app writes.
 
@@ -76,20 +98,25 @@ Keep the app open for AI apps to reach your memories. An Open memory opens strai
 
 ## Where things are
 
-- Your notes: the folders you chose. The first memory defaults to `~/Phygital Memory`.
-- The app's own information: `~/Library/Application Support/Phygital Memory`. See [settings.md](settings.md#files-the-app-keeps).
-- Your secrets: the Mac's Keychain.
+- Your notes: the folders you chose. The first memory defaults to `~/Phygital Memory` (a folder called Phygital Memory in your home folder).
+- The app's own information, the app folder:
+  - Mac: `~/Library/Application Support/Phygital Memory`
+  - Windows: `%APPDATA%\Phygital Memory`
+  - Linux: `~/.local/share/phygital-memory`
+
+  See [settings.md](settings.md#files-the-app-keeps).
+- Your secrets: the system's own secret store. That is the Keychain on Mac, Credential Manager on Windows, and the Secret Service (such as GNOME Keyring) on Linux.
 
 ## Update
 
-No release exists yet, so there is nothing to update. Releases will come from GitHub Releases with auto-update. See [updates.md](updates.md).
+The app updates itself from the latest GitHub Release. See [updates.md](updates.md).
 
 ## Remove it
 
 1. Quit Phygital Memory.
-2. Drag the app out of Applications.
-3. Delete `~/Library/Application Support/Phygital Memory`.
-4. Open **Keychain Access** and delete the items whose names start with "Phygital Memory".
+2. Remove the app. Mac: drag it out of Applications. Windows: **Settings › Apps › Installed apps**, then **Uninstall**. Linux: remove the package with your software installer, or delete the AppImage.
+3. Delete the app folder (see [Where things are](#where-things-are)).
+4. Delete the saved secrets whose names start with "Phygital Memory". Mac: in **Keychain Access**. Windows: in **Credential Manager**. Linux: in your keyring app, such as **Passwords and Keys**.
 5. Your memory folders stay where they are. Delete them yourself if you no longer want the notes.
 
 ## Use it from your phone
@@ -98,10 +125,10 @@ There is no phone app. An **Open** memory kept in iCloud Drive, Dropbox or Googl
 
 ## What we tested
 
-| What | Where | When |
+| What | Where | Result |
 |---|---|---|
-| The test scripts in `core/tests/` (open and encrypted memories, the AI door, sharing, backups with offline stand-ins for WebDAV, S3 and GitHub) | A Mac, built from this repository | October 2026 |
+| Mac (Apple chip) | Used every day, built from this repository, with the test scripts in `core/tests/` | Works |
+| Linux on ARM | A virtual machine | Works |
+| Windows on ARM | A virtual machine | Installs and opens. Known issues waiting for a retest: **Show in folder** could stop the app's engine, the folder picker could open hidden behind the app, and the close button once did nothing |
+| Linux x64, Windows x64, Intel Mac | The engine tests on GitHub's machines only | Not tried by hand yet |
 | A real Finder drag, a real Touch ID unlock, a real Nextcloud server | Checked by hand | Not yet fully tested |
-| Windows, Linux | Not tested | Not supported yet |
-| Intel Macs | Not tested | Not supported yet |
-| A clean Mac that never had the app | Not tested | Not yet |

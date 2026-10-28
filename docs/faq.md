@@ -7,14 +7,14 @@ Quick answers. Each one links to the page that goes deeper.
 <details>
 <summary><b>What is Phygital Memory?</b></summary>
 
-A Mac app that keeps your notes as a memory your AI can use. It has an editor, search, version history, a trash, AI tasks, sharing and backups. AI apps reach your notes through one local door on your own Mac. See [how it works](how-it-works.md).
+A desktop app for Mac, Windows and Linux that keeps your notes as a memory your AI can use. It has an editor, search, version history, a trash, AI tasks, sharing and backups. AI apps reach your notes through one local door on your own computer. See [how it works](how-it-works.md).
 
 </details>
 
 <details>
 <summary><b>Is it free?</b></summary>
 
-Yes. It is distributed free. Running it on your Mac costs nothing. Your AI app may need its own plan, and a cloud or S3 bucket you choose for backups may cost money. It is open source under the AGPL-3.0 license.
+Yes. It is distributed free. Running it on your computer costs nothing. Your AI app may need its own plan, and a cloud or S3 bucket you choose for backups may cost money. It is open source under the AGPL-3.0 license.
 
 </details>
 
@@ -28,7 +28,7 @@ No. Install the app, answer a few questions, and connect your AI app with one bu
 <details>
 <summary><b>What is the difference between Open and Encrypted?</b></summary>
 
-An Open memory is a plain folder. Any AI app can read it, there is no password, and it can sit in iCloud Drive, Dropbox or Google Drive so your phone gets it too. An Encrypted memory is locked with your password. AI apps can only reach it through this app, and only the ones you allow. You choose when you make the memory and cannot switch later. See [how it works](how-it-works.md#two-kinds-of-memory).
+An Open memory is a plain folder. Any AI app can read it, there is no password, and it can sit in iCloud Drive, Dropbox or Google Drive so your phone gets it too. An Encrypted memory is opened with your password. AI apps can only reach it through this app, and only the ones you allow. You choose when you make the memory and cannot switch later. See [how it works](how-it-works.md#two-kinds-of-memory).
 
 </details>
 
@@ -42,14 +42,21 @@ Pick Open if you want any AI app, and your phone, to read your notes with no set
 <details>
 <summary><b>Which computers does it work on?</b></summary>
 
-Mac only today. The first builds are for Apple silicon. Windows and Linux are being ported from the same code. Nothing there is tested yet. See [roadmap](roadmap.md).
+Mac (one download for Apple chip and Intel Macs), Windows (x64, and Windows on ARM through emulation) and Linux (x64 and ARM). The Mac app is used every day. Windows is built but not fully tested yet, and has known issues waiting for a retest. The Intel Mac build will be dropped in a later release. See [what we tested](setup-computer.md#what-we-tested).
+
+</details>
+
+<details>
+<summary><b>How do I install it?</b></summary>
+
+Download the file for your computer from the [Releases page](https://github.com/Phygital-Brain/Phygital-Memory/releases). Mac: open the `.dmg` and drag the app into **Applications**. Windows: run the `setup.exe` or the `.msi`. Linux: install the `.deb` or `.rpm`, or run the AppImage. See [setup](setup-computer.md#1-get-the-app).
 
 </details>
 
 <details>
 <summary><b>Which AI apps work with it?</b></summary>
 
-Claude Code, Claude Desktop, Cursor and Codex have steps in [connect your AI app](connect-your-ai.md). Any AI app that can use an MCP server over HTTP with a header may work, but we have only tested the ones with steps. Apps on the web or on your phone cannot reach the door yet, because it lives on your Mac.
+Claude Code, Claude Desktop, Cursor and Codex have steps in [connect your AI app](connect-your-ai.md). Any AI app that can use an MCP server over HTTP with a header may work, but we have only tested the ones with steps. Apps on the web or on your phone cannot reach the door yet, because it lives on your computer.
 
 </details>
 
@@ -135,7 +142,7 @@ That is called prompt injection and today's AI models can fall for it. The tools
 <details>
 <summary><b>Is it audited?</b></summary>
 
-No. Nobody outside the project has audited it. A security review is planned before the first release. See [threat model](threat-model.md#not-audited-yet).
+No. Nobody outside the project has audited it. A security review is planned. See [threat model](threat-model.md#not-audited-yet).
 
 </details>
 
@@ -158,7 +165,7 @@ Open the Encrypted memory, go to **Settings**, and show the recovery key (it ask
 <details>
 <summary><b>How does Touch ID work?</b></summary>
 
-If you turn it on, the app keeps your password in the Mac's Keychain, where only this app can read it after your fingerprint (or your Mac password if there is no Touch ID). If you change the password, Touch ID keeps working with the new one. See [privacy](privacy.md#whats-kept).
+Touch ID is Mac only. If you turn it on, the app keeps your password in the Mac's Keychain, where only this app can read it after your fingerprint (or your Mac password if there is no Touch ID). If you change the password, Touch ID keeps working with the new one. See [privacy](privacy.md#whats-kept).
 
 </details>
 
@@ -188,7 +195,7 @@ Yes. An Open memory is plain Markdown files, so Obsidian and others open it. An 
 <details>
 <summary><b>Does it work with iCloud Drive, Dropbox, Google Drive or Nextcloud?</b></summary>
 
-Yes, as folders on your Mac. Choose a cloud folder as the place when you make a memory, and that app syncs it. For Encrypted memories the cloud only sees encrypted files. If two devices change the same note, both versions are kept.
+Yes, as folders on your computer. Choose a cloud folder as the place when you make a memory, and that app syncs it. For Encrypted memories the cloud only sees encrypted files. If two devices change the same note, both versions are kept.
 
 </details>
 
@@ -202,7 +209,7 @@ There is no phone app. An Open memory in a cloud folder shows up in your phone's
 <details>
 <summary><b>Can two people work in one memory?</b></summary>
 
-Yes. Share a whole memory, one folder or one file from Mac to Mac, with Can edit or Can view. There is no account and no cloud. The owner's Mac has to be on for changes to travel. See [how it works](how-it-works.md) and [privacy](privacy.md#sharing).
+Yes. Share a whole memory, one folder or one file from computer to computer, with Can edit or Can view. It goes through Syncthing, with no account and no cloud. Both computers must be online with the app open at the same time. Changes wait until both are on. See [how it works](how-it-works.md) and [privacy](privacy.md#sharing).
 
 </details>
 
@@ -225,28 +232,35 @@ Yes, for AI apps to reach your memories. The door only exists while the app runs
 <details>
 <summary><b>Why does macOS say it can't verify the app?</b></summary>
 
-It is distributed free and is not notarized by Apple, so macOS asks you to allow it once. Open **System Settings › Privacy & Security** and click **Open Anyway**. See [setup](setup-computer.md#2-open-it-the-first-time).
+It is distributed free and is not code-signed or notarized by Apple, so macOS asks you to allow it once. Right-click the app and choose **Open**, or open **System Settings › Privacy & Security** and click **Open Anyway**. See [setup](setup-computer.md#2-open-it-the-first-time).
+
+</details>
+
+<details>
+<summary><b>Why does Windows say "unknown publisher"?</b></summary>
+
+The Windows app is not code-signed yet, so SmartScreen warns you once. Click **More info**, then **Run anyway**. See [setup](setup-computer.md#2-open-it-the-first-time).
 
 </details>
 
 <details>
 <summary><b>How do I update?</b></summary>
 
-Releases will come from GitHub Releases, and the app will update itself from there. There is no release yet. See [updates](updates.md).
+The app updates itself. It checks the latest GitHub Release when it opens. If it finds a newer version then, it installs it and restarts. If it finds one later, it installs it when you quit. See [updates](updates.md).
 
 </details>
 
 <details>
 <summary><b>How do I remove it?</b></summary>
 
-Quit the app and drag it out of Applications. Your memories stay where they are because they are your folders. The steps for removing the app's own data are in [setup](setup-computer.md#remove-it).
+Quit the app and remove it (on a Mac, drag it out of Applications). Your memories stay where they are because they are your folders. The steps for removing the app's own data are in [setup](setup-computer.md#remove-it).
 
 </details>
 
 <details>
 <summary><b>Where are my notes?</b></summary>
 
-In the folder you chose for each memory. The default first memory folder is `~/Phygital Memory`. The app's own information is in `~/Library/Application Support/Phygital Memory`. See [settings](settings.md#files-the-app-keeps).
+In the folder you chose for each memory. The default first memory folder is `~/Phygital Memory`. The app's own information is in the app folder: `~/Library/Application Support/Phygital Memory` on Mac, `%APPDATA%\Phygital Memory` on Windows, `~/.local/share/phygital-memory` on Linux. See [settings](settings.md#files-the-app-keeps).
 
 </details>
 

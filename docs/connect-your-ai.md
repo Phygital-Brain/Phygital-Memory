@@ -25,7 +25,7 @@ If your memory is **Open**, any AI app that can read files can also open the fol
 
 The quickest way: in **Settings › AI apps**, press **Add to Claude Code**. The app adds the door and the key for you.
 
-By hand, run this in Terminal, with your key in place of `YOUR_KEY`:
+By hand, run this in a terminal, with your key in place of `YOUR_KEY`:
 
 ```bash
 claude mcp add --scope user --transport http phygital-memory http://127.0.0.1:8790/mcp --header "Authorization: Bearer YOUR_KEY"
@@ -88,7 +88,7 @@ Apps that support MCP sign-in can add the address without a key. The app then sh
 
 ## Claude website and phone app
 
-Not supported yet. The door lives on your Mac at `127.0.0.1`, which a website or phone cannot reach. If your memory is **Open** and sits in a cloud folder or a private GitHub backup that your phone AI app can read, that app can read the files without the door.
+Not supported yet. The door lives on your computer at `127.0.0.1`, which a website or phone cannot reach. If your memory is **Open** and sits in a cloud folder or a private GitHub backup that your phone AI app can read, that app can read the files without the door.
 
 ## ChatGPT, VS Code, Gemini CLI, OpenClaw, Hermes Agent, Goose
 

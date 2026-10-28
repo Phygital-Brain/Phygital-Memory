@@ -11,7 +11,6 @@ Phygital Memory is run by [Phygital Brain](https://github.com/Phygital-Brain), t
 - Small changes (fixes, docs, translations): the maintainer reviews and merges. Anyone can propose one with a pull request.
 - Bigger changes (a new AI tool, a change to a safety rule, a new dependency, a new place where data can go): open an issue first. The maintainer answers within a week and says yes, no or not now, with the reason.
 - The safety rules in [AGENTS.md](AGENTS.md) are not weakened without a test and a written reason.
-- The repository is private for now. Until it opens, the maintainer decides who gets access.
 
 ## Becoming a maintainer
 
