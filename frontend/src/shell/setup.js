@@ -57,7 +57,7 @@ const ART = {
 };
 const art = (name) => {
   const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
-  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: 26, height: 26, fill: "none", stroke: "currentColor",
+  for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: "56%", height: "56%", fill: "none", stroke: "currentColor",
     "stroke-width": 1.6, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" })) s.setAttribute(k, v);
   for (const d of ART[name] || []) { const p = document.createElementNS(NS, "path"); p.setAttribute("d", d); s.append(p); }
   return s;
@@ -238,7 +238,8 @@ export function renderSetup(body, ctx) {
 
   // A question: cards with a drawing, a name and a line. Click or press its number to pick; many are fine
   const questionView = (q) => {
-    const grid = el("div", { class: "sp-grid" + (q.agent ? " agent" : ""), role: "group", "aria-label": q.q });
+    const n = q.options.length;   // rows that come out even: 4 as 2+2, 5 and 6 as 3s, 7 as 4+3
+    const grid = el("div", { class: `sp-grid c${n === 4 ? 2 : n <= 6 ? 3 : 4}` + (q.agent ? " agent" : ""), role: "group", "aria-label": q.q });
     q.options.forEach(([v, label, desc], k) => {
       const on = () => answers[q.key].includes(v);
       const card = el("button", { class: "sp-card" + (on() ? " on" : ""), type: "button", role: "checkbox", "aria-checked": String(on()),
