@@ -1,0 +1,7 @@
+{
+  "identifier": "default",
+  "description": "The main window shows our local page with no system title bar (like Baalda), so its top rows carry data-tauri-drag-region. The page may only start a window drag or toggle full size by double-click. Nothing else: no files, no shell, no other window commands.",
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:8790/*"] },
+  "permissions": ["core:window:allow-start-dragging", "core:window:allow-internal-toggle-maximize"]
+}
