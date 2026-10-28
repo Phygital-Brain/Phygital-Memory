@@ -624,45 +624,48 @@ async def allow_state(request: Request) -> Response:
     return JSONResponse({"next": nxt or None, "gone": nxt == ""}, headers={"Cache-Control": "no-store"})
 
 
-SERVER_STYLE = """<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>:root{color-scheme:light dark;--bg:#faf9f8;--card:#fff;--line:#e4e2df;--text:#1a1a1e;--faint:#6b6b76;--accent:#4d5bff;--on:#fff}
-@media (prefers-color-scheme:dark){:root{--bg:#0b0d12;--card:#14171f;--line:#262a35;--text:#ececf1;--faint:#9d9da7;--accent:#8a94ff;--on:#0b0d12}}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);
-font:16px/1.5 -apple-system,system-ui,sans-serif;padding:16px}main{width:100%;max-width:380px}
-h1{font:650 22px/1.3 -apple-system,system-ui,sans-serif;margin:0 0 6px}h1 b{color:var(--accent);font-weight:650}
-p{color:var(--faint);margin:0 0 20px}label{display:block;font-size:14px;color:var(--faint);margin-bottom:6px}
-input{width:100%;font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text)}
-input:focus{outline:2px solid var(--accent);outline-offset:1px}
-button{width:100%;font:600 16px/1 -apple-system,system-ui,sans-serif;padding:14px;border-radius:10px;border:0;margin-top:12px;
-background:var(--accent);color:var(--on);cursor:pointer}button.quiet{background:transparent;color:var(--text);border:1px solid var(--line)}
-#m{min-height:24px;margin:12px 0 0;color:var(--faint)}#m.bad{color:#e5484d}</style>"""
+KNOT_SVG = ('<svg class="knot" viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">'
+            '<circle cx="32" cy="32" r="30" fill="#C8F031"/><path class="knot-wire" d="M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 '
+            '45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 C45 29 46 36 46 42 H52" fill="none" stroke="#0B0D12" stroke-width="3" '
+            'stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="42" r="3.2" fill="#4D5BFF"/>'
+            '<circle cx="52" cy="42" r="3.2" fill="#4D5BFF"/></svg>')
 
-LOGIN_PAGE = """<!doctype html><meta charset="utf-8"><title>Phygital Memory</title>""" + SERVER_STYLE + """
-<main><h1>Phygital <b>Memory</b></h1><p>Type your server passphrase to open your memories.</p>
-<label for="pw">Passphrase</label><input id="pw" type="password" autocomplete="current-password" autofocus>
-<button id="go" type="button">Open</button><div id="m" role="status"></div></main>
+# The server's own small pages wear the app's look: its stylesheet and fonts (the only files open before the login),
+# laid out like the unlock screen.
+SERVER_HEAD = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Phygital Memory</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/app.css">
+<style>.unlock-card .knot{align-self:center;margin-bottom:4px}.unlock-card .btn{width:100%}</style>"""
+
+LOGIN_PAGE = SERVER_HEAD + """
+<div class="unlock"><div class="unlock-wrap"><form class="unlock-card" id="f">""" + KNOT_SVG + """
+<div class="wordmark">Phygital Memory</div><div class="unlock-sub">Type your server passphrase to open your memories.</div>
+<input id="pw" type="password" autocomplete="current-password" placeholder="Passphrase" aria-label="Passphrase" autofocus>
+<button class="btn primary" id="go" type="submit">Open</button><div class="unlock-err" id="m" role="status"></div>
+</form></div></div>
 <script>
 const pw = document.getElementById("pw"), m = document.getElementById("m"), go = document.getElementById("go");
-async function send() {
-  go.disabled = true; m.className = ""; m.textContent = "Checking";
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!pw.value) return;
+  go.disabled = true; m.textContent = "";
   try {
     const r = await fetch("/login", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ passphrase: pw.value, next: new URLSearchParams(location.search).get("next") || "/" }) });
     const j = await r.json();
     if (r.ok) { location.replace(j.next); return; }
-    m.className = "bad"; m.textContent = j.error || "That didn't work.";
-  } catch (e) { m.className = "bad"; m.textContent = "The server didn't answer. Try again."; }
+    m.textContent = j.error || "That didn't work.";
+  } catch (x) { m.textContent = "The server didn't answer. Try again."; }
   go.disabled = false; pw.select();
-}
-go.addEventListener("click", send);
-pw.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+});
 </script>"""
 
-SERVER_ALLOW_PAGE = """<!doctype html><meta charset="utf-8"><title>Phygital Memory</title>""" + SERVER_STYLE + """
-<main><h1>Let <b>{NAME}</b> in?</h1><p>It will see all your memories and can only read them. You can change what it
-sees, or allow edits, later in Settings, AI apps.</p>
-<button id="yes" type="button">Allow</button><button id="no" class="quiet" type="button">Not now</button>
-<div id="m" role="status"></div></main>
+SERVER_ALLOW_PAGE = SERVER_HEAD + """
+<div class="unlock"><div class="unlock-wrap"><div class="unlock-card">""" + KNOT_SVG + """
+<div class="wordmark">Phygital Memory</div><div class="unlock-folder">Let {NAME} in?</div>
+<div class="unlock-sub">It will see all your memories and can only read them. You can change what it sees, or allow
+edits, later in Settings, AI apps.</div>
+<button class="btn primary" id="yes" type="button">Allow</button><button class="btn" id="no" type="button">Not now</button>
+<div class="unlock-err" id="m" role="status"></div></div></div></div>
 <script>
 const m = document.getElementById("m"), base = location.pathname;
 async function answer(allow) {
@@ -671,11 +674,11 @@ async function answer(allow) {
     const r = await fetch(base + "/answer", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ allow }) });
     const j = await r.json();
-    if (!r.ok) { m.className = "bad"; m.textContent = j.error || "That didn't work."; return; }
+    if (!r.ok) { m.textContent = j.error || "That didn't work."; return; }
     const s = await (await fetch(base + "/state", { cache: "no-store" })).json();
-    if (s.next) { m.textContent = "Done. Going back to the AI app."; location.replace(s.next); }
-    else { m.className = "bad"; m.textContent = "This request ran out. Start the sign-in again from the AI app."; }
-  } catch (e) { m.className = "bad"; m.textContent = "The server didn't answer. Try again."; }
+    if (s.next) { m.classList.add("hint"); m.textContent = "Done. Going back to the AI app."; location.replace(s.next); }
+    else m.textContent = "This request ran out. Start the sign-in again from the AI app.";
+  } catch (x) { m.textContent = "The server didn't answer. Try again."; }
 }
 document.getElementById("yes").addEventListener("click", () => answer(true));
 document.getElementById("no").addEventListener("click", () => answer(false));
@@ -795,7 +798,8 @@ async def mcp_proof(request: Request) -> Response:
 async def asset(request: Request) -> Response:
     name = request.path_params["name"]
     f = WEB / "assets" / name
-    if not _local(request) or (hosted.ON and not hosted.signed_in(request)) or "/" in name or name.startswith(".") or not f.is_file() or f.suffix not in ASSET_TYPES:
+    public = name == "app.css" or f.suffix == ".woff2"   # the login page's look: nothing in them is private
+    if not _local(request) or (hosted.ON and not public and not hosted.signed_in(request)) or "/" in name or name.startswith(".") or not f.is_file() or f.suffix not in ASSET_TYPES:
         return Response("Not found.", status_code=404)
     return Response(f.read_bytes(), media_type=ASSET_TYPES[f.suffix], headers=HEADERS)
 

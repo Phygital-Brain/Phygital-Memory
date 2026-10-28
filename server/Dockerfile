@@ -13,9 +13,25 @@ RUN npm run build
 # ---- the engine ----
 FROM python:3.14-slim
 ARG VERSION=dev
-# syncthing: Link my computer and sharing. rclone and fuse3: a memory on WebDAV. git: the GitHub backup.
+ARG TARGETARCH
+# The same Syncthing (Link my computer, sharing) and rclone (a memory on WebDAV) as the desktop app
+# (core/packaging/bundle_server.py), checked against their published SHA-256. procps: pkill. fuse3: the WebDAV drive.
+# git: the GitHub backup.
+ARG SYNCTHING=2.1.7 RCLONE=1.75.2
 RUN apt-get update \
- && apt-get install -y --no-install-recommends syncthing rclone fuse3 git ca-certificates tini \
+ && apt-get install -y --no-install-recommends procps fuse3 git ca-certificates tini curl unzip \
+ && case "$TARGETARCH" in \
+      amd64) ST=2edc416e7ed136b7c858ed5f3f02a3b8316589605e54c380228ceea7acbf0142 RC=349ac8fba6ff65d6247043f1750cdcb518ec5d500ef91463a10d37c0ccdf3702 ;; \
+      arm64) ST=48e456690cd2b97e7d26b02b5ac35f62a3b36172267b144cfeaf02c993ab955c RC=7e1e8d69654941b7b7df84ee74c5f7fb09cce7d5496947fb7bf16b55ff427d10 ;; \
+      *) echo "Unsupported: $TARGETARCH" && exit 1 ;; esac \
+ && cd /tmp \
+ && curl -fsSLo st.tgz "https://github.com/syncthing/syncthing/releases/download/v$SYNCTHING/syncthing-linux-$TARGETARCH-v$SYNCTHING.tar.gz" \
+ && echo "$ST  st.tgz" | sha256sum -c - \
+ && tar -xzf st.tgz && mv "syncthing-linux-$TARGETARCH-v$SYNCTHING/syncthing" /usr/local/bin/ \
+ && curl -fsSLo rc.zip "https://downloads.rclone.org/v$RCLONE/rclone-v$RCLONE-linux-$TARGETARCH.zip" \
+ && echo "$RC  rc.zip" | sha256sum -c - \
+ && unzip -q rc.zip && mv "rclone-v$RCLONE-linux-$TARGETARCH/rclone" /usr/local/bin/ \
+ && rm -rf /tmp/* && apt-get purge -y curl unzip && apt-get autoremove -y \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 1000 memory \
  && mkdir -p /data && chown memory:memory /data
