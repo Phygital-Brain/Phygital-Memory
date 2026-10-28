@@ -12,7 +12,7 @@ import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
 import { openSettings, closeSettings, onSettings, settings } from "./shell/settings.js";
-import { openAIApps, allowDialog } from "./shell/aiapps.js";
+import { aiAppsView, allowDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
@@ -880,11 +880,7 @@ async function openSettingsHere() {
     },
     showHidden: { on: getPref("showHidden", false), set: (v) => { if (v !== getPref("showHidden", false)) toggleHidden(); return v; } },
     setAiHidden: async (v) => { try { await api("aihide", { hidden: v }); await refreshFolders(); return v; } catch (e) { toastErr(e.message); return !v; } },
-    aiApps: () => openAIApps({
-      load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
-      remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
-      claudeDesktop: () => api("claudedesktopext"),
-    }),
+    aiApps: () => openAI("apps"),
   } : null, me);
 }
 
@@ -2548,6 +2544,11 @@ async function openAI(start, path) {
                                                      api("approvals").then((j) => j.approvals || [])]); }
   catch (e) { toastErr(e.message); return; }
   await openAIPanel({
+    apps: () => aiAppsView({
+      load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
+      remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
+      claudeDesktop: () => api("claudedesktopext"),
+    }),
     tasks: {
       path, todo, label,
       give: async (ask) => {

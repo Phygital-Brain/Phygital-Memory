@@ -127,7 +127,7 @@ export function info(text) {
 export function openAIPanel(ctx, start = "tasks") {
   return modal((done) => {
     const tasks = tasksView(ctx.tasks, done), activity = activityView(ctx.activity, done);
-    const views = { tasks, activity, approvals: approvalsView(ctx.approvals) };
+    const views = { tasks, activity, approvals: approvalsView(ctx.approvals), apps: ctx.apps ? ctx.apps() : null };
     const body = el("div", { class: "ai-body" });
     const tools = el("div", { class: "act-tools" });
     const tabs = el("div", { class: "seg", role: "tablist" });
@@ -140,7 +140,8 @@ export function openAIPanel(ctx, start = "tasks") {
       first = null;
     };
     let first = start;   // the first tab shown already has fresh data
-    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"], ["approvals", "Approvals"]]) {
+    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"], ["approvals", "Approvals"], ["apps", "AI apps"]]) {
+      if (!views[k]) continue;
       tabs.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
     }
     const card = el("div", { class: "dlg activity", role: "dialog" },

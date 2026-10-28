@@ -55,13 +55,13 @@ const KINDS = [["claude-code", "Claude Code"], ["claude-desktop", "Claude Deskto
 
 // ctx: {load() -> {apps, folders, door, waiting}, add(body) -> {app, key, door}, update(body), remove(id),
 //       claudeCode(key) -> {ok, error}}
-export function openAIApps(ctx) {
-  return modal((done) => {
+// The AI apps tab of the AI window: its own heading, steps and buttons inside the tab.
+export function aiAppsView(ctx) {
     const body = el("div", { class: "cl-body" });
     const err = el("div", { class: "dlg-err" });
-    const title = el("div", { class: "dlg-title" }, "AI apps");
-    const actions = el("div", { class: "dlg-actions" });
-    const card = el("div", { class: "dlg storage ai-apps", role: "dialog" }, title, body, err, actions);
+    const title = el("div", { class: "ai-sub" }, "AI apps");
+    const actions = el("div", { class: "dlg-actions ai-apps-actions" });
+    const card = el("div", { class: "ai-apps" }, title, body, err, actions);
     const busy = (b) => card.classList.toggle("busy", b);
     const btn = (label, fn, cls) => el("button", { class: "btn " + (cls || ""), type: "button", onclick: fn }, label);
     let data = null;
@@ -82,7 +82,7 @@ export function openAIApps(ctx) {
           : [el("div", { class: "act-empty" }, "No AI app is connected yet.")])),
         el("div", { class: "st-gh-note" }, "Apps that support sign-in can connect with this address. You approve them here."),
         el("div", { class: "ai-door" }, el("code", {}, data.door), btn("Copy", () => navigator.clipboard.writeText(data.door), "small")));
-      actions.replaceChildren(btn("Close", () => done(null)), btn("Connect an AI app", pick, "primary"));
+      actions.replaceChildren(btn("Connect an AI app", pick, "primary"));
     };
 
     const pick = () => {
@@ -144,8 +144,7 @@ export function openAIApps(ctx) {
     const again = () => { if (!card.isConnected) document.removeEventListener("ai-apps-changed", again); else if (title.textContent === "AI apps") list(); };
     document.addEventListener("ai-apps-changed", again);
     list();
-    return { card };
-  });
+    return { tools: [], body: [card], refresh: () => { if (title.textContent === "AI apps") list(); } };
 }
 
 // The Allow window: an AI app signed in and waits for the person. Resolves {allow, folders, write}.
