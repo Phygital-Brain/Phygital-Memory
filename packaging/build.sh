@@ -14,5 +14,6 @@ uv run pyinstaller --noconfirm --clean --onedir --noupx --name phygital-memory-s
   --add-data "$PWD/$P/engram_config.json:$P" \
   --add-data "$PWD/$P/claude_ext:$P/claude_ext" \
   --add-data "$PWD/$P/brain:$P/brain" \
+  --add-data "$PWD/$P/brain_memory.json:$P" \
   --add-data "$PWD/$P/vault/words_en.txt:$P/vault" \
   packaging/entry.py

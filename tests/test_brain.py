@@ -42,4 +42,8 @@ try:
         m.lock()
 finally:
     shutil.rmtree(tmp)
+for code, _ in brain.languages():
+    text = brain._for_memory(brain._template(code, "templates", "root-CLAUDE.md"), code)
+    check("Baald" not in text and text.count("Phygital Memory") == 2, f"{code}: the rules name Phygital Memory, not Baalda or the cloud drive")
 print(f"\n{sum(ok)}/{len(ok)} passed")
+

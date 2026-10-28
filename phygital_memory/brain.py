@@ -13,6 +13,9 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent / "brain"
+# Phygital Brain's rules name another notes app and the cloud drive's history; in Phygital Memory both lines say this
+# app instead: [the line above the note syntax list, the last backups bullet] per language
+OWN = Path(__file__).resolve().parent / "brain_memory.json"
 PEOPLE = ("Clients", "Collaborators", "Team", "Partners")
 
 # (template, where it goes in the brain); paths are the brain's English names, turned into the language's below
@@ -54,6 +57,35 @@ def _template(lang: str, part: str, name: str) -> str | None:
         if f.is_file():
             return f.read_text()
     return None
+
+
+def _for_memory(text: str, lang: str) -> str:
+    """The root rules with Phygital Memory's two lines in place of the ones meant for other apps."""
+    try:
+        own = json.loads(OWN.read_text())
+    except (OSError, ValueError):
+        return text
+    notes, versions = own.get(lang) or own["en"]
+    lines = text.split("\n")
+    for i, l in enumerate(lines):
+        if l.startswith("- **") and "[[" in l:   # the note syntax list; the sentence above it names the app
+            j = i - 1
+            while j > 0 and not lines[j].strip():
+                j -= 1
+            if not lines[j].startswith("#"):
+                lines[j] = notes
+            break
+    for i, l in enumerate(lines):
+        if ".backups/YYYY" in l:   # the backups paragraph; its last bullet is the cloud drive's history
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith("- "):
+                j += 1
+            while j + 1 < len(lines) and lines[j + 1].startswith("- "):
+                j += 1
+            if j < len(lines) and lines[j].startswith("- "):
+                lines[j] = versions
+            break
+    return "\n".join(lines)
 
 
 def plan(picks: dict, lang: str) -> list[str]:
@@ -100,7 +132,7 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
         text = _template(lang, "templates", tpl)
         if text is not None:
             if where == "CLAUDE.md":   # the Brain Keeper's part of the root rules comes with it
-                text = text.rstrip() + "\n\n" + (_template(lang, "keeper", "root-CLAUDE-section.md") or "")
+                text = _for_memory(text.rstrip() + "\n\n" + (_template(lang, "keeper", "root-CLAUDE-section.md") or ""), lang)
             put(loc(where), fill(text))
     for tpl, where in KEEPER:
         text = _template(lang, "keeper", tpl)
