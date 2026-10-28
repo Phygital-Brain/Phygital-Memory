@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# A newer push cancels the run still going for an older one (saves build minutes).
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   engine:
     name: engine (${{ matrix.os }})
