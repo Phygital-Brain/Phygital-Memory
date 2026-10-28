@@ -2632,6 +2632,16 @@ def _watch_parent() -> None:
         return
 
     def alive() -> bool:
+        if system.WINDOWS:   # os.kill(pid, 0) there ends the process instead of asking about it
+            import ctypes
+            k = ctypes.windll.kernel32
+            h = k.OpenProcess(0x100000, False, app_pid)   # SYNCHRONIZE: enough to ask whether it has ended
+            if not h:
+                return False
+            try:
+                return k.WaitForSingleObject(h, 0) == 0x102   # WAIT_TIMEOUT: still running
+            finally:
+                k.CloseHandle(h)
         try:
             os.kill(app_pid, 0)
             return True
@@ -2661,6 +2671,14 @@ def main() -> None:
         Memory.create(FOLDER, pw)
         print(f"Made a locked notes folder at {FOLDER}")
         return
+    if getattr(sys, "frozen", False):   # the built app: errors go to a small log in the app's folder (nobody sees stderr)
+        import faulthandler
+        log = system.state_dir() / "engine.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        if log.exists() and log.stat().st_size > 1_000_000:
+            log.replace(log.with_suffix(".old.log"))
+        sys.stderr = open(log, "a", buffering=1, encoding="utf-8", errors="replace")
+        faulthandler.enable(sys.stderr)
     print(f"Phygital Memory: app {PAGE}  ·  AI apps connect to {PAGE}mcp", file=sys.stderr)
     finder_links.clear_desktop_links()   # shortcuts left by a run that ended without locking
     _watch_parent()

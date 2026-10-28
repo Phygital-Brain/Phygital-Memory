@@ -68,7 +68,7 @@ def open_path(path: str | Path) -> None:
     if MAC:
         _run(["open", p])
     elif WINDOWS:
-        os.startfile(p)   # noqa: the path is the app's own (a note's file or a memory's folder)
+        _run(["explorer", p])   # its own process: the engine stays out of the shell (os.startfile stopped it on Windows 11)
     else:
         _run(["xdg-open", p])
 

@@ -75,6 +75,7 @@ root.append(unlockEl, appEl);
 // ---------- folders ----------
 // Every locked folder keeps its own screen in memory while you look at another one: tabs, open tree folders,
 // settings, Finder state. Switching back is instant and nothing unsaved is lost.
+const ON_MAC = /Mac/.test(navigator.platform || navigator.userAgent);   // the Mac-only menu items and the like
 let folderList = [];          // [{id, name, path, open, exists, finder}] from the server
 let loadedFolder = null;      // the folder whose screen is in `state` right now (null on an unlock screen)
 const views = new Map();      // folder id -> its screen, while another folder is in front
@@ -3005,8 +3006,9 @@ function menuSpec() {
     { title: "Phygital Memory", items: [
       item("settings", t("Settings"), run(openSettingsHere), { key: "CmdOrCtrl+,", enabled: inApp }),
       ...(enc ? [item("touchid", t("Unlock with Touch ID"), () => menuTouchId(info), { check: !!touchOn[info.id], enabled: open })] : []),
-      item("desktopicon", t("Desktop icon"), () => setSettings({ desktopIcon: !s.desktopIcon }), { check: !!s.desktopIcon }),
-      sep, native("hide", t("Hide Phygital Memory")), native("hideothers", t("Hide others")), native("showall", t("Show all")),
+      ...(ON_MAC ? [   // the Mac's own window habits and its Finder desktop icon; Windows and Linux have neither
+        item("desktopicon", t("Desktop icon"), () => setSettings({ desktopIcon: !s.desktopIcon }), { check: !!s.desktopIcon }),
+        sep, native("hide", t("Hide Phygital Memory")), native("hideothers", t("Hide others")), native("showall", t("Show all"))] : []),
       sep, native("quit", t("Quit Phygital Memory"))] },
     { title: t("File"), items: [
       item("newnote", t("New note"), run(() => newNote()), { key: "CmdOrCtrl+N", enabled: inApp }),
