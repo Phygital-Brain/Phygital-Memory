@@ -95,9 +95,9 @@ AI:  Added at the end of "Projects/Logo.md". You can undo it from
 - **Every AI change can be undone.** The old text is kept first, each change shows in **Activity** with **Undo**, a trashed note stays 7 days, and notes keep up to 50 versions.
 - **It stays on your computer.** The door listens only on your own computer (`127.0.0.1`). A website or another computer cannot reach it.
 - **Nothing collected.** No account, no tracking, no usage reports and no server of ours. The one outside call you did not start is the update check to GitHub. Backups and sharing send data only after you turn them on.
-- **Encrypted means encrypted.** An Encrypted memory is a Cryptomator format 8 vault. Its file names are encrypted too, and its backups and shares travel as encrypted files.
+- **File names are encrypted too.** An Encrypted memory is a Cryptomator format 8 vault. Its file names are encrypted, and its backups and shares travel as encrypted files.
 - **Sharing waits for you.** Nothing is sent before you press **Let in**, and every sharing change is signed with your own key.
-- **Not audited yet.** Nobody outside the project has checked the code. A security review is planned. Tests are not an audit.
+- **Not audited yet.** Nobody outside the project has checked the code. A security review is planned.
 
 More in [docs/safety.md](docs/safety.md), [docs/privacy.md](docs/privacy.md) and [docs/threat-model.md](docs/threat-model.md).
 
@@ -121,7 +121,7 @@ More in [docs/how-it-works.md](docs/how-it-works.md).
 | **MCP** | Model Context Protocol: the standard way AI apps plug into tools like this one. |
 | **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. |
 | **Allow edits** | The switch that lets one AI app change notes. Off means read only. |
-| **Private for AI** | A folder or note the AI opens only when you ask in the chat. A rule the tools follow, not encryption. |
+| **Private for AI** | A folder or note the AI opens only when you ask in the chat. The tools follow this rule. The folder itself stays readable. |
 | **AI tasks** | A hidden note in each memory where you leave work for your AI. It is never shared. |
 | **Phygital Brain** | An optional set of folders, rules and first notes for working with an AI. The app can build it for you. |
 
@@ -265,7 +265,7 @@ You should see PASS or FAIL for each check. More for developers in [AGENTS.md](A
 - **The Claude website and phone app.** The door lives on your computer at `127.0.0.1`, which a website or a phone cannot reach.
 - **Sign-in from the Claude app.** It refuses sign-in pages that are not on https, and the door is a local address. Connect with a key instead.
 - **Code signing.** The Mac and Windows downloads are not signed yet, so the first open needs one extra step.
-- **Switching a memory between Open and Encrypted.** Old plain copies would stay in your cloud's history, so this was dropped.
+- **Switching a memory between Open and Encrypted.** Old plain copies would stay in your cloud's history, so the app doesn't offer it.
 - **Shutting a removed person out of later changes.** Changing a shared memory's key is not built yet.
 - **The Finder view and Touch ID off the Mac.** Both are Mac only for now.
 
@@ -286,7 +286,7 @@ Issues are public, so leave out passwords, keys and private notes.
 
 ## Contributors
 
-Thank you to everyone who helped. Code, bug reports, ideas, docs, translations, design and testing all count. A native speaker reading one of the 41 languages helps a lot. See [CONTRIBUTORS.md](CONTRIBUTORS.md), and add yourself when you send a pull request.
+A native speaker reading one of the 41 languages helps a lot. See [CONTRIBUTORS.md](CONTRIBUTORS.md), and add yourself when you send a pull request.
 
 ## Credits
 
