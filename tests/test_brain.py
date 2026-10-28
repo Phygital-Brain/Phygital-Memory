@@ -51,6 +51,16 @@ try:
         check(heads[-1] == heads[0] + 1 and heads.count(heads[0]) == 3, f"{lang}: only Clients keeps its Leads section")
         check(re.search(r"^31\. ", m.read("CLAUDE.md"), re.M), f"{lang}: client rules kept when there are clients")
         m.lock()
+    Memory.create(tmp / "typed", "test password 1")
+    m = Memory(tmp / "typed")
+    m.unlock("test password 1")
+    brain.build(m, {"projects": [{"name": "new website", "what": "Studio site"}, {"name": "../bad/one", "what": ""}],
+                    "people": [{"name": "Ana Lima", "kind": "team", "what": "Producer"}, {"name": "Acme", "kind": "nope", "what": ""}]}, "en", "Ana", "")
+    files = {f["path"] for f in m.list_files()}
+    check("Projects/New-Website/README.md" in files and 'description: "Studio site"' in m.read("Projects/New-Website/README.md"), "typed project gets its README")
+    check(not [f for f in files if ".." in f] and "Projects/Badone/README.md" in files, "project names can't leave the Projects folder")
+    check("type: team" in m.read("Relationships/Team/Ana Lima.md") and "Relationships/Clients/Acme.md" in files, "typed people get a profile in the right folder")
+    m.lock()
     Memory.create(tmp / "solo", "test password 1")
     m = Memory(tmp / "solo")
     m.unlock("test password 1")

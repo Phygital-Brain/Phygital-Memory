@@ -180,13 +180,37 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
         desc = str(page.get("desc", "")).replace('"', "'")
         put(loc(f"About/{key}.md"), f"---\ntype: about\nstatus: active\nupdated: {day}\ntags: [{tags}]\ndescription: \"{desc}\"\n---\n\n"
             + str(page.get("body", "")).strip() + f"\n\n## Evidence\n\n- {day}: {page.get('evidence') or 'from the setup questions.'}\n")
+    # A note for each project and person typed in: the README a project starts with, a profile per person
+    todo = str(picks.get("todo") or "To add.")[:40]
+    clean = lambda v, n: re.sub(r"[\x00-\x1f/\\:*?\"<>|#^\[\]]", "", str(v or "")).strip().lstrip(".").strip()[:n]
+    for p in (picks.get("projects") or [])[:30]:
+        title, what = clean(p.get("name"), 80), clean(p.get("what"), 300)
+        slug = "-".join(w[:1].upper() + w[1:] for w in title.split())
+        if not slug:
+            continue
+        folder = loc("Projects") + "/" + slug
+        try:
+            memory.make_folder(folder)
+        except Exception:
+            pass
+        put(f"{folder}/README.md", f"---\ntype: project\nstatus: active\nproject: {slug}\ncreated: {day}\nupdated: {day}\n"
+            f"tags: [{slug.lower()}, project]\ndescription: \"{what or title}\"\n---\n\n## {picks.get('h_what') or 'What it is'}\n\n{what or todo}\n\n"
+            f"## {picks.get('h_status') or 'Status and next step'}\n\n{todo}\n")
+    kinds = {"clients": ("Clients", "client"), "collaborators": ("Collaborators", "collaborator"), "team": ("Team", "team"), "partners": ("Partners", "partner")}
+    for p in (picks.get("people") or [])[:60]:
+        who, what = clean(p.get("name"), 80), clean(p.get("what"), 300)
+        folder, kind = kinds.get(p.get("kind"), kinds["clients"])
+        if who:
+            put(loc(f"Relationships/{folder}/{who}.md"), f"---\ntype: {kind}\nstatus: active\nlast-contact:\ntags: [relationship, {kind}]\n"
+                f"description: \"{what or who}\"\n---\n\n## {picks.get('h_who') or 'Who they are'}\n\n{what or todo}\n\n"
+                f"## {picks.get('h_contacts') or 'Contacts'}\n\n{todo}\n\n## {picks.get('h_work') or 'Work together'}\n\n{todo}\n")
     return {"made": made, "me": me, "language": lang_name}
 
 
 def finish_ask(picks: dict, lang_name: str, rules: str, me: str = "About/me.md") -> str:
-    """The one AI task left after setup: only what needs a conversation. Every folder, rule and About page is made."""
-    return (f"Finish setting up my Phygital Memory. The app already made every folder, the rules and the About pages "
-            f"from my answers. First read {rules} (the rules). Then ask me, a few at a time with click options where "
-            f"you can, only what's still missing: my current projects, the people and clients I work with by name, "
-            f"and the lines that say \"To add\" in the About pages. Make a note for each project and person I name, "
-            f"fill those lines, and change nothing else. Write in {lang_name}.")[:1990]
+    """The one AI task left after setup: add detail. The app already made everything from the person's answers."""
+    return (f"Make my Phygital Memory more complete. The app already set it all up from my answers: every folder, "
+            f"the rules, the About pages, and a note for each project and person I typed in. First read {rules} "
+            f"(the rules). Then read the About pages, projects and people. Where a page is thin or says \"To add\", "
+            f"ask me for the details, a few questions at a time with click options where you can. If I gave links, "
+            f"read them first and ask only what they don't answer. Add details; keep what I wrote. Write in {lang_name}.")[:1990]

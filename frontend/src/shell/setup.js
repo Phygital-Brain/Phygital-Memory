@@ -123,8 +123,13 @@ const QUESTIONS = () => [
 ];
 
 // The About pages, written now from the answers. "To add" marks what only the person or their AI can say.
-function pages(name, a, Q) {
+function pages(name, a, Q, x) {
   const TODO = t("To add.");
+  const typed = (v) => (v || "").trim() || TODO;
+  const lines = (v) => (v || "").split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => `- ${l}`).join("\n") || TODO;
+  const projects = x.projects.filter((p) => p.name.trim()).map((p) => `- ${p.name.trim()}${p.what.trim() ? `: ${p.what.trim()}` : ""}`).join("\n") || TODO;
+  const KIND = { clients: t("Client"), collaborators: t("Collaborator"), team: t("Team"), partners: t("Partner") };
+  const people = x.people.filter((p) => p.name.trim()).map((p) => `- [[${p.name.trim()}]] (${KIND[p.kind]})${p.what.trim() ? `: ${p.what.trim()}` : ""}`).join("\n");
   const pick = (key) => { const q = Q.find((x) => x.key === key); return q.options.filter(([v]) => a[key].includes(v)); };
   const list = (key, withDesc) => pick(key).map(([, l, d]) => `- ${l}${withDesc ? `: ${d.charAt(0).toLowerCase()}${d.slice(1)}` : ""}`).join("\n") || TODO;
   const sec = (h, body) => `## ${h}\n\n${body}\n`;
@@ -138,28 +143,35 @@ function pages(name, a, Q) {
       sec(t("What drains me"), list("drains")),
       sec(t("What my AI helps with"), list("help")),
       sec(t("How I want my agent to work"), list("talk", true)),
-      sec(t("Life and background"), TODO)),
+      sec(t("Life and background"), typed(x.story)),
+      sec(t("Links"), lines(x.links))),
     goals: page(t("{0}'s goals and priorities.", name), ["priorities"], sec(t("Right now"), list("goals")), sec(t("This year"), TODO)),
     business: page(t("What {0} does for work.", name), ["work"],
-      sec(t("What I do"), list("work")), sec(t("Who I work with"), list("people")), sec(t("Current projects"), TODO)),
+      sec(t("What I do"), list("work")), sec(t("Who I work with"), [list("people"), people].filter((v) => v && v !== TODO).join("\n") || TODO),
+      sec(t("Current projects"), projects)),
     services: page(t("What {0} offers.", name), ["offers"],
-      sec(t("Built on"), list("strengths", false)), sec(t("Offers"), TODO), sec(t("Prices"), TODO)),
+      sec(t("Built on"), list("strengths", false)), sec(t("Offers"), lines(x.offers)), sec(t("Prices"), lines(x.prices))),
     customers: page(t("Who {0} works for and how they find each other.", name), ["audience"],
       sec(t("Who"), a.people.includes("clients") ? t("Clients: people and companies {0} delivers work for.", name) : TODO),
       sec(t("How they find me"), TODO)),
     "pain-points": page(t("The problems {0} wants solved.", name), ["problems"], sec(t("What gets in the way"), list("drains"))),
-    brand: page(t("{0}'s voice and tone.", name), ["voice"], sec(t("Voice"), TODO), sec(t("Words to use"), TODO), sec(t("Words to avoid"), TODO)),
-    tools: page(t("The tools {0} uses and where things live.", name), ["stack"], sec(t("Tools"), t("Phygital Memory for notes.")), sec(t("Where things live"), TODO)),
-    cv: page(t("{0}'s work history, education and press.", name), ["history"], sec(t("Work"), TODO), sec(t("Education"), TODO), sec(t("Press and awards"), TODO)),
-    biography: page(t("{0}'s story.", name), ["story"], TODO),
+    brand: page(t("{0}'s voice and tone.", name), ["voice"], sec(t("Voice"), typed(x.voice)), sec(t("Words to use"), TODO), sec(t("Words to avoid"), TODO)),
+    tools: page(t("The tools {0} uses and where things live.", name), ["stack"], sec(t("Tools"), `- Phygital Memory\n${(x.tools || "").split(/[,\n]+/).map((l) => l.trim()).filter(Boolean).map((l) => `- ${l}`).join("\n")}`.trim()), sec(t("Where things live"), TODO)),
+    cv: page(t("{0}'s work history, education and press.", name), ["history"], sec(t("Work, education and press"), lines(x.history))),
+    biography: page(t("{0}'s story.", name), ["story"], typed(x.story)),
   };
 }
 
 export function renderSetup(body, ctx) {
   const Q = QUESTIONS();
   const answers = Object.fromEntries(Q.map((q) => [q.key, []]));
+  const extra = { projects: [{ name: "", what: "" }], people: [{ name: "", kind: "clients", what: "" }],
+    offers: "", prices: "", tools: "", story: "", history: "", links: "", voice: "" };
   let name = "", lang = "en", at = 0;
-  const total = Q.length + 1;   // the name screen, then the questions
+  // The screens: the name, the card questions, then the typing ones (all can be skipped)
+  const TYPED = [() => projectsView(), () => peopleView(), () => workView(), () => youView()];
+  const total = 1 + Q.length + TYPED.length;
+  const typedAt = (i) => i - 1 - Q.length;   // which typing screen i is, or below 0 for a card question
 
   const bar = el("div", { class: "sp-bar", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": total });
   const drawBar = (i) => {
@@ -175,16 +187,16 @@ export function renderSetup(body, ctx) {
   const go = (i, dir = 1) => {
     if (i < 0) return;
     if (i === 1 && !name.trim()) return;
-    if (i > Q.length) return buildView();
+    if (i >= total) return buildView();
     const old = stage.firstElementChild;
     const show = () => {
       at = i; drawBar(i);
-      stage.replaceChildren(i === 0 ? nameView() : questionView(Q[i - 1]));
+      stage.replaceChildren(i === 0 ? nameView() : typedAt(i) >= 0 ? TYPED[typedAt(i)]() : questionView(Q[i - 1]));
       stage.firstElementChild.classList.add(dir > 0 ? "in-up" : "in-down");
       back.hidden = i === 0;
       foot.querySelector(".sp-count").textContent = t("{0} of {1}", i + 1, total);
       refreshNext();
-      (stage.querySelector("input, .sp-card") || next).focus({ preventScroll: true });
+      (stage.querySelector("input, textarea, .sp-card") || next).focus({ preventScroll: true });
     };
     if (old && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
       old.classList.add(dir > 0 ? "out-up" : "out-down");
@@ -193,10 +205,75 @@ export function renderSetup(body, ctx) {
   };
   const refreshNext = () => {
     if (at === 0) { next.textContent = t("Next"); next.disabled = !name.trim(); return; }
-    const q = Q[at - 1], n = answers[q.key].length;
-    next.textContent = at === Q.length ? (n ? t("Set it up") : t("Skip and set it up")) : n ? t("Next") : t("Skip");
+    const k = typedAt(at);
+    const n = k < 0 ? answers[Q[at - 1].key].length : typedFilled(k);
+    next.textContent = at === total - 1 ? (n ? t("Set it up") : t("Skip and set it up")) : n ? t("Next") : t("Skip");
     next.disabled = false;
   };
+
+  const typedFilled = (k) => [
+    () => extra.projects.some((p) => p.name.trim()), () => extra.people.some((p) => p.name.trim()),
+    () => [extra.offers, extra.prices, extra.tools].some((v) => v.trim()),
+    () => [extra.story, extra.history, extra.links, extra.voice].some((v) => v.trim())][k]();
+
+  // A text box with its label; what's typed goes straight into extra[key]
+  const field = (key, label, hint, rows = 2) => {
+    const box = el(rows > 1 ? "textarea" : "input", { class: "sp-input", id: `sp-${key}`, rows: rows > 1 ? rows : null, placeholder: hint, spellcheck: "true" });
+    box.value = extra[key];
+    box.addEventListener("input", () => { extra[key] = box.value; refreshNext(); });
+    return el("label", { class: "sp-field", for: `sp-${key}` }, el("span", { class: "sp-flabel" }, label), box);
+  };
+
+  // A list you add rows to (projects, people): each row a few inputs and a remove button. Enter adds a row
+  const rowsView = (list, blank, cells, addText) => {
+    const wrap = el("div", { class: "sp-rows" });
+    const draw = (focusLast) => {
+      wrap.replaceChildren(...list.map((item, k) => el("div", { class: "sp-rowin" },
+        ...cells.map(([key, hint, opts]) => {
+          if (opts) {   // a choice: a small select
+            const sel = el("select", { class: "set-select sp-kind", "aria-label": hint }, ...opts.map(([v, l]) => el("option", { value: v }, l)));
+            sel.value = item[key];
+            sel.addEventListener("change", () => { item[key] = sel.value; });
+            return sel;
+          }
+          const i = el("input", { class: "sp-input", type: "text", value: item[key], placeholder: hint, "aria-label": hint, maxlength: 140 });
+          i.addEventListener("input", () => { item[key] = i.value; refreshNext(); });
+          i.addEventListener("keydown", (e) => { if (e.key === "Enter" && i.value.trim()) { e.preventDefault(); list.push(blank()); draw(true); } });
+          return i;
+        }),
+        el("button", { class: "icon-btn sp-del", type: "button", title: t("Remove"), "aria-label": t("Remove"),
+          onclick: () => { list.splice(k, 1); if (!list.length) list.push(blank()); draw(); refreshNext(); } }, icon("x", 14)))),
+        el("button", { class: "btn sp-add", type: "button", onclick: () => { list.push(blank()); draw(true); } }, icon("plus", 14, 2), addText));
+      if (focusLast) wrap.querySelectorAll(".sp-rowin")[list.length - 1]?.querySelector("input")?.focus();
+    };
+    draw();
+    return wrap;
+  };
+  const screen = (q, hint, ...parts) => el("section", { class: "sp-screen" }, el("h2", { class: "sp-q" }, q), el("p", { class: "sp-hint" }, hint), ...parts);
+
+  const projectsView = () => screen(t("What are you working on?"),
+    t("Name each project and say what it is in a few words. Your AI adds the rest later."),
+    rowsView(extra.projects, () => ({ name: "", what: "" }),
+      [["name", t("Project name")], ["what", t("What it is, in a few words")]], t("Add a project")));
+
+  const peopleView = () => screen(t("Who do you work with, by name?"),
+    t("A person or a company per line. Each gets its own note."),
+    rowsView(extra.people, () => ({ name: "", kind: "clients", what: "" }),
+      [["name", t("Name")], ["kind", t("Kind"), [["clients", t("Client")], ["collaborators", t("Collaborator")], ["team", t("Team")], ["partners", t("Partner")]]],
+       ["what", t("Who they are, in a few words")]], t("Add someone")));
+
+  const workView = () => screen(t("What do you offer?"), t("Short is fine. One thing per line."),
+    el("div", { class: "sp-fields" },
+      field("offers", t("What you offer"), t("For example: logo design, websites, workshops"), 3),
+      field("prices", t("Prices"), t("For example: logo from 900 euros"), 3),
+      field("tools", t("Tools you use"), t("For example: Figma, Gmail, Notion"), 1)));
+
+  const youView = () => screen(t("A bit about you"), t("Your AI uses this to write like you and to know your story."),
+    el("div", { class: "sp-fields two" },
+      field("story", t("Your story, in a few lines"), t("Where you're from, how you started, what you care about"), 3),
+      field("history", t("Work, education and press"), t("One per line: a job, a course, an article"), 3),
+      field("links", t("Links"), t("Your website, LinkedIn, Instagram"), 2),
+      field("voice", t("How you write"), t("Words you like, words you never use"), 2)));
 
   // Screen 1: the name the AI uses, and the language of the folders and rules
   const nameView = () => {
@@ -281,7 +358,9 @@ export function renderSetup(body, ctx) {
     const status = el("h2", { class: "sp-q" }, t("Setting up your memory"));
     const nextBtn = el("button", { class: "btn primary", type: "button", disabled: true, onclick: () => connectView() }, t("Next"));
     const clients = answers.people.includes("clients") || answers.work.some((w) => w === "freelance" || w === "business");
-    const choice = { clients, pages: pages(name.trim(), answers, Q) };
+    const choice = { clients, pages: pages(name.trim(), answers, Q, extra),
+      projects: extra.projects.filter((p) => p.name.trim()), people: extra.people.filter((p) => p.name.trim()),
+      todo: t("To add."), h_what: t("What it is"), h_status: t("Status and next step"), h_who: t("Who they are"), h_contacts: t("Contacts"), h_work: t("Work together") };
     stage.replaceChildren(el("section", { class: "sp-screen in-up" }, status, list, el("div", { class: "sp-end" }, nextBtn)));
     (async () => {
       try {
@@ -353,7 +432,7 @@ export function renderSetup(body, ctx) {
 
   // Keys: 1-9 or Space pick a card, Enter goes on, Escape goes back
   body.addEventListener("keydown", (e) => {
-    if (foot.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (foot.hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.matches("input, textarea, select")) return;
     if (at > 0 && /^[1-9]$/.test(e.key)) { stage.querySelectorAll(".sp-card")[+e.key - 1]?.click(); e.preventDefault(); }
     else if (e.key === "Enter" && at > 0 && (!e.target.closest("button") || e.target.closest(".sp-card"))) { next.click(); e.preventDefault(); }
     else if (e.key === "Escape" && at > 0) { go(at - 1, -1); e.preventDefault(); }
