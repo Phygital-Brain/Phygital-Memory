@@ -2204,16 +2204,19 @@ async def api(request: Request) -> Response:
             if not r:
                 return _ok({"error": "That result is gone. Search again."}, 404)
             return _ok({"path": r["path"], "heading": r["heading"], "text": r["text"]})
-        if action == "brainlanguages":   # the languages a Phygital Brain can be built in (folder names and rules)
-            return _ok({"languages": brain.languages()})
+        if action == "brainlanguages":   # the languages a memory can be set up in (folder names and rules), and the Mac's name
+            import pwd
+            mac = (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the Mac account's first name
+            return _ok({"languages": brain.languages(), "name": mac})
         if action == "brainplan":   # the folders the brain will have, to show while it builds
             return _ok({"folders": brain.plan(body.get("picks") or {}, str(body.get("lang") or "en"))})
-        if action == "brainbuild":   # set this memory up as a Phygital Brain, from the person's clicks
+        if action == "brainbuild":   # set this memory up from the person's clicks: folders, rules, About pages
             import pwd
             picks, lang = body.get("picks") or {}, str(body.get("lang") or "en")
             if lang not in {c for c, _ in brain.languages()}:
-                return _ok({"error": "That language isn't ready for a brain yet."}, 400)
-            name = (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the Mac account's first name
+                return _ok({"error": "That language isn't ready yet."}, 400)
+            name = re.sub(r"[\x00-\x1f{}\[\]<>`|#]", "", str(body.get("name") or "")).strip()[:60] \
+                or (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the name they confirmed, or the Mac's
             res = await asyncio.to_thread(brain.build, m, picks, lang, name, str(body.get("tz") or "")[:60])
             rules = "CLAUDE.md"
             item = await asyncio.to_thread(m.todo_add, res["me"], brain.finish_ask(picks, res["language"], rules, res["me"]))

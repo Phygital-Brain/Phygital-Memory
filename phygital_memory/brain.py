@@ -17,6 +17,9 @@ HERE = Path(__file__).resolve().parent / "brain"
 # app instead: [the line above the note syntax list, the last backups bullet] per language
 OWN = Path(__file__).resolve().parent / "brain_memory.json"
 PEOPLE = ("Clients", "Collaborators", "Team", "Partners")
+# The About pages and their category tag (About/CLAUDE.md)
+ABOUT = {"me": "identity", "biography": "identity", "goals": "goals", "business": "business", "services": "business",
+         "customers": "customers", "pain-points": "customers", "brand": "brand", "tools": "tools", "cv": "career"}
 
 # (template, where it goes in the brain); paths are the brain's English names, turned into the language's below
 RULES = [("root-CLAUDE.md", "CLAUDE.md"), ("about-CLAUDE.md", "About/CLAUDE.md"), ("projects-CLAUDE.md", "Projects/CLAUDE.md"),
@@ -88,13 +91,33 @@ def _for_memory(text: str, lang: str) -> str:
     return "\n".join(lines)
 
 
+ADAPTING = re.compile(r"<!-- ADAPTING.*?-->\n+", re.S)
+
+
+def _adapt(text: str, where: str, picks: dict) -> str:
+    """Do what each file's ADAPTING note asks, so the AI has nothing left to adapt: every folder and skill is made,
+    so only the client rules and the people folders' notes depend on the answers."""
+    text = ADAPTING.sub("", text, count=1)
+    if where == "CLAUDE.md" and not picks.get("clients"):
+        lines = [l for l in text.split("\n") if not re.match(r"3[12]\. ", l)]   # rules 31, 32: client messages
+        text = "\n".join(l.replace("33", "31").replace("34", "32") if l.startswith("<!--") and "33" in l else l for l in lines)
+    m = re.match(r"Relationships/(\w+)/CLAUDE\.md$", where)
+    if m:
+        kind = PEOPLE.index(m.group(1))
+        def intro(mt):   # {Clients: "…" / Collaborators: "…" / …}: this folder's line, without its label and quotes
+            parts = mt.group(1).split(" / ")
+            one = parts[kind] if kind < len(parts) else parts[0]
+            return one.split(":", 1)[-1].strip().strip("\"“”„«»「」『』'").strip()
+        text = re.sub(r"^\{(.+)\}$", intro, text, count=1, flags=re.M)
+        if kind:   # only Clients keeps the Leads section, the last one
+            text = text[:text.rindex("\n## ")].rstrip() + "\n"
+    return text
+
+
 def plan(picks: dict, lang: str) -> list[str]:
-    """The folders this brain will have, in its language: what the window shows while it builds."""
+    """The folders the memory gets, in its language: all of them, so the AI never has to make one."""
     paths = _names(lang).get("paths", {})
-    folders = list(FOLDERS) + [f"Relationships/{p}" for p in PEOPLE if p in picks.get("people", [])]
-    if picks.get("brief"):
-        folders.append("Skills/morning-brief")
-    return [_local(f, paths) for f in folders]
+    return [_local(f, paths) for f in FOLDERS + [f"Relationships/{p}" for p in PEOPLE] + ["Skills/morning-brief"]]
 
 
 def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct_time | None = None) -> dict:
@@ -125,12 +148,12 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
         except Exception:
             pass   # there already
     rules = list(RULES)
-    rules += [("relationships-subfolder-CLAUDE.md", f"Relationships/{p}/CLAUDE.md") for p in PEOPLE if p in picks.get("people", [])]
-    if picks.get("brief"):
-        rules.append(("morning-brief.md", "Skills/morning-brief/morning-brief.md"))
+    rules += [("relationships-subfolder-CLAUDE.md", f"Relationships/{p}/CLAUDE.md") for p in PEOPLE]
+    rules.append(("morning-brief.md", "Skills/morning-brief/morning-brief.md"))
     for tpl, where in rules:
         text = _template(lang, "templates", tpl)
         if text is not None:
+            text = _adapt(text, where, picks)
             if where == "CLAUDE.md":   # the Brain Keeper's part of the root rules comes with it
                 text = _for_memory(text.rstrip() + "\n\n" + (_template(lang, "keeper", "root-CLAUDE-section.md") or ""), lang)
             put(loc(where), fill(text))
@@ -146,20 +169,24 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
     day = time.strftime("%Y-%m-%d", t)
     put(loc(f"Daily/{day}.md"), "---\ntype: daily\ndate: {d}\nday: {wd}\nweek: W{w:02d}\nmonth: {m}\nstatus: active\ntags: [daily]\n---\n\n{line}\n".format(
         d=day, wd=time.strftime("%A", t), w=int(time.strftime("%V", t)), m=time.strftime("%B", t),
-        line=picks.get("first_line") or "Phygital Brain set up."))
+        line=picks.get("first_line") or "Phygital Memory set up."))
+    # The About pages, written by the app from the answers (picks["pages"]: {me: {desc, tags, body}, goals: ...}):
+    # every one is made, with "To add" where only the person or their AI can say more
     me = loc("About/me.md")
-    about = "\n".join(f"- {k}: {v}" for k, v in (picks.get("labels") or {}).items())
-    put(me, "---\ntype: about\nstatus: active\nupdated: {d}\ntags: [about, identity]\n---\n\n{name}\n\n{about}\n\n## Evidence\n\n- {d}: set up as a Phygital Brain.\n".format(
-        d=day, name=name or "", about=about))
+    for key, page in (picks.get("pages") or {}).items():
+        if key not in ABOUT or not isinstance(page, dict):
+            continue
+        tags = ", ".join(["about", ABOUT[key]] + [re.sub(r"[^a-z0-9-]", "", re.sub(r"\s+", "-", str(x).strip().lower())) for x in page.get("tags", [])][:4])
+        desc = str(page.get("desc", "")).replace('"', "'")
+        put(loc(f"About/{key}.md"), f"---\ntype: about\nstatus: active\nupdated: {day}\ntags: [{tags}]\ndescription: \"{desc}\"\n---\n\n"
+            + str(page.get("body", "")).strip() + f"\n\n## Evidence\n\n- {day}: {page.get('evidence') or 'from the setup questions.'}\n")
     return {"made": made, "me": me, "language": lang_name}
 
 
 def finish_ask(picks: dict, lang_name: str, rules: str, me: str = "About/me.md") -> str:
-    """The one AI task that finishes the brain: what the app couldn't do without an AI."""
-    said = "; ".join(f"{k}: {v}" for k, v in (picks.get("labels") or {}).items())
-    return (f"Finish setting up my Phygital Brain. The app already made the folders, the rules and today's note. "
-            f"First read {rules} (the brain's rules). Then: 1) follow every ADAPTING note in the brain's files and "
-            f"remove it; 2) ask me, a few at a time with click options where you can, what you still need: what I do "
-            f"and my strengths, my current projects, the people I work with, when I work; 3) write {me} and the "
-            f"other About files from my answers, and make a note for each project and person I name. Write everything "
-            f"in {lang_name}. What I picked in the app: {said}.")[:1990]
+    """The one AI task left after setup: only what needs a conversation. Every folder, rule and About page is made."""
+    return (f"Finish setting up my Phygital Memory. The app already made every folder, the rules and the About pages "
+            f"from my answers. First read {rules} (the rules). Then ask me, a few at a time with click options where "
+            f"you can, only what's still missing: my current projects, the people and clients I work with by name, "
+            f"and the lines that say \"To add\" in the About pages. Make a note for each project and person I name, "
+            f"fill those lines, and change nothing else. Write in {lang_name}.")[:1990]

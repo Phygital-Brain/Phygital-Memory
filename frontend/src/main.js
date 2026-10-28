@@ -48,7 +48,7 @@ const baseName = (p) => p.split("/").pop();
 const dirOf = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
 const label = (p) => baseName(p).replace(/\.md$/i, "");
 const tabLabel = (t) => t.title || label(t.path);
-const isSpecial = (t) => t.kind === "graph" || t.kind === "home" || t.kind === "search" || t.kind === "setup";
+const isSpecial = (t) => t.kind === "graph" || t.kind === "home" || t.kind === "search";
 const colorsPref = () => getPref("colors", {});
 function folderColor(path) { return colorsPref()[path] || hashColor(baseName(path)); }
 function nodeColor(path) { const d = dirOf(path); return d ? folderColor(d) : PALETTE[0]; }
@@ -445,7 +445,7 @@ async function createNewFolder() {
     await switchTo(j.folder.id);
     if (currentFolder() === j.folder.id) await unlockCurrent(v.password);
     toastOk(t("Created \"{0}\".", j.folder.name));
-    openSetupTab();   // a new memory starts with the choice to make it a brain
+    openSetupTab();   // a new memory starts with its setup
   } catch (e) { toastErr(e.message); }
 }
 
@@ -2376,22 +2376,16 @@ function openHomeTab() {
   activate(tab);
 }
 
-// "Make it a Phygital Brain": its own tab, opened from Home or right after a new memory is made.
+// "Set up your Phygital Memory": its own page over the app, opened from Home or right after a new memory is made.
 function openSetupTab() {
-  let tab = state.tabs.find((k) => k.kind === "setup");
-  if (!tab) {
-    const body = el("div", { class: "note-col setup" });
-    const pane = el("div", { class: "pane hidden" }, body);
-    paneHost.append(pane);
-    tab = { path: "::setup", title: t("Set up"), kind: "setup", pane, body, dirty: false };
-    state.tabs.push(tab);
-    renderSetup(body, {
-      api, language: currentLanguage, openAI: (k) => openAI(k),
-      files: async () => { await syncFromDisk(); refreshHome(); },
-      done: () => { closeTab(tab); goHome(); },
-    });
-  }
-  activate(tab);
+  if (document.querySelector(".setup-page")) return;
+  const page = el("div", { class: "setup-page", role: "dialog", "aria-modal": "true", "aria-label": t("Set up your Phygital Memory") });
+  document.body.append(page);
+  renderSetup(page, {
+    api, language: currentLanguage, openAI: (k) => openAI(k),
+    files: async () => { await syncFromDisk(); refreshHome(); },
+    done: () => { page.remove(); goHome(); },
+  });
 }
 const isBrain = () => state.files.some((f) => f.path === "CLAUDE.md");
 
@@ -2417,8 +2411,8 @@ function renderHome(tab) {
       homeClock()),
     status,
     ...(isBrain() ? [] : [el("button", { class: "home-brain", type: "button", onclick: openSetupTab }, knot(30),
-      el("span", { class: "hb-text" }, el("span", { class: "hb-t" }, t("Make it a Phygital Brain")),
-        el("span", { class: "hb-s" }, t("Folders, rules and notes your AI files into. About a minute, all clicks."))),
+      el("span", { class: "hb-text" }, el("span", { class: "hb-t" }, t("Set up your Phygital Memory")),
+        el("span", { class: "hb-s" }, t("A few questions, all clicks. Folders, rules and About pages your AI works with."))),
       icon("chevron", 16, 2))]),
     ...(pinned.length ? [el("h2", { class: "home-h" }, t("Pinned")), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
     ai,
