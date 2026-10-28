@@ -635,12 +635,7 @@ KNOT_SVG = ('<svg class="knot" viewBox="0 0 64 64" width="56" height="56" aria-h
 SERVER_HEAD = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Phygital Memory</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/app.css">
 <style>.unlock-card .knot{align-self:center;margin-bottom:4px}.unlock-card>.btn{width:100%}
-.sc-help{text-align:left;font-size:12.5px;color:var(--text-3);border:1px solid var(--border);border-radius:var(--r-s);padding:8px 12px}
-.sc-help summary{cursor:pointer;color:var(--text)}.sc-help p{margin:8px 0}.sc-help ul{margin:8px 0;padding-left:18px}
-.sc-help li{margin:4px 0}.sc-help b{color:var(--text);font-weight:600}
-.sc-help code{font-family:var(--font-mono,monospace);font-size:12px;color:var(--text)}
-.sc-cmd{display:flex;align-items:center;gap:8px;margin-top:4px;padding:6px 8px;background:var(--bg-app);border-radius:var(--r-s)}
-.sc-cmd code{flex:1;overflow-wrap:anywhere}.sc-cmd .btn{padding:3px 10px}</style>"""
+::selection{background:var(--selection)}input{caret-color:var(--accent)}</style>"""
 
 LOGIN_PAGE = SERVER_HEAD + """
 <div class="unlock"><div class="unlock-wrap"><form class="unlock-card" id="f">""" + KNOT_SVG + """
@@ -665,37 +660,81 @@ document.getElementById("f").addEventListener("submit", async (e) => {
 });
 </script>"""
 
-SETUP_PAGE = SERVER_HEAD + """
+# The first visit: the form on the left, and beside it where the setup code is (the app's two-panel lock screen).
+SETUP_STYLE = """<style>
+.sc-panel{width:360px;display:flex;flex-direction:column;gap:14px;padding:28px 0 28px 28px;box-shadow:inset 1px 0 var(--border);
+  justify-content:center;text-align:left}
+.sc-head{font:500 11px/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--text-faint)}
+.sc-log{margin:0;padding:12px 14px;border-radius:var(--r-s);background:var(--bg-rec);border:1px solid var(--border);
+  font:12px/1.6 var(--font-mono);color:var(--text-faint);white-space:pre-wrap;overflow-wrap:anywhere}
+.sc-log b{color:var(--text-2);font-weight:500}.sc-log mark{background:var(--accent-soft);color:var(--accent);border-radius:3px;padding:0 3px}
+.sc-p{margin:0;font-size:13px;line-height:1.5;color:var(--text-3)}
+.sc-hosts{display:flex;flex-wrap:wrap;gap:6px}
+.sc-hosts button{padding:5px 9px;border-radius:999px;border:1px solid var(--border);background:none;color:var(--text-2);
+  font:500 12px/1.2 inherit;transition:background 120ms,border-color 120ms,color 120ms}
+.sc-hosts button:hover{background:var(--bg-subtle)}
+.sc-hosts button[aria-pressed=true]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.sc-how{min-height:76px;display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.5;color:var(--text-2)}.sc-how p{margin:0}
+.sc-how b{color:var(--text);font-weight:600}
+.sc-cmd{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border-radius:var(--r-s);background:var(--bg-surface);
+  border:1px solid var(--border);font:12px/1.4 var(--font-mono);color:var(--text)}
+.sc-cmd code{flex:1;overflow-wrap:anywhere}.sc-cmd .btn{flex:none;padding:3px 10px}
+.sc-note{margin:0;font-size:12px;line-height:1.5;color:var(--text-faint)}
+.unlock-card input#code{font-family:var(--font-mono);letter-spacing:.06em}
+@media (max-width:700px){.unlock{place-items:start center;overflow:auto;padding:24px 16px}
+  .sc-panel{width:auto;max-width:340px;box-shadow:inset 0 1px var(--border);padding:24px 0 8px}}
+</style>"""
+
+SETUP_PAGE = SERVER_HEAD + SETUP_STYLE + """
 <div class="unlock"><div class="unlock-wrap"><form class="unlock-card" id="f">""" + KNOT_SVG + """
-<div class="wordmark">Phygital Memory</div><div class="unlock-folder">Choose this server's passphrase</div>
-<div class="unlock-sub">You type it to open your memories here, 12 or more characters. First, the setup code from the
-server's log, so only you can do this.</div>
-<input id="code" autocomplete="off" placeholder="Setup code, like 1a2b-3c4d-5e6f" aria-label="Setup code" autofocus>
-<details class="sc-help"><summary>Where do I find the setup code?</summary>
-<p>The server writes it in its log when it starts, on a line that begins with <b>First visit</b>. Open the log where
-you set up the server:</p>
-<ul>
-<li><b>Docker Compose:</b> on the server, run this in the folder with <code>compose.yaml</code>:
-<span class="sc-cmd"><code id="cmd">docker compose logs memory</code><button class="btn" type="button" id="copy">Copy</button></span></li>
-<li><b>Docker:</b> <code>docker logs</code> and the container's name.</li>
-<li><b>Coolify:</b> open the service, then <b>Logs</b>.</li>
-<li><b>Railway or Render:</b> open the service, then <b>Logs</b>.</li>
-</ul>
-<p>Only someone who can open the server's logs can see it. That is how the server knows it's you. A restart makes a new
-code.</p></details>
+<div class="wordmark">Phygital Memory</div><div class="unlock-folder">A new server</div>
+<div class="unlock-sub">Choose the passphrase you'll type to open your memories here, 12 or more characters. First,
+the setup code from the server's log, so only you can do this.</div>
+<input id="code" autocomplete="off" spellcheck="false" placeholder="Setup code" aria-label="Setup code" aria-describedby="where" autofocus>
 <input id="pw" type="password" autocomplete="new-password" placeholder="New passphrase" aria-label="New passphrase">
 <input id="again" type="password" autocomplete="new-password" placeholder="Passphrase again" aria-label="Passphrase again">
 <button class="btn primary" id="go" type="submit">Set passphrase</button><div class="unlock-err" id="m" role="status"></div>
-</form></div></div>
+</form>
+<section class="sc-panel" id="where" aria-label="Where to find the setup code">
+<div class="sc-head">Where's the setup code</div>
+<p class="sc-p">In the server's log, the text it shows when it starts. Look for this:</p>
+<pre class="sc-log">====================
+<b>First visit:</b> open your address
+and choose the passphrase. <b>Setup code:</b> <mark>1a2b-3c4d-5e6f</mark>
+====================</pre>
+<p class="sc-p">Where you set up the server:</p>
+<div class="sc-hosts" role="group" aria-label="Where you set up the server">
+<button type="button" data-h="compose" aria-pressed="true">Docker Compose</button><button type="button" data-h="docker" aria-pressed="false">Docker</button><button type="button" data-h="coolify" aria-pressed="false">Coolify</button><button type="button" data-h="railway" aria-pressed="false">Railway</button><button type="button" data-h="render" aria-pressed="false">Render</button>
+</div>
+<div class="sc-how" id="how" aria-live="polite"></div>
+<p class="sc-note">Only someone who can open the server's logs sees the code. A restart makes a new one.</p>
+</section></div></div>
 <script>
-const $ = (i) => document.getElementById(i), m = $("m"), go = $("go");
-$("copy").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText($("cmd").textContent); $("copy").textContent = "Copied"; }
-  catch (x) { getSelection().selectAllChildren($("cmd")); }
+const $ = (i) => document.getElementById(i), m = $("m"), go = $("go"), how = $("how");
+const cmd = (c) => '<div class="sc-cmd"><code>' + c + '</code><button class="btn" type="button" data-copy>Copy</button></div>';
+const HOW = {
+  compose: "<p>On the server, in the folder with <b>compose.yaml</b>, run:</p>" + cmd("docker compose logs memory"),
+  docker: "<p>On the server, run this with your container's name:</p>" + cmd("docker logs phygital-memory"),
+  coolify: "<p>Open the service in Coolify, then the <b>Logs</b> tab.</p>",
+  railway: "<p>Open the service in Railway, then <b>Deployments</b>, then <b>View logs</b>.</p>",
+  render: "<p>Open the service in Render, then <b>Logs</b> in the side bar.</p>",
+};
+const pick = (h) => {
+  document.querySelectorAll("[data-h]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.h === h)));
+  how.innerHTML = HOW[h];
+};
+document.querySelectorAll("[data-h]").forEach((b) => b.addEventListener("click", () => pick(b.dataset.h)));
+how.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-copy]");
+  if (!b) return;
+  try { await navigator.clipboard.writeText(b.previousElementSibling.textContent); b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy", 1500); }
+  catch (x) { getSelection().selectAllChildren(b.previousElementSibling); }
 });
+pick("compose");
 $("f").addEventListener("submit", async (e) => {
   e.preventDefault();
-  if ($("pw").value !== $("again").value) { m.textContent = "The two passphrases differ."; return; }
+  if (!$("code").value.trim()) { m.textContent = "Type the setup code from the server's log."; $("code").focus(); return; }
+  if ($("pw").value !== $("again").value) { m.textContent = "The two passphrases differ."; $("again").focus(); return; }
   go.disabled = true; m.textContent = "";
   try {
     const r = await fetch("/setup", { method: "POST", headers: { "Content-Type": "application/json" },
