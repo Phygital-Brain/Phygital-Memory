@@ -75,7 +75,12 @@ curl -fL -o /tmp/pm.deb https://github.com/Phygital-Brain/Phygital-Memory/releas
 sudo dnf install -y https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-linux-$(uname -m).rpm
 ```
 
-**Your own server**, so the AI on your phone reaches your memories when the computer is off: one Docker Compose file, see [Run it on your own server](docs/server.md).
+**Your own server**, so the AI on your phone reaches your memories when your computer is off:
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/phygital-memory)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory)
+
+Or Coolify, or Docker Compose on any server: [Run it on your own server](docs/server.md).
 
 ## How to use
 
@@ -204,7 +209,8 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [`core/packaging/`](core/packaging) | Turns the engine into one program, plus the Touch ID and Keychain helper (Mac only). |
 | [`core/scripts/`](core/scripts) | Small tools, such as `i18n.py` for the screen texts. |
 | [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
-| [`server/`](server) | Phygital Memory Server: the Docker image, Compose and deploy files ([guide](docs/server.md)). |
+| [`server/`](server) | Phygital Memory Server: the Docker image and Compose files ([guide](docs/server.md)). |
+| [`render.yaml`](render.yaml) | The Deploy to Render button's settings for the server (Render looks for it here). |
 | [`brand/`](brand) | Logo, colours, icons and the brand guide. |
 | [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 

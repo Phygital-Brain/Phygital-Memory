@@ -17,13 +17,31 @@ Only the memories on the server. Nothing on your computer.
 
 Things that need a computer are not on the server: Touch ID, Finder, and choosing files with your computer's own file chooser (backup files, import and export). Do those in the desktop app.
 
-## Before you start
+## Deploy it
 
-- A server with Docker (any Linux server, a home server, or a host like Coolify).
-- A domain or subdomain pointing at it, like `memory.example.com`. The page and the AI door need HTTPS.
-- A long passphrase, 12 characters or more, that you use nowhere else. You choose it on the first visit.
+Pick one. Each gives you an address with HTTPS, and keeps your memories on a disk that survives restarts.
 
-## Set it up with Docker Compose
+### One click
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/phygital-memory)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory)
+
+- **Railway:** press the button, then Deploy. Railway gives the server its address and a disk, and the server picks up the address by itself.
+- **Render:** press the button, then Apply. It uses Render's smallest paid plan, because the free one has no disk. The server picks up its address by itself.
+
+Then open the address Railway or Render shows you, for [the first visit](#the-first-visit).
+
+On Railway and Render there is no WebDAV drive (they don't allow one), and syncing with your computer goes through relays, which is a little slower.
+
+### Coolify
+
+1. In Coolify, add a new resource, choose **Docker Compose**, and paste [`server/compose.yaml`](../server/compose.yaml).
+2. Coolify does HTTPS for you, so delete the `caddy` part and give the `memory` service your domain, on port 8790.
+3. Set `DOMAIN` to that domain, and deploy.
+
+### Docker Compose, on any server
+
+You need a domain or subdomain pointing at the server, like `memory.example.com`.
 
 1. Copy the [`server`](../server) folder from this repository to your server.
 2. Copy `.env.example` to `.env` and fill in `DOMAIN`.
@@ -35,29 +53,29 @@ docker compose up -d
 
 Caddy gets the HTTPS certificate on its own.
 
+### Docker, by hand
+
+If you already have HTTPS in front of it, run the image and point your address at port 8790:
+
+```bash
+docker run -d --name phygital-memory --restart unless-stopped -p 8790:8790 -p 22000:22000 -p 22000:22000/udp -v phygital-memory:/data -e PHYGITAL_MEMORY_URL=https://memory.example.com ghcr.io/phygital-brain/phygital-memory:latest
+```
+
 ## The first visit
 
-Open `https://your-domain`. The server asks you to choose its passphrase. First it wants the **setup code** it printed in its log, so nobody who finds the address before you can claim it. To see the code:
+Open your server's address. It asks you to choose its passphrase: 12 characters or more, used nowhere else. First it wants the **setup code** it wrote in its log, so nobody who finds the address before you can claim the server. The page shows where the log is for each host. With Docker Compose:
 
 ```bash
 docker compose logs memory
 ```
 
-On Coolify, Render and Railway, the code is in the service's logs. After that, the page asks for your passphrase.
-
-## Other ways
-
-- **Coolify:** make a new resource from Docker Compose and paste [`server/compose.yaml`](../server/compose.yaml). Set `DOMAIN`. If Coolify already does HTTPS for you, remove the `caddy` part and point your domain at port 8790.
-- **Render:** New, Blueprint, this repository, Blueprint path `server/render.yaml`. After the first deploy, set `PHYGITAL_MEMORY_URL` to the address Render gives you, then open it for the first visit.
-- **Railway or any host that runs images:** use the image `ghcr.io/phygital-brain/phygital-memory:latest`, a disk at `/data`, port 8790, and the settings below.
-
-On Render and Railway there is no WebDAV drive (they don't allow it), and syncing with your computer goes through relays, which is slower.
+The code stays the same until you set the passphrase. After that, the page asks for your passphrase.
 
 ## Settings
 
 | Setting | What it is |
 |---|---|
-| `PHYGITAL_MEMORY_URL` | The address people open, like `https://memory.example.com`. Required |
+| `PHYGITAL_MEMORY_URL` | The address people open, like `https://memory.example.com`. Not needed on Railway and Render, which give it to the server |
 | `PHYGITAL_MEMORY_PASSPHRASE` | Optional. Sets the passphrase as a setting instead of on the first visit. 12 characters or more |
 | `PHYGITAL_MEMORY_DATA` | Where memories and settings live. `/data` in the image: keep it on a disk that survives restarts |
 | `PHYGITAL_MEMORY_SYNC_PORT` | The port for syncing with your computers. `22000` in the image |

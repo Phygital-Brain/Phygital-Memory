@@ -88,7 +88,8 @@ AGPL-3.0-only. Before you send a contribution, read "Other licenses, and contrib
 | [`core/packaging/`](core/packaging) | Turns the engine into one program, plus the Touch ID and Keychain helper (Mac only). |
 | [`core/scripts/`](core/scripts) | Small tools, such as `i18n.py` for the screen texts. |
 | [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
-| [`server/`](server) | Phygital Memory Server: the Docker image, Compose and deploy files ([guide](docs/server.md)). |
+| [`server/`](server) | Phygital Memory Server: the Docker image and Compose files ([guide](docs/server.md)). |
+| [`render.yaml`](render.yaml) | The Deploy to Render button's settings for the server (Render looks for it here). |
 | [`brand/`](brand) | Logo, colours, icons and the brand guide. |
 | [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 

@@ -1,0 +1,17 @@
+# Phygital Memory Server on Render, for the Deploy to Render button (docs/server.md). Render needs this file at the
+# top of the repository. The server reads the address Render gives it (RENDER_EXTERNAL_URL), so nothing to fill in.
+# Render's free plan has no disk, so this uses the smallest paid one: memories live on the 1 GB disk at /data.
+services:
+  - type: web
+    name: phygital-memory
+    runtime: image
+    image:
+      url: ghcr.io/phygital-brain/phygital-memory:latest
+    plan: starter
+    envVars:
+      - key: PORT
+        value: "8790"
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1

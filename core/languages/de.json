@@ -720,7 +720,7 @@
  "Signed in": "Angemeldet",
  "Signed in to {0}": "Angemeldet bei {0}",
  "Signed · ": "Signiert · ",
- "Signing in to your server": "Anmeldung bei deinem Server",
+ "Signing in to your server and getting this computer ready. The first time takes up to half a minute.": "Anmeldung bei deinem Server, dieser Computer wird vorbereitet. Beim ersten Mal dauert das bis zu einer halben Minute.",
  "Skip": "Überspringen",
  "Smaller": "Kleiner",
  "Sort by": "Sortieren nach",

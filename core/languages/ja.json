@@ -720,7 +720,7 @@
  "Signed in": "サインインしました",
  "Signed in to {0}": "{0}にサインインしました",
  "Signed · ": "署名済み · ",
- "Signing in to your server": "サーバーにサインインしています",
+ "Signing in to your server and getting this computer ready. The first time takes up to half a minute.": "サーバーにサインインして、このPCを準備しています。初回は30秒ほどかかります。",
  "Skip": "スキップ",
  "Smaller": "小さく",
  "Sort by": "並べ替え",

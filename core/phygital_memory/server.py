@@ -3045,7 +3045,7 @@ def main() -> None:
             line = "  " + "=" * 60
             print(f"\n{line}\n  First visit: open {PAGE}\n  and choose the passphrase. Setup code: {code}\n{line}\n",
                   file=sys.stderr, flush=True)
-        mcp.run("streamable-http", host="0.0.0.0", port=PORT,
+        mcp.run("streamable-http", host="0.0.0.0", port=int(os.environ.get("PORT") or PORT),   # hosts like Railway give one
                 transport_security=TransportSecuritySettings(
                     enable_dns_rebinding_protection=True, allowed_hosts=[hosted.HOST], allowed_origins=[hosted.URL]))
         return

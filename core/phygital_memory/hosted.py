@@ -26,7 +26,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ON = os.environ.get("PHYGITAL_MEMORY_SERVER") == "1"
-URL = os.environ.get("PHYGITAL_MEMORY_URL", "").strip().rstrip("/")
+# The address: set by hand, or the one Render or Railway gives the service (so one-click deploys need no setting)
+URL = (os.environ.get("PHYGITAL_MEMORY_URL") or os.environ.get("RENDER_EXTERNAL_URL")
+       or (os.environ.get("RAILWAY_PUBLIC_DOMAIN") and "https://" + os.environ["RAILWAY_PUBLIC_DOMAIN"]) or "").strip().rstrip("/")
 HOST = urlparse(URL).netloc
 PASSPHRASE = os.environ.get("PHYGITAL_MEMORY_PASSPHRASE", "")
 DATA = Path(os.environ.get("PHYGITAL_MEMORY_DATA", "/data")).expanduser()
