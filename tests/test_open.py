@@ -61,7 +61,7 @@ try:
     check(m.search("otters"), "another program's new note shows up in search")
 
     m.todo_add("Old.md", "tidy this note")
-    check(m.todo() and (tmp / "tasks.key").exists(), "AI tasks work, with a key kept on this Mac")
+    check(m.todo() and "tidy this note" in (root / "AI tasks.md").read_text(), "AI tasks work, in the AI tasks note")
 
     m.write_bytes("pic.png", b"\x89PNG fake")
     check((root / "pic.png").read_bytes() == b"\x89PNG fake", "other files are plain too")

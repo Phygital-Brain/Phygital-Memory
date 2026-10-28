@@ -225,10 +225,11 @@ def sync(sid: str, a: Memory) -> int:
         to_b, to_a = (lambda r: r[len(prefix) + 1:]), (lambda r: f"{prefix}/{r}")
     else:
         to_b, to_a = (lambda r: r.rsplit("/", 1)[-1]), (lambda r: prefix)
-    from .memory import HIDDEN
-    asig = {to_b(r): v for r, v in a.file_sigs(prefix).items() if to_b(r).split("/")[0] not in HIDDEN}   # the app's own
-    # hidden folders aren't shared: on the other side they'd be hidden, and so look deleted
-    bsig = b.file_sigs("")
+    from .memory import HIDDEN, TASKS_NOTE
+    asig = {to_b(r): v for r, v in a.file_sigs(prefix).items() if to_b(r).split("/")[0] not in HIDDEN and r != TASKS_NOTE}
+    # the app's own hidden folders aren't shared (on the other side they'd be hidden, and so look deleted), and
+    # neither is the AI tasks note: nobody else may give your AI a task
+    bsig = {r: v for r, v in b.file_sigs("").items() if r != TASKS_NOTE}
     if kind == "file":
         bsig = {r: v for r, v in bsig.items() if r == s["name"]}
 
@@ -243,7 +244,9 @@ def mirror(name: str, a: Memory, b: Memory, raw: bytes, two_way: bool) -> int:
     copied is kept (STATE/shares/NAME.sync)."""
     if not a.is_open or not b.is_open:
         return 0
-    return _step(name, raw, a, b, a.file_sigs(""), b.file_sigs(""), lambda r: r, two_way, None)
+    from .memory import TASKS_NOTE   # each side's own AI tasks stay its own
+    sigs = lambda m: {r: v for r, v in m.file_sigs("").items() if r != TASKS_NOTE}
+    return _step(name, raw, a, b, sigs(a), sigs(b), lambda r: r, two_way, None)
 
 
 def _step(sid, raw, a, b, asig, bsig, to_a, two_way, log) -> int:

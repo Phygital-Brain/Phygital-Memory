@@ -2557,10 +2557,10 @@ async function homeExtras(status, ai, leaving) {
   if (open.length || finished.length || work.length) {
     ai.replaceChildren(el("h2", { class: "home-h" }, t("Your AI")),
       el("div", { class: "home-list" },
-        ...open.slice(0, 3).map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("sparkle", 15),
-          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.ask || t("Read it")), el("span", { class: "hi-time hi-wait" }, "waiting"))),
-        ...finished.map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("check", 15),
-          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.result ? `${t.by ? t.by + ": " : ""}${t.result}` : t.ask || t("Read it")),
+        ...open.slice(0, 3).map((k) => el("button", { class: "home-item", onclick: () => openPath(k.path || TASKS_NOTE) }, icon("sparkle", 15),
+          el("span", { class: "hi-name" }, label(k.path || TASKS_NOTE)), el("span", { class: "hi-dir" }, k.ask || t("Read it")), el("span", { class: "hi-time hi-wait" }, "waiting"))),
+        ...finished.map((k) => el("button", { class: "home-item", onclick: () => openPath(k.path || TASKS_NOTE) }, icon("check", 15),
+          el("span", { class: "hi-name" }, label(k.path || TASKS_NOTE)), el("span", { class: "hi-dir" }, k.result ? `${k.by ? k.by + ": " : ""}${k.result}` : k.ask || t("Read it")),
           el("span", { class: "hi-time hi-done" }, "done"))),
         ...work.map((r) => {
           const row = el("div", { class: "home-item hi-work" }, icon("pulse", 15),
@@ -2962,7 +2962,8 @@ window.phygitalOpenFolder = async (id) => {
   await switchTo(id);
 };
 
-const LAST_MEMORY = "phygital-memory-last";   // the memory last open on screen (an id, nothing private)
+const LAST_MEMORY = "phygital-memory-last";
+const TASKS_NOTE = "AI tasks.md";   // the AI's tasks, one note at the top of the memory (memory.py)   // the memory last open on screen (an id, nothing private)
 
 (async function start() {
   await useLanguage(settings().lang);   // the app's words, before anything draws

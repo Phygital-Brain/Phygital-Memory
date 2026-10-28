@@ -1164,9 +1164,11 @@ class Memory:
             return prefs
 
     # ---------- AI tasks: notes the person gave to their AI, each with what to do ----------
-    # Kept on this Mac (tasks_file), encrypted with the memory's own key, so it survives locking and waits for the AI.
-    # Never inside the memory: anyone else who holds the memory's key (a share, another Mac) could plant a "task"
-    # there that the AI would take as the person's own request. A list from before this moves out once.
+    # One note at the top of the memory, "AI tasks": To do, then Done. It's a normal note, so the person sees and
+    # ticks tasks anywhere (phone, another computer, any app) and an AI reading the folder finds it. Each line keeps
+    # its id and times in a small comment; a line typed by hand becomes a task too. Done ones leave after 7 days.
+    # Shares never carry it (shares.py), so nobody the memory is shared with can add a task the AI would follow.
+    # A view-only memory (shared with you) can't be written to: its tasks stay on this Mac (tasks_file).
 
     def _tasks_key(self) -> bytes:
         if self.plain:   # no memory key: a random one, kept on this Mac next to the tasks
@@ -1181,46 +1183,62 @@ class Memory:
         from cryptography.hazmat.primitives.kdf.hkdf import HKDF
         return HKDF(hashes.SHA256(), 32, None, b"phygital-memory ai tasks").derive(bytes(self._key.raw))
 
-    def todo(self) -> list[dict]:
-        with self._lock:
-            self._need_open()
-            if self.tasks_file is None:   # a memory opened outside the app (tests, tools): the old place
-                try:
-                    items = json.loads(self._tree.read_file(self._tree.resolve(TODO)))
-                    return items if isinstance(items, list) else []
-                except (NotFound, ValueError):
-                    return []
-            if not self.tasks_file.exists():
-                try:   # the list from before: moved out of the memory, once
-                    old = self._tree.resolve(TODO)
-                    items = json.loads(self._tree.read_file(old))
-                    self._save_todo(items if isinstance(items, list) else [])
-                    self._writer.remove(old)
-                except (NotFound, ValueError):
-                    pass
+    def _old_tasks(self) -> list[dict]:
+        """Tasks kept the older ways: on this Mac (tasks_file, encrypted) or as JSON inside the memory."""
+        items = []
+        if self.tasks_file is not None and self.tasks_file.exists():
             try:
                 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
                 raw = self.tasks_file.read_bytes()
                 items = json.loads(AESGCM(self._tasks_key()).decrypt(raw[:12], raw[12:], b"ai-tasks"))
-                return items if isinstance(items, list) else []
-            except Exception:   # missing, or not this memory's key
-                return []
+            except Exception:   # not this memory's key
+                items = []
+        try:
+            items += json.loads(self._tree.read_file(self._tree.resolve(TODO)))
+        except (NotFound, ValueError):
+            pass
+        return [i for i in items if isinstance(i, dict) and i.get("id")] if isinstance(items, list) else []
+
+    def todo(self) -> list[dict]:
+        with self._lock:
+            self._need_open()
+            if getattr(self, "read_only", False):
+                return self._old_tasks()
+            old = self._old_tasks()
+            try:
+                text = self._tree.read_file(self._tree.resolve(TASKS_NOTE)).decode("utf-8", "replace")
+            except NotFound:
+                text = None
+            items = _parse_tasks(text or "")
+            have = {i["id"] for i in items}
+            items += [i for i in old if i["id"] not in have]   # the older list moves into the note, once
+            cutoff = time.time() - TODO_DONE_DAYS * 86400
+            kept = [i for i in items if not (i.get("done") and (i.get("done_t") or 0) < cutoff)]
+            if old or kept != items or (text is not None and _tasks_text(kept) != text):
+                self._save_todo(kept)   # ids for lines typed by hand, old ones out, the older list moved in
+                if old:
+                    if self.tasks_file is not None:
+                        self.tasks_file.unlink(missing_ok=True)
+                    try:
+                        self._writer.remove(self._tree.resolve(TODO))
+                    except NotFound:
+                        pass
+            return kept
 
     def _save_todo(self, items: list[dict]) -> list[dict]:
         items = items[-TODO_KEEP:]
-        data = json.dumps(items, ensure_ascii=False).encode()
-        if self.tasks_file is None:
-            parent, name = self._make_parents(TODO)
-            existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
-            self._writer.write_file(parent, name, data, replace=existing)
+        if getattr(self, "read_only", False) and self.tasks_file is not None:   # can't write into the memory
+            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+            nonce = os.urandom(12)
+            self.tasks_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.tasks_file.with_suffix(".tmp")
+            tmp.write_bytes(nonce + AESGCM(self._tasks_key()).encrypt(nonce, json.dumps(items, ensure_ascii=False).encode(), b"ai-tasks"))
+            os.chmod(tmp, 0o600)
+            tmp.replace(self.tasks_file)
             return items
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-        nonce = os.urandom(12)
-        self.tasks_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.tasks_file.with_suffix(".tmp")
-        tmp.write_bytes(nonce + AESGCM(self._tasks_key()).encrypt(nonce, data, b"ai-tasks"))
-        os.chmod(tmp, 0o600)
-        tmp.replace(self.tasks_file)
+        parent, name = self._make_parents(TASKS_NOTE)
+        existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+        self._write_note(TASKS_NOTE, parent, name, existing, _tasks_text(items).encode("utf-8"), False)
         return items
 
     def todo_add(self, rel: str, ask: str) -> dict:
@@ -1313,6 +1331,8 @@ AI_PRIVATE = ".phygital/ai-private.json"
 TRASH_INDEX = ".phygital/trash.json"
 TRASH_DAYS = 7
 TODO_KEEP = 100
+TODO_DONE_DAYS = 7   # finished tasks leave the AI tasks note after this
+TASKS_NOTE = "AI tasks.md"   # the AI's tasks, at the top of the memory
 TODO_ASK_MAX = 2000
 HIDDEN = (TRASH, VERSIONS, ".phygital")
 VERSION_EVERY = 5 * 60
@@ -1409,3 +1429,62 @@ class _NoWrites:
         def refuse(*a, **k):
             raise ValueError("You can view this shared memory, not change it.")
         return refuse
+
+
+# ---------- the AI tasks note: what it says, and reading it back ----------
+TASKS_INTRO = ("Your AI's tasks. Add a line under To do to give it one, like \"- [ ] [[Plan]] tidy this note\", "
+               "and tick it when it's done. Finished tasks leave Done after 7 days.")
+_TASK = re.compile(r"^\s*[-*]\s+\[( |x|X)\]\s*(.*?)\s*(?:<!--\s*pm\s+(\{.*\})\s*-->)?\s*$")
+_LINK = re.compile(r"^\[\[([^\]|#]+)(?:\|[^\]]*)?\]\]\s*")
+
+
+def _tasks_text(items: list[dict]) -> str:
+    """The AI tasks note for these items: To do (oldest first), then Done (newest first)."""
+    def line(i):
+        meta = {k: i[k] for k in ("id", "t", "done", "done_t", "by", "result", "copy", "path", "ask") if i.get(k) not in (None, "", False)}
+        link = f"[[{i['path'][:-3] if i.get('path', '').lower().endswith('.md') else i.get('path')}]] " if i.get("path") else ""
+        ask = " ".join(str(i.get("ask", "")).split())
+        tail = ""
+        if i.get("done"):
+            tail = (f" → {' '.join(str(i['result']).split())}" if i.get("result") else "") + (f" ({i['by']})" if i.get("by") else "")
+        return f"- [{'x' if i.get('done') else ' '}] {link}{ask}{tail} <!-- pm {json.dumps(meta, ensure_ascii=False)} -->"
+    todo = [i for i in items if not i.get("done")]
+    done = sorted((i for i in items if i.get("done")), key=lambda i: -(i.get("done_t") or 0))
+    return ("---\ntype: ai-tasks\n---\n\n" + TASKS_INTRO + "\n\n## To do\n\n" + "".join(line(i) + "\n" for i in todo)
+            + "\n## Done\n\n" + "".join(line(i) + "\n" for i in done))
+
+
+def _parse_tasks(text: str) -> list[dict]:
+    """The items in an AI tasks note. A ticked line under To do is done (by you); an unticked one under Done is to
+    do again. A line with no comment (typed by hand) gets a new id; its [[link]], if any, is the note it's about."""
+    items, seen = [], set()
+    for raw in text.splitlines():
+        m = _TASK.match(raw)
+        if not m:
+            continue
+        ticked, body, meta = m.group(1).lower() == "x", m.group(2), m.group(3)
+        try:
+            i = json.loads(meta) if meta else {}
+        except ValueError:
+            i = {}
+        if not isinstance(i, dict):
+            i = {}
+        link = _LINK.match(body)
+        shown = body[link.end():] if link else body
+        if not i.get("id") or i["id"] in seen:   # typed by hand (or a copied line): a task of its own
+            i = {"id": "h-" + secrets.token_hex(4), "t": time.time(),
+                 "path": (link.group(1).strip() + ".md") if link else ""}
+            i["ask"] = shown.strip()[:TODO_ASK_MAX]
+        elif not ticked and not i.get("done"):
+            i["ask"] = shown.strip()[:TODO_ASK_MAX]   # still to do: the line's words are the request, edits and all
+        seen.add(i["id"])
+        if ticked and not i.get("done"):
+            i.update(done=True, done_t=time.time(), by=i.get("by") or "you")
+        elif not ticked and i.get("done"):
+            i.update(done=False, done_t=None, by="", result="")
+        i.setdefault("done", ticked)
+        i.setdefault("path", "")
+        i.setdefault("ask", "")
+        i.setdefault("t", time.time())
+        items.append(i)
+    return items

@@ -235,7 +235,7 @@ function tasksView(ctx, done) {
       box.addEventListener("change", () => act(() => ctx.set(i.id, box.checked)));
       return el("div", { class: "todo-row" + (i.done ? " done" : "") }, box,
         el("div", { class: "act-main" },
-          el("button", { class: "act-path", type: "button", title: i.path, onclick: () => { done(null); ctx.open(i.path); } }, ctx.label(i.path)),
+          el("button", { class: "act-path", type: "button", title: i.path || "AI tasks.md", onclick: () => { done(null); ctx.open(i.path || "AI tasks.md"); } }, ctx.label(i.path || "AI tasks.md")),
           el("div", { class: "act-detail" }, i.ask || t("No request: just read it.")),
           i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : t("Ticked off by you")}${i.result ? ": " + i.result : ""}`)
                  : el("div", { class: "act-folder" }, t("Given {0}", ago(Math.max(0, Date.now() / 1000 - i.t))))),

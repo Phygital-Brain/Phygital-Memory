@@ -169,25 +169,33 @@ export function renderSetup(body, ctx) {
       return x;
     };
     // Stored in: this Mac, a synced cloud folder (one click puts it at its top), or any other folder
-    const where = el("span", { class: "sp-where" }, mem.parent ? shortPath(mem.parent) : "");
+    const where = el("span", { class: "sp-where" });
+    const hint = el("p", { class: "sp-hint" });
+    const showWhere = () => {   // the path picked, or for WebDAV what happens (in words, not a path)
+      const dav = mem.picked === "webdav";
+      where.classList.toggle("sp-where-note", dav);
+      where.textContent = dav ? t("This Mac and your WebDAV server. You pick the server once it's made.") : mem.parent ? shortPath(mem.parent) : "";
+      hint.hidden = dav;
+    };
     const home = places?.home ? `${places.home}/Documents` : "";
     const opts = [["mac", t("This Mac"), home, "laptop"], ...(places?.places || []).map((p) => [p.path, p.name, p.path, "cloud"]),
       ["webdav", t("WebDAV"), home, "cloud"]];   // made on this Mac, then kept in step with the server
     const chips = el("div", { class: "sp-langs sp-places", role: "radiogroup", "aria-label": t("Where to keep it") });
     const draw = () => chips.replaceChildren(...opts.map(([k, label, path, ic]) => el("button", {
       class: "sp-lang" + (mem.parent === path && mem.picked === k ? " on" : ""), type: "button", role: "radio", "aria-checked": String(mem.parent === path && mem.picked === k),
-      onclick: () => { mem.parent = path; mem.picked = k; where.textContent = k === "webdav" ? t("This Mac and your WebDAV server. You pick the server once it's made.") : shortPath(path); draw(); refreshNext(); } }, icon(ic, 13), label)),
+      onclick: () => { mem.parent = path; mem.picked = k; showWhere(); draw(); refreshNext(); } }, icon(ic, 13), label)),
       el("button", { class: "sp-lang" + (mem.picked === "other" ? " on" : ""), type: "button", onclick: async () => {
-        try { const p = await ctx.pick(); if (p) { mem.parent = p; mem.picked = "other"; where.textContent = shortPath(p); draw(); refreshNext(); } }
+        try { const p = await ctx.pick(); if (p) { mem.parent = p; mem.picked = "other"; showWhere(); draw(); refreshNext(); } }
         catch (e) { toastErr(e.message); }
       } }, icon("folder", 13), t("Other folder")));
     draw();
     if (!places) chips.append(el("span", { class: "sp-hint" }, t("Looking for cloud folders")));
     const kids = [el("h2", { class: "sp-q" }, encrypted() ? t("Name it and lock it") : t("Name it and pick its place")),
       field(t("Memory name"), inp("name", { maxlength: 60, "aria-label": t("Memory name") })),
-      el("div", { class: "sp-field" }, el("span", { class: "sp-sub" }, t("Stored in")), chips, where),
-      el("p", { class: "sp-hint" }, encrypted() ? t("A cloud folder (iCloud Drive, Dropbox) keeps a locked copy safe in the cloud.")
-        : t("A cloud folder like iCloud Drive or Dropbox puts it on your phone too."))];
+      el("div", { class: "sp-field" }, el("span", { class: "sp-sub" }, t("Stored in")), chips, where), hint];
+    hint.textContent = encrypted() ? t("A cloud folder (iCloud Drive, Dropbox) keeps a locked copy safe in the cloud.")
+      : t("A cloud folder like iCloud Drive or Dropbox puts it on your phone too.");
+    showWhere();
     if (encrypted()) kids.push(
       field(t("Password (8 or more characters)"), inp("password", { type: "password", "aria-label": t("Password") })),
       field(t("Password again"), inp("again", { type: "password", "aria-label": t("Password again") })),

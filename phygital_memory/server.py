@@ -328,8 +328,8 @@ def read_note(ctx: Context, id: ResultId, private: Private = False) -> str:
 
 @mcp.tool(annotations=READ)
 def handed_notes(ctx: Context) -> str:
-    """The person's AI tasks: notes they gave you from the Phygital Memory app ("Give AI a task"), oldest first, each
-    with what they want done and the note in full. Use the handed id with replace_in_note or append_to_note, then
+    """The person's AI tasks: the To do list of the "AI tasks" note in their own memory (from "Give AI a task" in
+    the app, or typed there by them), oldest first, each with what they want done and the note in full. Use the handed id with replace_in_note or append_to_note, then
     call finish_handed_note. Finished ones are not shown."""
     app = _seen(ctx)
     out = []
@@ -339,7 +339,7 @@ def handed_notes(ctx: Context) -> str:
             if item.get("done"):
                 continue
             try:
-                text = f.memory.read(item["path"])
+                text = f.memory.read(item["path"]) if item["path"] else "(No note: the request is the whole task.)"
             except Exception:
                 text = "(This note is gone: it was moved or deleted. Tell the person, then finish it.)"
             _log(app, f, "read a handed note", item.get("ask", "")[:120], item["path"])
