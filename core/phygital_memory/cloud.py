@@ -163,6 +163,18 @@ def _password(conn: dict) -> str | None:
         return None
 
 
+def _no_config() -> str:
+    """An empty settings file for rclone: everything comes from the environment. Windows refuses its NUL device here,
+    so it gets an empty file of the app's own."""
+    if sys.platform != "win32":
+        return os.devnull
+    from .system import state_dir
+    p = state_dir() / "rclone-empty.conf"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("")
+    return str(p)
+
+
 def _env(conn: dict, password: str | None = None) -> dict:
     p = f"RCLONE_CONFIG_{REMOTE}_"
     if conn.get("kind") in S3_KINDS:
@@ -172,13 +184,13 @@ def _env(conn: dict, password: str | None = None) -> dict:
         provider = "Cloudflare" if conn["kind"] == "r2" else "AWS" if conn["url"].endswith(".amazonaws.com") else "Other"
         return {**os.environ, p + "TYPE": "s3", p + "PROVIDER": provider, p + "ACCESS_KEY_ID": conn["user"],
                 p + "SECRET_ACCESS_KEY": secret, p + "ENDPOINT": conn["url"], p + "REGION": conn.get("region") or "auto",
-                p + "NO_CHECK_BUCKET": "true", p + "FORCE_PATH_STYLE": "true", "RCLONE_CONFIG": os.devnull}
+                p + "NO_CHECK_BUCKET": "true", p + "FORCE_PATH_STYLE": "true", "RCLONE_CONFIG": _no_config()}
     obscured = _obscure(password) if password is not None else _password(conn)
     if obscured is None:
         raise CloudError(f"Connect to {label(conn)} again: its password isn't on this Mac any more.")
     return {**os.environ, p + "TYPE": "webdav", p + "URL": conn["url"], p + "USER": conn["user"], p + "PASS": obscured,
             p + "VENDOR": "nextcloud" if conn["kind"] == "nextcloud" else "other",
-            "RCLONE_CONFIG": os.devnull}   # never read or write a config file
+            "RCLONE_CONFIG": _no_config()}   # never read or write a config file
 
 
 def _remote(path: str) -> str:
