@@ -521,6 +521,7 @@
  "Personal": "個人",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memoryはロックされています。本人がアプリでパスワードを入力して解除します。",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} の準備ができました。次にアプリを開いたときに起動します。",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "バックアップの.zip、またはメモリーのmasterkey.cryptomatorファイルを選んでください。",
  "Pick a folder of notes, not a whole drive or home folder.": "ドライブ全体やホームフォルダではなく、メモのフォルダを選んでください。",
  "Pick a folder, not a file.": "ファイルではなく、フォルダを選んでください。",

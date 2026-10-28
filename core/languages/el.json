@@ -521,6 +521,7 @@
  "Personal": "Προσωπικά",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Το Phygital Memory είναι κλειδωμένο. Το άτομο το ξεκλειδώνει στην εφαρμογή με το συνθηματικό του.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Το Phygital Memory {0} είναι έτοιμο. Θα ξεκινήσει την επόμενη φορά που θα ανοίξεις την εφαρμογή.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Διάλεξε ένα .zip αντιγράφου ή το αρχείο masterkey.cryptomator μιας μνήμης.",
  "Pick a folder of notes, not a whole drive or home folder.": "Διάλεξε έναν φάκελο σημειώσεων, όχι ολόκληρο δίσκο ή τον αρχικό φάκελο χρήστη.",
  "Pick a folder, not a file.": "Διάλεξε φάκελο, όχι αρχείο.",

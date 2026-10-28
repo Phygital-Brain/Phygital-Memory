@@ -3015,6 +3015,8 @@ async function sendMenu() {
   api("menu", { spec }).catch(() => { menuSent = ""; });
 }
 window.phygitalMenu = (id) => { const fn = menuFns[id]; if (fn) fn(); };
+// The Mac app downloaded an update from GitHub and put it in place: it starts the next time the app opens.
+window.phygitalUpdated = (v) => toastOk(t("Phygital Memory {0} is ready. It starts the next time you open the app.", v));
 onSettings(() => sendMenu());
 
 // ---------- keyboard ----------

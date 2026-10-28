@@ -521,6 +521,7 @@
  "Personal": "Peribadi",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory dikunci. Orang itu membuka kuncinya dalam apl dengan kata laluannya.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} sudah sedia. Ia bermula apabila anda membuka app pada kali seterusnya.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Pilih .zip sandaran, atau fail masterkey.cryptomator sesebuah ingatan.",
  "Pick a folder of notes, not a whole drive or home folder.": "Pilih folder nota, bukan seluruh pemacu atau folder utama.",
  "Pick a folder, not a file.": "Pilih folder, bukan fail.",

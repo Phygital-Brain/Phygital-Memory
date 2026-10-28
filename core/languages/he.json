@@ -521,6 +521,7 @@
  "Personal": "אישי",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory נעול. האדם פותח אותו באפליקציה עם הסיסמה שלו.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} מוכנה. היא תיפתח בפעם הבאה שהאפליקציה תיפתח.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "לבחור .zip של גיבוי, או את קובץ masterkey.cryptomator של זיכרון.",
  "Pick a folder of notes, not a whole drive or home folder.": "לבחור תיקיית פתקים, לא כונן שלם או תיקיית בית.",
  "Pick a folder, not a file.": "לבחור תיקיה, לא קובץ.",

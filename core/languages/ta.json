@@ -521,6 +521,7 @@
  "Personal": "தனிப்பட்டவை",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory பூட்டப்பட்டுள்ளது. அந்த நபர் தன் பாஸ்வேர்டால் ஆப்பில் அதைத் திறப்பார்.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} தயார். அடுத்த முறை ஆப்பைத் திறக்கும்போது இது தொடங்கும்.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "ஒரு பேக்கப் .zip-ஐ அல்லது ஒரு நினைவகத்தின் masterkey.cryptomator ஃபைலைத் தேர்ந்தெடுக்கவும்.",
  "Pick a folder of notes, not a whole drive or home folder.": "குறிப்புகள் உள்ள ஒரு ஃபோல்டரைத் தேர்ந்தெடுக்கவும், முழு டிரைவ் அல்லது ஹோம் ஃபோல்டரை அல்ல.",
  "Pick a folder, not a file.": "ஒரு ஃபோல்டரைத் தேர்ந்தெடுக்கவும், ஃபைலை அல்ல.",

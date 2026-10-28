@@ -1,0 +1,67 @@
+# Tests on Mac, Windows and Linux at every push: the engine's tests that need no secret store or second app,
+# then a compile check of the app window. (The sharing and server tests run on the Mac for now; see AGENTS.md.)
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: engine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    defaults:
+      run:
+        working-directory: core
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - run: uv sync --frozen
+      - name: Tests
+        env:
+          OFFLINE: "1"
+          PHYGITAL_MEMORY_OFFLINE: "1"
+          PYTHONPATH: .
+          PYTHONUTF8: "1"
+        run: |
+          set -e
+          for t in test_open test_tasks_note test_brain test_backup_file test_import_export test_conflicts test_docx test_versions_cleanup; do
+            echo "== $t"
+            PHYGITAL_MEMORY_STATE="$(mktemp -d)" uv run python "tests/$t.py"
+          done
+
+  window:
+    name: app window (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: app/src-tauri
+      - name: Linux libraries for the window
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Compile check
+        working-directory: app/src-tauri
+        shell: bash
+        run: mkdir -p server && cargo check --locked

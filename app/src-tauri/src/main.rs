@@ -190,6 +190,24 @@ fn submenu(app: &tauri::AppHandle, title: &str, v: &serde_json::Value) -> tauri:
     sb.build()
 }
 
+// Updates come from the latest GitHub Release, signed with the app's own update key (its public half is in
+// tauri.conf.json, so nothing else can pass for an update). Downloaded and put in place quietly; the page then says
+// the new version starts the next time the app opens. Builds made while working on the app (debug) never update.
+fn check_update(app: tauri::AppHandle) {
+    if cfg!(debug_assertions) { return; }
+    tauri::async_runtime::spawn(async move {
+        use tauri_plugin_updater::UpdaterExt;
+        let Ok(updater) = app.updater() else { return };
+        let Ok(Some(update)) = updater.check().await else { return };
+        let v: String = update.version.chars().filter(|c| c.is_ascii_alphanumeric() || ".-+".contains(*c)).collect();
+        if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.eval(&format!("window.phygitalUpdated && window.phygitalUpdated('{v}')"));
+            }
+        }
+    });
+}
+
 fn quit(app: &tauri::AppHandle) {
     let _ = shell(app, "lockall");   // lock every folder and close every Finder view before we go
     MAY_EXIT.store(true, Ordering::SeqCst);
@@ -312,6 +330,7 @@ fn main() {
             std::thread::spawn(move || { let _ = shell(&h, "reopen"); });
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_menu_event(|app, ev| {
             let Some(id) = ev.id().0.strip_prefix("pm:") else { return };
             // only plain ids reach the page (they're ours, but nothing odd ever goes into the script)
@@ -355,6 +374,7 @@ fn main() {
                         ask_window(&h2);
                     });
                     watch_menu(h.clone());
+                    check_update(h.clone());
                 }
             });
             Ok(())

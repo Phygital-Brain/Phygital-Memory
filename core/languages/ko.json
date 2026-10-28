@@ -521,6 +521,7 @@
  "Personal": "개인",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory가 잠겨 있어요. 본인이 앱에서 암호로 잠금을 풀어요.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0}이(가) 준비됐어요. 다음에 앱을 열 때 실행돼요.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "백업 .zip 또는 메모리의 masterkey.cryptomator 파일을 고르세요.",
  "Pick a folder of notes, not a whole drive or home folder.": "드라이브 전체나 홈 폴더가 아니라 메모 폴더를 고르세요.",
  "Pick a folder, not a file.": "파일이 아니라 폴더를 고르세요.",

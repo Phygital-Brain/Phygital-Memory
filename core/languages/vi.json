@@ -521,6 +521,7 @@
  "Personal": "Cá nhân",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory đã khóa. Người đó mở khóa trong ứng dụng bằng mật khẩu của mình.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} đã sẵn sàng. Bản này sẽ chạy vào lần tới bạn mở ứng dụng.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Chọn một tệp sao lưu .zip, hoặc tệp masterkey.cryptomator của một trí nhớ.",
  "Pick a folder of notes, not a whole drive or home folder.": "Hãy chọn một thư mục ghi chú, không phải cả ổ đĩa hay thư mục cá nhân.",
  "Pick a folder, not a file.": "Hãy chọn một thư mục, không phải một tệp.",

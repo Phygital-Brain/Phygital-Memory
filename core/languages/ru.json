@@ -521,6 +521,7 @@
  "Personal": "Личное",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory заблокирована. Человек разблокирует её в приложении своим паролем.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} готова. Новая версия запустится при следующем открытии приложения.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Выберите .zip резервной копии или файл masterkey.cryptomator памяти.",
  "Pick a folder of notes, not a whole drive or home folder.": "Выберите папку с заметками, а не весь диск или домашнюю папку.",
  "Pick a folder, not a file.": "Выберите папку, а не файл.",

@@ -521,6 +521,7 @@
  "Personal": "Kişisel",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory kilitli. Kişi, uygulamada parolasıyla kilidi açar.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} hazır. Uygulamayı bir sonraki açışında başlar.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Bir yedek .zip ya da bir hafızanın masterkey.cryptomator dosyasını seç.",
  "Pick a folder of notes, not a whole drive or home folder.": "Bir not klasörü seç, tüm bir disk ya da ev klasörü değil.",
  "Pick a folder, not a file.": "Bir klasör seç, dosya değil.",

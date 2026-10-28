@@ -521,6 +521,7 @@
  "Personal": "Henkilökohtainen",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory on lukittu. Käyttäjä avaa lukituksen sovelluksessa salasanallaan.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} on valmis. Se käynnistyy, kun avaat sovelluksen seuraavan kerran.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Valitse varmuuskopion .zip tai muistin masterkey.cryptomator-tiedosto.",
  "Pick a folder of notes, not a whole drive or home folder.": "Valitse muistiinpanokansio, ei koko asemaa eikä kotikansiota.",
  "Pick a folder, not a file.": "Valitse kansio, ei tiedostoa.",

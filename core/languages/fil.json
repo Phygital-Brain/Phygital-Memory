@@ -521,6 +521,7 @@
  "Personal": "Personal",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Naka-lock ang Phygital Memory. Ia-unlock ito ng gumagamit sa app gamit ang kanyang password.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Handa na ang Phygital Memory {0}. Magsisimula ito sa susunod na buksan mo ang app.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Pumili ng backup .zip, o ng masterkey.cryptomator file ng alaala.",
  "Pick a folder of notes, not a whole drive or home folder.": "Pumili ng folder ng mga note, hindi buong drive o home folder.",
  "Pick a folder, not a file.": "Pumili ng folder, hindi file.",

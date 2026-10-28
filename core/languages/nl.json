@@ -521,6 +521,7 @@
  "Personal": "Persoonlijk",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory is vergrendeld. De persoon ontgrendelt het in de app met het eigen wachtwoord.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} is klaar. Hij start de volgende keer dat je de app opent.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Kies een back-up-.zip of het masterkey.cryptomator-bestand van een geheugen.",
  "Pick a folder of notes, not a whole drive or home folder.": "Kies een map met notities, geen hele schijf of thuismap.",
  "Pick a folder, not a file.": "Kies een map, geen bestand.",

@@ -521,6 +521,7 @@
  "Personal": "Personal",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory este blocat. Persoana îl deblochează în aplicație cu parola ei.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} este gata. Pornește data viitoare când deschizi aplicația.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Alege un .zip de backup sau fișierul masterkey.cryptomator al unei memorii.",
  "Pick a folder of notes, not a whole drive or home folder.": "Alege un dosar de notițe, nu un disc întreg sau dosarul personal.",
  "Pick a folder, not a file.": "Alege un dosar, nu un fișier.",

@@ -521,6 +521,7 @@
  "Personal": "Binafsi",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory imefungwa kufuli. Mtu huifungua kwenye programu kwa nenosiri lake.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} iko tayari. Itaanza utakapofungua programu wakati ujao.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Chagua .zip ya nakala ya akiba, au faili ya masterkey.cryptomator ya kumbukumbu.",
  "Pick a folder of notes, not a whole drive or home folder.": "Chagua folda ya noti, si diski nzima au folda ya nyumbani.",
  "Pick a folder, not a file.": "Chagua folda, si faili.",

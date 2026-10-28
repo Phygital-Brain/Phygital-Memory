@@ -521,6 +521,7 @@
  "Personal": "ส่วนตัว",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory ล็อคอยู่ ผู้ใช้ปลดล็อคในแอปด้วยรหัสผ่านของตัวเอง",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} พร้อมแล้ว จะเริ่มทำงานเมื่อคุณเปิดแอปครั้งถัดไป",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "เลือกไฟล์สำรองข้อมูล .zip หรือไฟล์ masterkey.cryptomator ของคลังความจำ",
  "Pick a folder of notes, not a whole drive or home folder.": "เลือกโฟลเดอร์ของโน้ต ไม่ใช่ทั้งไดรฟ์หรือโฟลเดอร์โฮม",
  "Pick a folder, not a file.": "เลือกโฟลเดอร์ ไม่ใช่ไฟล์",

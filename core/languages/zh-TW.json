@@ -521,6 +521,7 @@
  "Personal": "個人",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory 已鎖定。需要由本人在 App 裡用密碼解鎖。",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} 已準備就緒，下次打開 App 時就會啟動。",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "選一個備份 .zip，或某個記憶的 masterkey.cryptomator 檔案。",
  "Pick a folder of notes, not a whole drive or home folder.": "請選一個筆記檔案夾，不要選整個磁碟或個人檔案夾。",
  "Pick a folder, not a file.": "請選檔案夾，不要選檔案。",

@@ -521,6 +521,7 @@
  "Personal": "Személyes",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "A Phygital Memory zárolva van. A személy az appban oldja fel a jelszavával.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "A Phygital Memory {0} kész. Az app következő megnyitásakor indul el.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Válassz egy mentés .zipet, vagy egy emlékezet masterkey.cryptomator fájlját.",
  "Pick a folder of notes, not a whole drive or home folder.": "Válassz egy jegyzetmappát, ne egy egész meghajtót vagy a saját mappát.",
  "Pick a folder, not a file.": "Válassz egy mappát, ne egy fájlt.",

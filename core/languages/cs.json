@@ -521,6 +521,7 @@
  "Personal": "Osobní",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory je zamčená. Osoba ji v aplikaci odemkne svým heslem.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} je připravená. Spustí se, až aplikaci příště otevřeš.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Vyber .zip zálohy nebo soubor masterkey.cryptomator některé paměti.",
  "Pick a folder of notes, not a whole drive or home folder.": "Vyber složku s poznámkami, ne celý disk ani domovskou složku.",
  "Pick a folder, not a file.": "Vyber složku, ne soubor.",

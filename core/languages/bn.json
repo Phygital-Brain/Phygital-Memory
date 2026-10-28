@@ -521,6 +521,7 @@
  "Personal": "ব্যক্তিগত",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory লক করা। ব্যক্তিটি অ্যাপে নিজের পাসওয়ার্ড দিয়ে আনলক করেন।",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} প্রস্তুত। পরের বার অ্যাপ খুললে এটি চালু হবে।",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "একটি ব্যাকআপ .zip বা কোনো স্মৃতির masterkey.cryptomator ফাইল বেছে নিন।",
  "Pick a folder of notes, not a whole drive or home folder.": "নোটের একটি ফোল্ডার বেছে নিন, পুরো ড্রাইভ বা হোম ফোল্ডার নয়।",
  "Pick a folder, not a file.": "একটি ফোল্ডার বেছে নিন, ফাইল নয়।",

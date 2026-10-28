@@ -521,6 +521,7 @@
  "Personal": "Personligt",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory er låst. Personen låser den op i appen med sin adgangskode.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} er klar. Den starter, næste gang du åbner appen.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Vælg en backup-.zip eller en hukommelses masterkey.cryptomator-fil.",
  "Pick a folder of notes, not a whole drive or home folder.": "Vælg en mappe med noter, ikke et helt drev eller en hjemmemappe.",
  "Pick a folder, not a file.": "Vælg en mappe, ikke en fil.",

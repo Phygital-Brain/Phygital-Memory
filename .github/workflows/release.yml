@@ -1,0 +1,90 @@
+# Builds Phygital Memory for Mac, Windows and Linux from one tag (v0.2.0, say) and puts all of them in one draft
+# GitHub Release, with latest.json for the app's updater. Publish the draft by hand once it looks right.
+#
+# Secrets (Settings › Secrets and variables › Actions):
+#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD   signs each update (.signing/updater.key)
+#   MACOS_HELPER_P12, MACOS_HELPER_P12_PASSWORD                     optional: the Touch ID helper's fixed certificate
+#                                                                   (base64 of .signing/id.p12). Without it the Mac
+#                                                                   app is built without Touch ID.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write   # to make the draft release and upload to it
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: stable
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: app/src-tauri
+      - name: Linux libraries for the window
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: The screens
+        working-directory: core/frontend
+        run: npm ci && npm run build
+      - name: The engine
+        working-directory: core
+        run: uv sync --frozen && uv run python packaging/build.py
+      - name: Engine, Syncthing, rclone and licences into the app
+        working-directory: core
+        run: uv run python packaging/bundle_server.py --fetch
+
+      - name: Touch ID helper (Mac, with the fixed certificate)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          P12: ${{ secrets.MACOS_HELPER_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_HELPER_P12_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "::warning::No MACOS_HELPER_P12 secret: this Mac build has no Touch ID."; exit 0; fi
+          KC="$RUNNER_TEMP/helper.keychain-db"; KCP="$(uuidgen)"
+          security create-keychain -p "$KCP" "$KC" && security unlock-keychain -p "$KCP" "$KC"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
+          security import "$RUNNER_TEMP/id.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/id.p12"
+          ID=$(security find-identity "$KC" | awk '/Phygital Memory Local Signing/ {print $2; exit}')
+          T=core/packaging/touchid
+          swiftc -O -o "$T/bin/Phygital Memory" "$T/main.swift"
+          codesign -f -s "$ID" --keychain "$KC" -i "Phygital Memory" "$T/bin/Phygital Memory"
+          mkdir -p app/src-tauri/server/touchid && cp -p "$T/bin/Phygital Memory" app/src-tauri/server/touchid/
+
+      - name: Build the app and upload it to the draft release
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: app
+          tauriScript: npx --yes @tauri-apps/cli@2
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseName: Phygital Memory __VERSION__
+          releaseBody: See CHANGELOG.md for what's new.
+          releaseDraft: true
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true

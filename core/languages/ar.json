@@ -521,6 +521,7 @@
  "Personal": "شخصي",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory مقفل. يفتح الشخص قفله في التطبيق بكلمة مروره.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} جاهز. سيعمل في المرة القادمة التي تفتح فيها التطبيق.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "اختر ملف .zip للنسخة الاحتياطية، أو ملف masterkey.cryptomator لذاكرة.",
  "Pick a folder of notes, not a whole drive or home folder.": "اختر مجلد ملاحظات، لا قرصًا كاملًا ولا مجلد المنزل.",
  "Pick a folder, not a file.": "اختر مجلدًا، لا ملفًا.",

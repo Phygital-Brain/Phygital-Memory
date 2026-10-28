@@ -521,6 +521,7 @@
  "Personal": "వ్యక్తిగతం",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory లాక్ అయి ఉంది. యాప్‌లో ఆ వ్యక్తి తన పాస్‌వర్డ్‌తో అన్‌లాక్ చేస్తారు.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} సిద్ధంగా ఉంది. తదుపరిసారి యాప్ తెరిచినప్పుడు ఇది ప్రారంభమవుతుంది.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "బ్యాకప్ .zip లేదా ఒక మెమరీ masterkey.cryptomator ఫైల్ ఎంచుకోండి.",
  "Pick a folder of notes, not a whole drive or home folder.": "నోట్స్ ఫోల్డర్ ఎంచుకోండి, మొత్తం డ్రైవ్ లేదా హోమ్ ఫోల్డర్ కాదు.",
  "Pick a folder, not a file.": "ఫోల్డర్ ఎంచుకోండి, ఫైల్ కాదు.",

@@ -521,6 +521,7 @@
  "Personal": "Personnel",
  "Phygital Memory": "Phygital Memory",
  "Phygital Memory is locked. The person unlocks it in the app with their password.": "Phygital Memory est verrouillé. La personne le déverrouille dans l'app avec son mot de passe.",
+ "Phygital Memory {0} is ready. It starts the next time you open the app.": "Phygital Memory {0} est prête. Elle démarrera la prochaine fois que vous ouvrirez l’app.",
  "Pick a backup .zip, or a memory's masterkey.cryptomator file.": "Choisissez un .zip de sauvegarde, ou le fichier masterkey.cryptomator d'une mémoire.",
  "Pick a folder of notes, not a whole drive or home folder.": "Choisissez un dossier de notes, pas un disque entier ni le dossier personnel.",
  "Pick a folder, not a file.": "Choisissez un dossier, pas un fichier.",
