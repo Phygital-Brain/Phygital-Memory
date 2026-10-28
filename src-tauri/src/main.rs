@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, Submenu, SubmenuBuilder};
 use tauri_plugin_shell::{process::{CommandChild, CommandEvent}, ShellExt};
 
 struct Server(Mutex<Option<CommandChild>>);
@@ -111,6 +112,79 @@ fn open_folder_file(app: tauri::AppHandle, path: PathBuf) {
             std::thread::sleep(Duration::from_millis(200));
         }
     });
+}
+
+// The menu bar. The page describes it in the app's language and as things stand (see menuSpec in main.js); the
+// server keeps the latest one, and this asks for a newer one every moment and draws it. A click on one of our items
+// goes back to the page as window.phygitalMenu(id); cut, copy, paste, hide, quit and the like are the Mac's own.
+fn watch_menu(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut have = 0i64;
+        loop {
+            std::thread::sleep(Duration::from_millis(600));
+            let Some(reply) = shell_with(&app, "menu", &format!("{{\"v\":{have}}}")) else { continue };
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&reply) else { continue };
+            let Some(spec) = v.get("spec").cloned() else { continue };
+            have = v["v"].as_i64().unwrap_or(have);
+            let h = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Ok(menu) = build_menu(&h, &spec) { let _ = h.set_menu(menu); }
+            });
+        }
+    });
+}
+
+fn build_menu(app: &tauri::AppHandle, spec: &serde_json::Value) -> tauri::Result<Menu<tauri::Wry>> {
+    let mut mb = MenuBuilder::new(app);
+    for sub in spec.as_array().into_iter().flatten() {
+        let label = sub["title"].as_str().or(sub["label"].as_str()).unwrap_or("");
+        mb = mb.item(&submenu(app, label, sub)?);
+    }
+    mb.build()
+}
+
+fn submenu(app: &tauri::AppHandle, title: &str, v: &serde_json::Value) -> tauri::Result<Submenu<tauri::Wry>> {
+    let mut sb = SubmenuBuilder::new(app, title);
+    for it in v["items"].as_array().into_iter().flatten() {
+        let label = it["label"].as_str().unwrap_or("");
+        if it["sep"].as_bool() == Some(true) {
+            sb = sb.separator();
+        } else if it["items"].is_array() {
+            sb = sb.item(&submenu(app, label, it)?);
+        } else if let Some(n) = it["native"].as_str() {
+            let t = Some(label);
+            let p = match n {
+                "undo" => PredefinedMenuItem::undo(app, t)?, "redo" => PredefinedMenuItem::redo(app, t)?,
+                "cut" => PredefinedMenuItem::cut(app, t)?, "copy" => PredefinedMenuItem::copy(app, t)?,
+                "paste" => PredefinedMenuItem::paste(app, t)?, "selectall" => PredefinedMenuItem::select_all(app, t)?,
+                "hide" => PredefinedMenuItem::hide(app, t)?, "hideothers" => PredefinedMenuItem::hide_others(app, t)?,
+                "showall" => PredefinedMenuItem::show_all(app, t)?, "quit" => PredefinedMenuItem::quit(app, t)?,
+                "minimize" => PredefinedMenuItem::minimize(app, t)?, "zoom" => PredefinedMenuItem::maximize(app, t)?,
+                "fullscreen" => PredefinedMenuItem::fullscreen(app, t)?,
+                _ => continue,
+            };
+            sb = sb.item(&p);
+        } else {
+            let id = format!("pm:{}", it["id"].as_str().unwrap_or(""));
+            let enabled = it["enabled"].as_bool().unwrap_or(true);
+            // a shortcut the Mac can't read leaves the item without one, never the whole menu broken
+            let key = it["key"].as_str();
+            if let Some(on) = it["check"].as_bool() {
+                let make = |k: Option<&str>| {
+                    let b = CheckMenuItemBuilder::with_id(id.clone(), label).checked(on).enabled(enabled);
+                    match k { Some(k) => b.accelerator(k).build(app), None => b.build(app) }
+                };
+                sb = sb.item(&make(key).or_else(|_| make(None))?);
+            } else {
+                let make = |k: Option<&str>| {
+                    let b = MenuItemBuilder::with_id(id.clone(), label).enabled(enabled);
+                    match k { Some(k) => b.accelerator(k).build(app), None => b.build(app) }
+                };
+                sb = sb.item(&make(key).or_else(|_| make(None))?);
+            }
+        }
+    }
+    sb.build()
 }
 
 fn quit(app: &tauri::AppHandle) {
@@ -230,6 +304,15 @@ fn main() {
             std::thread::spawn(move || { let _ = shell(&h, "reopen"); });
         }))
         .plugin(tauri_plugin_shell::init())
+        .on_menu_event(|app, ev| {
+            let Some(id) = ev.id().0.strip_prefix("pm:") else { return };
+            // only plain ids reach the page (they're ours, but nothing odd ever goes into the script)
+            let id: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || "-_:.".contains(*c)).collect();
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.eval(&format!("window.phygitalMenu && window.phygitalMenu('{id}')"));
+            }
+        })
         .manage(Server(Mutex::new(None)))
         .manage(ShellToken(random_token()))
         .manage(ServerProof(random_token()))
@@ -263,6 +346,7 @@ fn main() {
                         }
                         ask_window(&h2);
                     });
+                    watch_menu(h.clone());
                 }
             });
             Ok(())
