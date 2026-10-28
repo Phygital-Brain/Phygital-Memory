@@ -33,7 +33,7 @@ try:
     (src / "Trip" / ".DS_Store").write_bytes(b"junk")
     (src / "Trip" / ".hidden").mkdir()
     (src / "Trip" / ".hidden" / "x.md").write_text("hidden\n")
-    (src / "note.md").write_text("loose note\n")
+    (src / "note.md").write_bytes(b"loose note\n")   # bytes: the same file on every system (no \r\n on Windows)
     big = os.urandom(1 << 20) * 40 + b"tail"   # about 42 MB, over the old 25 MB limit
     (src / "big.bin").write_bytes(big)
     for n in (0, 1, 32 * 1024, 32 * 1024 + 1, 3 * 32 * 1024):   # sizes around the 32 KiB parts

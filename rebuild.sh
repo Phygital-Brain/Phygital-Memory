@@ -33,6 +33,10 @@ check_helper() {
 }
 check_helper "$T/bin/Phygital Memory"
 mkdir -p app/src-tauri/server/touchid && cp -p "$T/bin/Phygital Memory" app/src-tauri/server/touchid/
+# The update files are signed with the app's own update key (.signing/updater.key): the app only installs updates
+# signed with it. Never printed; only this build reads it.
+export TAURI_SIGNING_PRIVATE_KEY="$(cat .signing/updater.key)"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat .signing/updater-password)"
 # The .dmg step sometimes can't eject its disk image ("Resource busy"): then build just the app, which is what gets installed.
 rm -f "app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.0_aarch64.dmg"   # so an old .dmg never passes for a new one
 (cd app && cargo tauri build --bundles app,dmg >/tmp/pm-tauri.log 2>&1) || (cd app && cargo tauri build --bundles app >>/tmp/pm-tauri.log 2>&1)

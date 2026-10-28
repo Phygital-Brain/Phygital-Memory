@@ -386,6 +386,7 @@ fn main() {
             api.prevent_exit();
             handle_close(h.clone(), true);
         }
+        #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => {   // clicking the Dock icon brings the hidden window back and cancels the timer
             if let Some(w) = h.get_webview_window("main") { let _ = w.show(); let _ = w.set_focus(); }
             let h2 = h.clone();
