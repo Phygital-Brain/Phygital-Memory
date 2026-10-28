@@ -1,5 +1,7 @@
 // Talks to the local Phygital Memory program. Each locked folder has its own pass, which comes only from unlocking
 // and lives in this module's memory: never in storage, cookies or the URL.
+import { t } from "./shell/i18n.js";
+
 const passes = new Map();   // folder id -> pass
 let current = null;         // the folder id every call is about, unless the call names another
 const lockedListeners = new Set();
@@ -27,7 +29,7 @@ export async function api(action, body = {}) {
     lockedListeners.forEach((fn) => fn(id));
     throw new Error("locked");
   }
-  if (!r.ok) { const e = new Error(j.error || `Error ${r.status}`); e.data = j; throw e; }
+  if (!r.ok) { const e = new Error(j.error ? t(j.error) : `Error ${r.status}`); e.data = j; throw e; }   // the engine's words, in the app's language
   return j;
 }
 
@@ -65,7 +67,7 @@ export async function uploadStream(path, file, folder = current) {
   if (pass) headers["X-App-Pass"] = pass;
   const r = await fetch(`/upload?folder=${encodeURIComponent(folder)}&path=${encodeURIComponent(path)}`, { method: "POST", headers, body: file });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Error ${r.status}`);
+  if (!r.ok) throw new Error(j.error ? t(j.error) : `Error ${r.status}`);
   return j.path;
 }
 

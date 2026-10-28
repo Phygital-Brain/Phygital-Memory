@@ -634,7 +634,18 @@ async def close_page(request: Request) -> Response:
 
 
 WEB = HERE / "web"   # the built front end (frontend/ builds into it)
-ASSET_TYPES = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".svg": "image/svg+xml"}
+ASSET_TYPES = {".js": "text/javascript", ".css": "text/css", ".woff2": "font/woff2", ".svg": "image/svg+xml",
+               ".json": "application/json"}   # .json: the app's languages (lang-{code}.json)
+
+
+@mcp.custom_route("/mcp-proof", methods=["GET"])
+async def mcp_proof(request: Request) -> Response:
+    """The Claude Desktop bridge asks this before it sends its key, so a program squatting on this port while the app
+    is closed never gets one (see claude_ext/index.js)."""
+    nonce = request.query_params.get("n", "")
+    if not _local(request) or not (16 <= len(nonce) <= 128) or not nonce.isalnum():
+        return Response("Not found.", status_code=404)
+    return JSONResponse({"proofs": gate.proofs(nonce)}, headers=HEADERS)
 
 
 @mcp.custom_route("/assets/{name}", methods=["GET"])
@@ -1218,8 +1229,20 @@ def _st_offer(fid: str, person: dict) -> None:
 ST_TRUSTED = STATE / "syncthing-trusted.json"   # computers of people who shared with you before
 
 
+ST_OFFERS = STATE / "syncthing-offers.json"   # something more shared with you, waiting for your yes
+ST_ACCEPTED = STATE / "syncthing-accepted.json"   # [computer, item name] you said yes to: sent again, it comes back
+
+
+def _st_offers() -> dict:
+    try:
+        return json.loads(ST_OFFERS.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
 def _st_take_offers() -> None:
-    """Someone who already shares with you shares something more: it's taken in, under Shared with me."""
+    """Someone who already shares with you shares something more: it waits under Home until you say yes (nothing
+    comes onto this Mac by itself), and comes in hidden from AI."""
     me, trusted = st.device_id(), set()
     for x in list(folders.items.values()):
         if x.joined and x.syncthing:
@@ -1246,18 +1269,53 @@ def _st_take_offers() -> None:
         if fid in gone and (gone[fid] == "own" or rnd <= int(gone[fid])):
             continue   # stopped here, or the same round they removed us from
         label = re.sub(r'[/\\:*?"<>|]', "-", name or "Shared").strip()[:60] or "Shared"
-        parent = STATE / "Shared with me"
-        target, n = parent / label, 1
-        while target.exists():
-            n += 1
-            target = parent / f"{label} {n}"
-        st.add_folder(fid, target, label, [dev])
-        STATE.mkdir(parents=True, exist_ok=True)
-        ST_GENS.write_text(json.dumps({**_gens(), fid: rnd}))
-        with folders._lock:
-            j = folders._add(target, label)
-        j.joined, j.syncthing = True, fid
-        folders._save()
+        offers = _st_offers()
+        if offers.get(fid, {}).get("rnd") != rnd:   # new, or a new round of it: ask
+            STATE.mkdir(parents=True, exist_ok=True)
+            ST_OFFERS.write_text(json.dumps({**offers, fid: {"dev": dev, "label": label, "rnd": rnd, "t": time.time()}}))
+        try:
+            said_yes = [dev, label] in json.loads(ST_ACCEPTED.read_text())
+        except (OSError, ValueError):
+            said_yes = False
+        if fid in _gens() or said_yes:   # the same thing from the same person, sent again (view only made Can edit,
+            _st_accept_offer(fid)          # or shared again): no new question
+
+
+def _st_accept_offer(fid: str) -> None:
+    """The person said yes to something shared with them: it comes in under Shared with me, hidden from AI."""
+    offers = _st_offers()
+    o = offers.pop(fid, None)
+    if not o or st.has_folder(fid):
+        raise ValueError("That share isn't waiting any more.")
+    dev, label, rnd = o["dev"], o["label"], o["rnd"]
+    parent = STATE / "Shared with me"
+    target, n = parent / label, 1
+    while target.exists():
+        n += 1
+        target = parent / f"{label} {n}"
+    st.add_folder(fid, target, label, [dev])
+    STATE.mkdir(parents=True, exist_ok=True)
+    ST_GENS.write_text(json.dumps({**_gens(), fid: rnd}))
+    with folders._lock:
+        j = folders._add(target, label)
+    j.joined, j.syncthing, j.ai_hidden = True, fid, True   # AI apps reach it only once you open it to them
+    folders._save()
+    try:
+        yes = json.loads(ST_ACCEPTED.read_text())
+    except (OSError, ValueError):
+        yes = []
+    if [dev, label] not in yes:
+        ST_ACCEPTED.write_text(json.dumps(yes + [[dev, label]]))
+    ST_OFFERS.write_text(json.dumps(offers))
+
+
+def _st_ignore_offer(fid: str) -> None:
+    """Not now: it stays off this Mac until they share it again."""
+    offers = _st_offers()
+    o = offers.pop(fid, None)
+    if o:
+        _st_gone_add(fid, str(o["rnd"]))   # this round stays out; a new share of it asks again
+    ST_OFFERS.write_text(json.dumps(offers))
 
 
 def hmac_eq(a: str, b: str) -> bool:
@@ -1436,6 +1494,14 @@ async def api(request: Request) -> Response:
         # ---- the folder list: the switcher shows it before anything is unlocked (names and places only) ----
         if action == "folders":
             return _ok({"folders": folders.list()})
+        if action == "shareoffers":   # something more shared with you, waiting for a yes (Home shows it)
+            return _ok({"offers": [{"id": k, "label": v["label"]} for k, v in _st_offers().items()]})
+        if action == "shareofferaccept":
+            await asyncio.to_thread(_st_accept_offer, str(body.get("id", "")))
+            return _ok({"folders": folders.list()})
+        if action == "shareofferignore":
+            await asyncio.to_thread(_st_ignore_offer, str(body.get("id", "")))
+            return _ok({"ok": True})
         if action == "myname":   # the name others see when you share or join
             if "name" in body:
                 return _ok({"name": await asyncio.to_thread(sharing.set_my_name, str(body["name"]))})

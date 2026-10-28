@@ -1,5 +1,6 @@
 // An editable table for CSV/TSV files. Our own small grid: each cell is a plain-text editable box. Every change
 // calls onChange(newText); the caller saves it.
+import { t } from "./i18n.js";
 import { el, icon } from "./dom.js";
 
 export const CSV_EDIT_MAX_ROWS = 5000;
@@ -39,7 +40,7 @@ export function csvEditor(text, path, onChange) {
   const table = el("table", { class: "md-table csv-edit" });
   const cap = el("span", { class: "csv-cap" });
   const width = () => Math.max(1, ...rows.map((r) => r.length));
-  const changed = () => { cap.textContent = `${rows.length} rows · ${width()} columns`; onChange(toCsv(rows, sep, eol)); };
+  const changed = () => { cap.textContent = t("{0} rows · {1} columns", rows.length, width()); onChange(toCsv(rows, sep, eol)); };
 
   function draw(focus) {
     const w = width();
@@ -67,7 +68,7 @@ export function csvEditor(text, path, onChange) {
       }
       (r === 0 ? head : body).append(tr);
     });
-    cap.textContent = `${rows.length} rows · ${w} columns`;
+    cap.textContent = t("{0} rows · {1} columns", rows.length, w);
     if (focus) { const cell = table.rows[focus.r] && table.rows[focus.r].cells[focus.c]; cell && cell.focus(); }
   }
 
@@ -92,10 +93,10 @@ export function csvEditor(text, path, onChange) {
   }
   const btn = (label, fn, title) => el("button", { class: "btn small", type: "button", title, onclick: fn }, label);
   const bar = el("div", { class: "csv-bar" },
-    btn("Add row", () => addRow(at.r + 1), "Add a row below the selected cell"),
-    btn("Add column", addCol, "Add a column right of the selected cell"),
-    btn("Delete row", delRow, "Delete the selected cell's row"),
-    btn("Delete column", delCol, "Delete the selected cell's column"),
+    btn(t("Add row"), () => addRow(at.r + 1), t("Add a row below the selected cell")),
+    btn(t("Add column"), addCol, t("Add a column right of the selected cell")),
+    btn(t("Delete row"), delRow, t("Delete the selected cell's row")),
+    btn(t("Delete column"), delCol, t("Delete the selected cell's column")),
     cap);
   draw();
   return el("div", { class: "csv-editor" }, bar, el("div", { class: "md-table-wrap" }, table));

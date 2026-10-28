@@ -9,6 +9,7 @@
 //     loadImage(path),                // -> Promise of a blob: URL
 //     uploadFile(file),               // pasted or dropped file -> Promise of its saved path
 //   }) -> { view, getText(), setText(text), focus(), destroy() }
+import { t as tr } from "./shell/i18n.js";   // t is taken: the highlight tags below
 import { EditorState, StateField, StateEffect, RangeSetBuilder, Prec } from "@codemirror/state";
 import { EditorView, Decoration, WidgetType, keymap, drawSelection, highlightActiveLine, dropCursor,
          rectangularSelection, placeholder } from "@codemirror/view";
@@ -176,12 +177,12 @@ class ImageWidget extends WidgetType {
   toDOM(view) {
     const wrap = document.createElement("span"); wrap.className = "md-embed";
     const path = this.opts.resolveFile(this.src);
-    if (!path) { wrap.classList.add("md-missing"); wrap.textContent = `Not found: ${this.src}`; return wrap; }
+    if (!path) { wrap.classList.add("md-missing"); wrap.textContent = tr("Not found: {0}", this.src); return wrap; }
     const img = document.createElement("img"); img.alt = this.alt || this.src; img.draggable = false;
     if (this.width) img.style.width = `${this.width}px`;
     this.opts.loadImage(path).then((url) => { img.src = url; })
-      .catch(() => { wrap.classList.add("md-missing"); wrap.textContent = `Can't open ${this.src}`; });
-    const handle = document.createElement("span"); handle.className = "md-resize"; handle.title = "Drag to resize";
+      .catch(() => { wrap.classList.add("md-missing"); wrap.textContent = tr("Can't open {0}", this.src); });
+    const handle = document.createElement("span"); handle.className = "md-resize"; handle.title = tr("Drag to resize");
     wrap.append(img, handle);
 
     img.addEventListener("mousedown", (e) => { e.preventDefault(); });
@@ -262,10 +263,10 @@ class CodeHeaderWidget extends WidgetType {
   toDOM() {
     const bar = document.createElement("span"); bar.className = "md-code-header";
     const label = document.createElement("span"); label.textContent = this.lang || "code";
-    const copy = document.createElement("button"); copy.type = "button"; copy.className = "md-copy"; copy.textContent = "Copy";
+    const copy = document.createElement("button"); copy.type = "button"; copy.className = "md-copy"; copy.textContent = tr("Copy");
     copy.addEventListener("mousedown", (e) => {
       e.preventDefault(); e.stopPropagation();
-      navigator.clipboard.writeText(this.code).then(() => { copy.textContent = "Copied"; setTimeout(() => { copy.textContent = "Copy"; }, 1200); });
+      navigator.clipboard.writeText(this.code).then(() => { copy.textContent = tr("Copied"); setTimeout(() => { copy.textContent = tr("Copy"); }, 1200); });
     });
     bar.append(label, copy);
     return bar;
@@ -355,25 +356,25 @@ class TableWidget extends WidgetType {
       b.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); fn(); });
       bar.append(b);
     };
-    button("+ Row", "Add a row below", () => {
+    button("+ Row", tr("Add a row below"), () => {
       const rows = model.rows.map((x) => x.slice()); const at = Math.max(1, last.r + 1);
       rows.splice(at, 0, Array(model.width).fill("")); write(rows, model.aligns, { r: at, c: 0 });
     });
-    button("+ Column", "Add a column to the right", () => {
+    button("+ Column", tr("Add a column to the right"), () => {
       const at = last.c + 1;
       const rows = model.rows.map((x, i) => { const y = x.slice(); y.splice(at, 0, i === 0 ? "Column" : ""); return y; });
       const aligns = model.aligns.slice(); aligns.splice(at, 0, "left"); write(rows, aligns, { r: 0, c: at });
     });
-    button("− Row", "Remove this row", () => {
+    button("− Row", tr("Remove this row"), () => {
       if (model.rows.length <= 2 || last.r === 0) return;
       const rows = model.rows.filter((_, i) => i !== last.r); write(rows, model.aligns, null);
     });
-    button("− Column", "Remove this column", () => {
+    button("− Column", tr("Remove this column"), () => {
       if (model.width <= 1) return;
       const rows = model.rows.map((x) => x.filter((_, i) => i !== last.c));
       write(rows, model.aligns.filter((_, i) => i !== last.c), null);
     });
-    button("Markdown", "Edit the table as text", () => {
+    button("Markdown", tr("Edit the table as text"), () => {
       view.dispatch({ selection: { anchor: view.posAtDOM(wrap) } }); view.focus();
     });
     wrap.append(table, bar);
@@ -714,7 +715,7 @@ export function createEditor(parent, opts) {
     highlightActiveLine(),
     highlightSelectionMatches(),
     EditorView.lineWrapping,
-    placeholder("Start writing"),
+    placeholder(tr("Start writing")),
     markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [ObsidianSyntax], addKeymap: true }),
     syntaxHighlighting(syntaxColours),
     focusedField,

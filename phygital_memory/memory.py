@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import secrets
 import shutil
@@ -56,6 +57,7 @@ class Memory:
         self._last_use = 0.0
         self._last_version: dict[str, float] = {}
         self.on_lock: list = []
+        self.tasks_file: Path | None = None   # set by the app: AI tasks kept on this Mac, outside the synced memory
         self._gen = 0              # goes up whenever a note changes; the links cache is only good for one value
         self._links_cache = None   # called after every lock (the Finder view closes itself here)
         self._synced = 0.0         # when notes changed by a cloud drive were last picked up
@@ -1129,22 +1131,55 @@ class Memory:
             return prefs
 
     # ---------- AI tasks: notes the person gave to their AI, each with what to do ----------
-    # Kept inside the lock like the settings, so it survives locking and waits for the AI.
+    # Kept on this Mac (tasks_file), encrypted with the memory's own key, so it survives locking and waits for the AI.
+    # Never inside the memory: anyone else who holds the memory's key (a share, another Mac) could plant a "task"
+    # there that the AI would take as the person's own request. A list from before this moves out once.
+
+    def _tasks_key(self) -> bytes:
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+        return HKDF(hashes.SHA256(), 32, None, b"phygital-memory ai tasks").derive(bytes(self._key.raw))
 
     def todo(self) -> list[dict]:
         with self._lock:
             self._need_open()
+            if self.tasks_file is None:   # a memory opened outside the app (tests, tools): the old place
+                try:
+                    items = json.loads(self._tree.read_file(self._tree.resolve(TODO)))
+                    return items if isinstance(items, list) else []
+                except (NotFound, ValueError):
+                    return []
+            if not self.tasks_file.exists():
+                try:   # the list from before: moved out of the memory, once
+                    old = self._tree.resolve(TODO)
+                    items = json.loads(self._tree.read_file(old))
+                    self._save_todo(items if isinstance(items, list) else [])
+                    self._writer.remove(old)
+                except (NotFound, ValueError):
+                    pass
             try:
-                items = json.loads(self._tree.read_file(self._tree.resolve(TODO)))
+                from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+                raw = self.tasks_file.read_bytes()
+                items = json.loads(AESGCM(self._tasks_key()).decrypt(raw[:12], raw[12:], b"ai-tasks"))
                 return items if isinstance(items, list) else []
-            except (NotFound, ValueError):
+            except Exception:   # missing, or not this memory's key
                 return []
 
     def _save_todo(self, items: list[dict]) -> list[dict]:
         items = items[-TODO_KEEP:]
-        parent, name = self._make_parents(TODO)
-        existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
-        self._writer.write_file(parent, name, json.dumps(items, ensure_ascii=False).encode(), replace=existing)
+        data = json.dumps(items, ensure_ascii=False).encode()
+        if self.tasks_file is None:
+            parent, name = self._make_parents(TODO)
+            existing = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
+            self._writer.write_file(parent, name, data, replace=existing)
+            return items
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        nonce = os.urandom(12)
+        self.tasks_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.tasks_file.with_suffix(".tmp")
+        tmp.write_bytes(nonce + AESGCM(self._tasks_key()).encrypt(nonce, data, b"ai-tasks"))
+        os.chmod(tmp, 0o600)
+        tmp.replace(self.tasks_file)
         return items
 
     def todo_add(self, rel: str, ask: str) -> dict:

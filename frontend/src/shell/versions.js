@@ -1,5 +1,6 @@
 // Version history: a slide-in panel listing earlier copies of a note, a read-only view of one, a line diff
 // against the current text, and "Restore this version".
+import { t } from "./i18n.js";
 import { api } from "../api.js";
 import { el, icon } from "./dom.js";
 import { confirmDialog } from "./dialogs.js";
@@ -21,8 +22,8 @@ export function whenDate(d, now = new Date()) {
   const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diff = Math.round((day(now) - day(d)) / 86400000);
-  if (diff === 0) return "Today " + time;
-  if (diff === 1) return "Yesterday " + time;
+  if (diff === 0) return t("Today ") + time;
+  if (diff === 1) return t("Yesterday ") + time;
   return `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear() !== now.getFullYear() ? " " + d.getFullYear() : ""} ${time}`;
 }
 export function sizeWords(n) { return n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(1).replace(/\.0$/, "") + " KB" : (n / 1048576).toFixed(1) + " MB"; }
@@ -63,20 +64,20 @@ export async function openVersions(ctx) {
   closeVersions();
   owner = ctx.path;
   const body = el("div", { class: "vh-body" });
-  const head = el("div", { class: "vh-head" }, el("div", { class: "vh-title" }, "Version history"),
-    el("button", { class: "icon-btn", title: "Close", "aria-label": "Close", onclick: closeVersions }, icon("x", 14, 2)));
-  panel = el("aside", { class: "vh", "aria-label": "Version history" }, head, body);
+  const head = el("div", { class: "vh-head" }, el("div", { class: "vh-title" }, t("Version history")),
+    el("button", { class: "icon-btn", title: t("Close"), "aria-label": t("Close"), onclick: closeVersions }, icon("x", 14, 2)));
+  panel = el("aside", { class: "vh", "aria-label": t("Version history") }, head, body);
   ctx.host.append(panel);
   const mine = panel;
   const alive = () => panel === mine;
 
   const showList = async () => {
-    body.replaceChildren(el("div", { class: "vh-empty" }, "Loading"));
+    body.replaceChildren(el("div", { class: "vh-empty" }, t("Loading")));
     let list = [];
     try { list = (await api("versions", { path: ctx.path })).versions || []; } catch (e) { toast(e.message, "error"); }
     if (!alive()) return;
     if (!list.length) {
-      body.replaceChildren(el("div", { class: "vh-empty" }, "No earlier versions yet.", el("br"), "A copy is kept as you edit, at most one every few minutes."));
+      body.replaceChildren(el("div", { class: "vh-empty" }, t("No earlier versions yet."), el("br"), t("A copy is kept as you edit, at most one every few minutes.")));
       return;
     }
     body.replaceChildren(el("div", { class: "vh-list" }, ...list.map((v) =>
@@ -84,7 +85,7 @@ export async function openVersions(ctx) {
   };
 
   const showOne = async (v) => {
-    body.replaceChildren(el("div", { class: "vh-empty" }, "Loading"));
+    body.replaceChildren(el("div", { class: "vh-empty" }, t("Loading")));
     let text;
     try { text = (await api("version", { path: ctx.path, id: v.id })).text || ""; } catch (e) { toast(e.message, "error"); showList(); return; }
     if (!alive()) return;
@@ -95,7 +96,7 @@ export async function openVersions(ctx) {
       tabs.replaceChildren(...[["diff", "Changes"], ["text", "Text"]].map(([k, t]) => el("button", { class: "seg-b" + (mode === k ? " on" : ""), onclick: () => { mode = k; draw(); } }, t)));
       if (mode === "text") { view.replaceChildren(el("pre", { class: "vh-text" }, text)); return; }
       const rows = lineDiff(text, ctx.currentText());
-      if (!rows.some((r) => r.t !== " ")) { view.replaceChildren(el("div", { class: "vh-empty" }, "Same as the note now.")); return; }
+      if (!rows.some((r) => r.t !== " ")) { view.replaceChildren(el("div", { class: "vh-empty" }, t("Same as the note now."))); return; }
       const frag = [];
       let i = 0;
       while (i < rows.length) {
@@ -116,13 +117,13 @@ export async function openVersions(ctx) {
     };
     draw();
     const restore = el("button", { class: "btn primary small", onclick: async () => {
-      const ok = await confirmDialog(`Restore the version from ${whenWords(v.id)}? This replaces the text of the note.`, "Restore", false);
+      const ok = await confirmDialog(t("Restore the version from {0}? This replaces the text of the note.", whenWords(v.id)), t("Restore"), false);
       if (!ok) return;
-      try { await ctx.restore(text); toastOk("Version restored."); closeVersions(); } catch (e) { toast(e.message, "error"); }
-    } }, "Restore this version");
+      try { await ctx.restore(text); toastOk(t("Version restored.")); closeVersions(); } catch (e) { toast(e.message, "error"); }
+    } }, t("Restore this version"));
     body.replaceChildren(
-      el("div", { class: "vh-bar" }, el("button", { class: "btn small", onclick: showList }, icon("back", 12, 2), "All"), el("span", { class: "vh-when" }, whenWords(v.id)), restore),
-      el("div", { class: "vh-sub" }, "Read-only. ", tabs), view);
+      el("div", { class: "vh-bar" }, el("button", { class: "btn small", onclick: showList }, icon("back", 12, 2), t("All")), el("span", { class: "vh-when" }, whenWords(v.id)), restore),
+      el("div", { class: "vh-sub" }, t("Read-only. "), tabs), view);
   };
   showList();
 }

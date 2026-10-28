@@ -75,6 +75,7 @@ def write_guides(path: Path) -> None:
 
 MIRRORS = STATE / "webdav"   # Mac + WebDAV: rclone's notes about the two-way sync, one folder per memory
 GITDIRS = STATE / "git"   # GitHub backup: git's own files, one folder per memory, never inside the memory itself
+TASKS = STATE / "ai-tasks"   # each memory's AI tasks, encrypted with its key, never synced
 CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (hidden drives), and their caches
 
 
@@ -91,6 +92,7 @@ class Folder:
                                      CLOUDS / f"{fid}.cache")
         self.id, self.name, self.path = fid, name, Path(path)
         self.memory = Memory(self.path)
+        self.memory.tasks_file = TASKS / f"{fid}.bin"   # AI tasks stay on this Mac (see Memory.todo)
         self.finder = Finder(self.memory, volume=name)
         self.passes: set[str] = set()
         self.fails = {"n": 0, "until": 0.0}

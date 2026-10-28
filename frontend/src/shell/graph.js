@@ -1,14 +1,15 @@
 // Graph view: every note is a glowing dot, every [[link]] a soft thread, on a deep gradient (the Obsidian / Baalda
 // look). sigma.js draws it on the GPU (WebGL) with our glow program; d3-force lays it out in a background thread.
 // Both libraries are free (MIT / ISC) and load only when the graph is first opened.
+import { t } from "./i18n.js";
 import { el } from "./dom.js";
 
 const SETTINGS_KEY = "pm.graph.settings.v1";
 const DEFAULTS = { repel: -220, linkDistance: 70, linkStrength: 0.35, gravity: 0.6, nodeSize: 1, lineWidth: 1,
                    labels: 1, colorBy: "links", hideOrphans: false, showFiles: true, showFolders: false };
 const RANGES = {
-  repel: ["Repel force", -1200, -10, 10], linkDistance: ["Link distance", 10, 300, 5], linkStrength: ["Link force", 0, 1, 0.05],
-  gravity: ["Centre force", 0, 2, 0.05], nodeSize: ["Node size", 0.4, 3, 0.1], lineWidth: ["Line thickness", 0.3, 3, 0.1],
+  repel: [t("Repel force"), -1200, -10, 10], linkDistance: [t("Link distance"), 10, 300, 5], linkStrength: [t("Link force"), 0, 1, 0.05],
+  gravity: [t("Centre force"), 0, 2, 0.05], nodeSize: [t("Node size"), 0.4, 3, 0.1], lineWidth: [t("Line thickness"), 0.3, 3, 0.1],
   labels: ["Labels", 0, 3, 0.1],
 };
 
@@ -37,19 +38,19 @@ function loadSettings() {
 function saveSettings(s) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {} }
 
 export function createGraph({ onOpen, colorFor, labelFor }) {
-  const host = el("div", { class: "graph-canvas", tabindex: "0", "aria-label": "Graph of linked notes" });
+  const host = el("div", { class: "graph-canvas", tabindex: "0", "aria-label": t("Graph of linked notes") });
   const info = el("span", { class: "graph-info" });
-  const localBox = el("input", { type: "checkbox", "aria-label": "Local graph" });
-  const find = el("input", { type: "search", class: "graph-find", placeholder: "Find a note", "aria-label": "Find a note in the graph" });
-  const panelBtn = el("button", { class: "btn small", onclick: () => panel.classList.toggle("hidden") }, "Settings");
+  const localBox = el("input", { type: "checkbox", "aria-label": t("Local graph") });
+  const find = el("input", { type: "search", class: "graph-find", placeholder: t("Find a note"), "aria-label": t("Find a note in the graph") });
+  const panelBtn = el("button", { class: "btn small", onclick: () => panel.classList.toggle("hidden") }, t("Settings"));
   const bar = el("div", { class: "graph-bar" },
     find,
-    el("label", { class: "set-check", title: "Only the open note and what it links to, two steps out" }, localBox, "Local"),
-    el("button", { class: "btn small", onclick: () => worker?.postMessage({ type: "reheat" }) }, "Shake"),
-    el("button", { class: "btn small", onclick: () => fit() }, "Fit"),
+    el("label", { class: "set-check", title: t("Only the open note and what it links to, two steps out") }, localBox, t("Local")),
+    el("button", { class: "btn small", onclick: () => worker?.postMessage({ type: "reheat" }) }, t("Shake")),
+    el("button", { class: "btn small", onclick: () => fit() }, t("Fit")),
     panelBtn, info);
   const panel = el("div", { class: "graph-panel hidden" });
-  const empty = el("div", { class: "graph-empty hidden" }, "No notes to show yet.");
+  const empty = el("div", { class: "graph-empty hidden" }, t("No notes to show yet."));
   const root = el("div", { class: "graph" }, host, bar, panel, empty);
 
   let s = loadSettings();
@@ -71,8 +72,8 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
       });
       return el("label", { class: "graph-row" }, el("span", {}, label), input, out);
     });
-    const colorSel = el("select", { "aria-label": "Colour by" },
-      el("option", { value: "links" }, "Colour by links"), el("option", { value: "folder" }, "Colour by folder"));
+    const colorSel = el("select", { "aria-label": t("Colour by") },
+      el("option", { value: "links" }, t("Colour by links")), el("option", { value: "folder" }, t("Colour by folder")));
     colorSel.value = s.colorBy;
     colorSel.addEventListener("change", () => { s.colorBy = colorSel.value; saveSettings(s); restyle(); });
     const tick = (key, text) => {
@@ -80,9 +81,9 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
       box.addEventListener("change", () => { s[key] = box.checked; saveSettings(s); rebuild(); });
       return el("label", { class: "set-check" }, box, text);
     };
-    const reset = el("button", { class: "btn small", onclick: () => { s = { ...DEFAULTS }; saveSettings(s); buildPanel(); worker?.postMessage({ type: "settings", settings: s }); restyle(); } }, "Reset");
-    panel.replaceChildren(el("div", { class: "graph-panel-title" }, "Graph"), colorSel,
-      tick("showFiles", "Show other files"), tick("showFolders", "Show folders"), tick("hideOrphans", "Hide items without links"),
+    const reset = el("button", { class: "btn small", onclick: () => { s = { ...DEFAULTS }; saveSettings(s); buildPanel(); worker?.postMessage({ type: "settings", settings: s }); restyle(); } }, t("Reset"));
+    panel.replaceChildren(el("div", { class: "graph-panel-title" }, t("Graph")), colorSel,
+      tick("showFiles", t("Show other files")), tick("showFolders", t("Show folders")), tick("hideOrphans", t("Hide items without links")),
       ...rows, reset);
   }
 
@@ -282,7 +283,7 @@ export function createGraph({ onOpen, colorFor, labelFor }) {
       startWorker(fresh);
     } catch (e) {
       console.error(e);
-      empty.textContent = `The graph couldn't be drawn: ${e.message}`;
+      empty.textContent = t("The graph couldn't be drawn: {0}", e.message);
       empty.classList.remove("hidden");
     }
   }

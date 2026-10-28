@@ -2,6 +2,7 @@
 //   ![[report.pdf]]  ![[clip.mp4]]  ![[voice.m4a]]  ![[data.csv]]  -> a viewer in the note
 //   any other file   -> a file card
 // Everything is decrypted into memory only (blob URLs), never written to disk.
+import { t } from "./../shell/i18n.js";
 import { WidgetType } from "@codemirror/view";
 
 export const VIDEO = /\.(mp4|m4v|mov|webm)$/i;
@@ -76,7 +77,7 @@ class CsvWidget extends WidgetType {
       });
       const scroller = document.createElement("div"); scroller.className = "md-table-wrap"; scroller.append(table);
       const cap = document.createElement("div"); cap.className = "md-media-caption";
-      cap.textContent = `${this.name.split("/").pop()} · ${rows.length} rows${rows.length > 200 ? " (first 200 shown)" : ""}`;
+      cap.textContent = t("{0} · {1} rows{2}", this.name.split("/").pop(), rows.length, rows.length > 200 ? " (first 200 shown)" : "");
       wrap.append(scroller, cap);
     }).catch(() => missing(wrap, `Can't open ${this.name}`));
     return wrap;
@@ -96,7 +97,7 @@ export function csvTable(text, path) {
   });
   const wrap = document.createElement("div"); wrap.className = "md-table-wrap"; wrap.append(table);
   const cap = document.createElement("div"); cap.className = "md-media-caption";
-  cap.textContent = `${rows.length} rows${rows.length > 5000 ? " (first 5,000 shown)" : ""}`;
+  cap.textContent = t("{0} rows{1}", rows.length, rows.length > 5000 ? " (first 5,000 shown)" : "");
   const out = document.createElement("div"); out.append(wrap, cap);
   return out;
 }
@@ -154,8 +155,8 @@ export class MermaidWidget extends WidgetType {
   eq(o) { return o.code === this.code; }
   toDOM(view) {
     const wrap = document.createElement("div"); wrap.className = "md-mermaid";
-    wrap.textContent = "Drawing diagram";
-    if (this.code.length > 20000) return missing(wrap, "This diagram is too big to draw.");
+    wrap.textContent = t("Drawing diagram");
+    if (this.code.length > 20000) return missing(wrap, t("This diagram is too big to draw."));
     loadMermaid().then((m) => m.render(`pm-diagram-${++diagramCount}`, this.code)).then(({ svg }) => {
       const img = document.createElement("img"); img.alt = "Diagram";
       img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);

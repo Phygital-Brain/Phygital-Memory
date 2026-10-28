@@ -1,6 +1,7 @@
 // The search view: Engram search over the open folder, as a tab. Results on the left (note, section, a snippet
 // with the words marked, why it matched), the whole matching section on the right. Enter opens the note at that
 // section. Everything from notes is put in as text only.
+import { t } from "./i18n.js";
 import { el, icon } from "./dom.js";
 
 const WORD = /[\p{L}\p{N}][\p{L}\p{N}'_-]*/gu;
@@ -38,13 +39,13 @@ const when = (ts) => {
 
 // opts: {api(action, body), openAt(path, heading), folders() -> ["Projects", ...], recent(n) -> [paths]}
 export function createSearchView(opts) {
-  const input = el("input", { class: "sv-input", type: "search", placeholder: "Search your notes", spellcheck: "false",
-                              "aria-label": "Search notes" });
-  const within = el("select", { class: "sv-within", "aria-label": "Search inside" });
-  const order = el("select", { class: "sv-order", "aria-label": "Order" },
-    el("option", { value: "best" }, "Best match"), el("option", { value: "new" }, "Newest first"));
+  const input = el("input", { class: "sv-input", type: "search", placeholder: t("Search your notes"), spellcheck: "false",
+                              "aria-label": t("Search notes") });
+  const within = el("select", { class: "sv-within", "aria-label": t("Search inside") });
+  const order = el("select", { class: "sv-order", "aria-label": t("Order") },
+    el("option", { value: "best" }, t("Best match")), el("option", { value: "new" }, t("Newest first")));
   const count = el("span", { class: "sv-count" });
-  const list = el("div", { class: "sv-list", role: "listbox", "aria-label": "Results" });
+  const list = el("div", { class: "sv-list", role: "listbox", "aria-label": t("Results") });
   const preview = el("div", { class: "sv-preview" });
   const root = el("div", { class: "sv" },
     el("div", { class: "sv-bar" }, el("span", { class: "sv-icon" }, icon("search", 17)), input),
@@ -55,7 +56,7 @@ export function createSearchView(opts) {
 
   function fillWithin() {
     const cur = within.value;
-    within.replaceChildren(el("option", { value: "" }, "Everywhere"), ...opts.folders().map((f) => el("option", { value: f }, `In ${f}`)));
+    within.replaceChildren(el("option", { value: "" }, t("Everywhere")), ...opts.folders().map((f) => el("option", { value: f }, t("In {0}", f))));
     within.value = [...within.options].some((o) => o.value === cur) ? cur : "";
   }
 
@@ -75,16 +76,16 @@ export function createSearchView(opts) {
     count.textContent = input.value.trim() ? `${rows.length} result${rows.length === 1 ? "" : "s"}` : "";
     if (!input.value.trim()) {
       const recent = opts.recent(8);
-      list.replaceChildren(el("div", { class: "sv-hint" }, "Type to search every note in this folder. Words, names, phrases; "
+      list.replaceChildren(el("div", { class: "sv-hint" }, t("Type to search every note in this folder. Words, names, phrases; ")
         + "put a phrase in \"quotes\" to match it exactly."),
-        ...(recent.length ? [el("div", { class: "sv-sub" }, "Recent notes"),
+        ...(recent.length ? [el("div", { class: "sv-sub" }, t("Recent notes")),
           ...recent.map((p) => el("button", { class: "sv-recent", type: "button", onclick: () => opts.openAt(p, "") },
             icon("file", 14), p.replace(/\.md$/i, "")))] : []));
       preview.replaceChildren();
       return;
     }
     if (!rows.length) {
-      list.replaceChildren(el("div", { class: "sv-hint" }, "Nothing found. Try fewer or different words."));
+      list.replaceChildren(el("div", { class: "sv-hint" }, t("Nothing found. Try fewer or different words.")));
       preview.replaceChildren();
       return;
     }
@@ -100,7 +101,7 @@ export function createSearchView(opts) {
       const snip = el("div", { class: "sv-snippet" });
       engramMarks(snip, r.snippet || "");
       item.append(head, section ? el("div", { class: "sv-section" }, "› " + section) : null, snip, meta,
-        r.why ? el("div", { class: "sv-why", title: "Why this result" }, r.why) : null);
+        r.why ? el("div", { class: "sv-why", title: t("Why this result") }, r.why) : null);
       return item;
     }));
     list.querySelector(".sv-item.on")?.scrollIntoView({ block: "nearest" });
@@ -122,7 +123,7 @@ export function createSearchView(opts) {
       el("div", { class: "sv-ppath" }, r.path),
       body,
       el("div", { class: "sv-pactions" },
-        el("button", { class: "btn primary small", type: "button", onclick: () => open(sel) }, "Open note ↵")));
+        el("button", { class: "btn primary small", type: "button", onclick: () => open(sel) }, t("Open note ↵"))));
   }
 
   function open(i) {

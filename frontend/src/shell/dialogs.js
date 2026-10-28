@@ -1,4 +1,5 @@
 // In-page dialogs (prompt() and confirm() don't work in the Mac app window).
+import { t } from "./i18n.js";
 import { el } from "./dom.js";
 
 export function modal(build) {
@@ -28,17 +29,17 @@ export function askText(title, value, okLabel, validate) {
       done(input.value);
     };
     const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, title), input, err,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Cancel"), el("button", { class: "btn primary", onclick: submit }, okLabel)));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Cancel")), el("button", { class: "btn primary", onclick: submit }, okLabel)));
     return { card, focus: input, submit };
   });
 }
 
 export function askPassword(title, okLabel) {
   return modal((done) => {
-    const input = el("input", { class: "dlg-input", type: "password", autocomplete: "off", "aria-label": "Password", placeholder: "Password" });
+    const input = el("input", { class: "dlg-input", type: "password", autocomplete: "off", "aria-label": t("Password"), placeholder: t("Password") });
     const submit = () => { if (input.value) done(input.value); };
     const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, title), input,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Cancel"), el("button", { class: "btn primary", onclick: submit }, okLabel)));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Cancel")), el("button", { class: "btn primary", onclick: submit }, okLabel)));
     return { card, focus: input, submit };
   });
 }
@@ -58,10 +59,10 @@ export function choiceDialog(message, detail, buttons, cancel = "Cancel") {
 export function showRecoveryKey(words) {
   return modal((done) => {
     const list = el("ol", { class: "rk-words" }, ...words.split(" ").map((w) => el("li", {}, w)));
-    const copy = el("button", { class: "btn", type: "button", onclick: () => navigator.clipboard.writeText(words).then(() => { copy.textContent = "Copied"; }) }, "Copy");
-    const card = el("div", { class: "dlg rk", role: "dialog" }, el("div", { class: "dlg-title" }, "Your recovery key"),
-      el("div", { class: "mf-hint" }, "These 44 words open this memory if you forget the password. Keep them somewhere safe and private. Anyone with them can open it."),
-      list, el("div", { class: "dlg-actions" }, copy, el("button", { class: "btn primary", type: "button", onclick: () => done(true) }, "Done")));
+    const copy = el("button", { class: "btn", type: "button", onclick: () => navigator.clipboard.writeText(words).then(() => { copy.textContent = t("Copied"); }) }, t("Copy"));
+    const card = el("div", { class: "dlg rk", role: "dialog" }, el("div", { class: "dlg-title" }, t("Your recovery key")),
+      el("div", { class: "mf-hint" }, t("These 44 words open this memory if you forget the password. Keep them somewhere safe and private. Anyone with them can open it.")),
+      list, el("div", { class: "dlg-actions" }, copy, el("button", { class: "btn primary", type: "button", onclick: () => done(true) }, t("Done"))));
     return { card };
   });
 }
@@ -69,8 +70,8 @@ export function showRecoveryKey(words) {
 // The open-source licences of the programs the app includes, as their authors wrote them.
 export function showLicenses(text) {
   return modal((done) => {
-    const ok = el("button", { class: "btn primary", type: "button", onclick: () => done(true) }, "Done");
-    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, "Open-source licences"),
+    const ok = el("button", { class: "btn primary", type: "button", onclick: () => done(true) }, t("Done"));
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, t("Open-source licences")),
       el("pre", { class: "lic-text" }, text), el("div", { class: "dlg-actions" }, ok));
     return { card, focus: ok };
   });
@@ -79,20 +80,20 @@ export function showLicenses(text) {
 // Forgot the password: the recovery key, and a new password twice. Resolves {words, password, again} or null.
 export function recoveryDialog() {
   return modal((done) => {
-    const words = el("textarea", { class: "dlg-input rk-input", rows: "4", spellcheck: "false", placeholder: "The 44 words, in order", "aria-label": "Recovery key" });
-    const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "new-password", placeholder: "New password (8 or more characters)", "aria-label": "New password" });
-    const again = el("input", { class: "dlg-input", type: "password", autocomplete: "new-password", placeholder: "New password again", "aria-label": "New password again" });
+    const words = el("textarea", { class: "dlg-input rk-input", rows: "4", spellcheck: "false", placeholder: t("The 44 words, in order"), "aria-label": t("Recovery key") });
+    const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "new-password", placeholder: t("New password (8 or more characters)"), "aria-label": t("New password") });
+    const again = el("input", { class: "dlg-input", type: "password", autocomplete: "new-password", placeholder: t("New password again"), "aria-label": t("New password again") });
     const err = el("div", { class: "dlg-err" });
     const submit = () => {
-      if (words.value.trim().split(/\s+/).length !== 44) { err.textContent = "A recovery key has 44 words."; return; }
-      if (pw.value.length < 8) { err.textContent = "Use at least 8 characters."; return; }
-      if (pw.value !== again.value) { err.textContent = "The two passwords don't match."; return; }
+      if (words.value.trim().split(/\s+/).length !== 44) { err.textContent = t("A recovery key has 44 words."); return; }
+      if (pw.value.length < 8) { err.textContent = t("Use at least 8 characters."); return; }
+      if (pw.value !== again.value) { err.textContent = t("The two passwords don't match."); return; }
       done({ words: words.value.trim(), password: pw.value, again: again.value });
     };
-    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, "Use your recovery key"),
-      el("div", { class: "mf-hint" }, "Type the 44 words, then choose a new password."), words, pw, again, err,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel"),
-        el("button", { class: "btn primary", type: "button", onclick: submit }, "Set new password")));
+    const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, t("Use your recovery key")),
+      el("div", { class: "mf-hint" }, t("Type the 44 words, then choose a new password.")), words, pw, again, err,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => done(null) }, t("Cancel")),
+        el("button", { class: "btn primary", type: "button", onclick: submit }, t("Set new password"))));
     return { card, focus: words };
   });
 }
@@ -102,7 +103,7 @@ export function confirmDialog(message, okLabel, danger, detail) {
     const ok = el("button", { class: "btn " + (danger ? "danger" : "primary"), onclick: () => done(true) }, okLabel);
     const card = el("div", { class: "dlg", role: "dialog" }, el("div", { class: "dlg-title" }, message),
       detail ? el("div", { class: "mf-hint" }, detail) : null,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Cancel"), ok));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Cancel")), ok));
     return { card, focus: ok, submit: () => done(true) };
   }).then((v) => v === true);
 }

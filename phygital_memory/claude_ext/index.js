@@ -9,7 +9,20 @@ if (!["127.0.0.1", "localhost", "[::1]", "::1"].includes(host)) {
   process.exit(1);
 }
 
+const crypto = require("node:crypto");
 let session = null, hello = null, queue = Promise.resolve(), buf = "";
+
+// Before the key goes anywhere: is this really the Phygital Memory app? It must answer a fresh challenge with
+// HMAC(sha256(key), challenge), which only something holding this key's fingerprint can do. A program squatting on
+// the port while the app is closed can't, so it never sees the key. Checked before every message: the app may have
+// closed in between.
+async function prove() {
+  const n = crypto.randomBytes(24).toString("hex");
+  const want = crypto.createHmac("sha256", crypto.createHash("sha256").update(KEY).digest("hex")).update(n).digest("hex");
+  const res = await fetch(new URL(`/mcp-proof?n=${n}`, DOOR));
+  const got = res.ok ? (await res.json()).proofs || [] : [];
+  return got.some((p) => typeof p === "string" && p.length === want.length && crypto.timingSafeEqual(Buffer.from(p), Buffer.from(want)));
+}
 const out = (msg) => process.stdout.write(JSON.stringify(msg) + "\n");
 const fail = (msg, message) => { if (msg.id !== undefined && msg.id !== null) out({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message } }); };
 
@@ -30,13 +43,19 @@ async function answers(res) {   // a plain JSON answer, or an event stream that 
 
 async function pass(msg, again = true) {
   let res;
-  try { res = await post(msg); }
+  try {
+    if (!(await prove())) {
+      return fail(msg, "The program at Phygital Memory's address isn't your Phygital Memory app, or the key was removed. Open the app, check Settings › AI apps, then try again.");
+    }
+    res = await post(msg);
+  }
   catch { return fail(msg, "Phygital Memory isn't open on this Mac. Open the app, unlock a memory, then try again."); }
   const sid = res.headers.get("mcp-session-id");
   if (sid) session = sid;
-  if (res.status === 404 && session && again && hello) {   // the app restarted: say hello again, then retry once
+  if (res.status === 404 && session && again && hello) {   // the app restarted: prove it again, say hello, retry once
     session = null;
-    const r = await post(hello);
+    if (!(await prove().catch(() => false))) return fail(msg, "The program at Phygital Memory's address isn't your Phygital Memory app. Open the app, then try again.");
+    const r = await post(hello);   // checked just above
     session = r.headers.get("mcp-session-id") || session;
     await r.text();
     await (await post({ jsonrpc: "2.0", method: "notifications/initialized" })).text();

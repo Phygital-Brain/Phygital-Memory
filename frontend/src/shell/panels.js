@@ -1,5 +1,6 @@
 // Panels from the sidebar's status icons: where this folder is stored, the AI panel (tasks and activity), the trash.
 // Everything from the server is put in as text only.
+import { t } from "./i18n.js";
 import { el, icon, tabbed } from "./dom.js";
 import { modal } from "./dialogs.js";
 import { shortPath } from "./folders.js";
@@ -21,7 +22,7 @@ export function openStorage(ctx) {
       try { if (await fn()) done(result); else busy(false); } catch (e) { err.textContent = e.message; busy(false); }
     };
     const btn = (label, fn, cls = "") => el("button", { class: "btn small " + cls, type: "button", onclick: fn }, label);
-    const now = (on) => on ? el("span", { class: "st-opt-now" }, "Now") : null;
+    const now = (on) => on ? el("span", { class: "st-opt-now" }, t("Now")) : null;
     const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : `${Math.round(sec / 3600)} h ago`;
     const option = (ic, title, tip, on, ...body) => el("div", { class: "st-opt" + (on ? " on" : "") },
       el("div", { class: "st-opt-head" }, el("span", { class: "st-opt-icon" }, icon(ic, 16)),
@@ -40,57 +41,57 @@ export function openStorage(ctx) {
       return el("button", { class: "st-place" + (here ? " on" : ""), type: "button", disabled: here, title: p.path,
         onclick: async () => { const w = await ctx.pick(`Choose where in ${p.name} to keep "${ctx.name}"`, p.path); if (w) toPlace(w, p.name); } },
         icon("cloud", 15), el("span", {}, p.name));
-    }), btn("Other folder", async () => { const w = await ctx.pick("Choose a folder your cloud app syncs"); if (w) toPlace(w, "that folder"); }));
-    if (!s.places.length) chips.prepend(el("div", { class: "st-none" }, "No cloud apps found on this Mac."));
+    }), btn(t("Other folder"), async () => { const w = await ctx.pick(t("Choose a folder your cloud app syncs")); if (w) toPlace(w, "that folder"); }));
+    if (!s.places.length) chips.prepend(el("div", { class: "st-none" }, t("No cloud apps found on this Mac.")));
 
     const webdavNow = s.webdav ? `Mac + WebDAV. Synced with ${s.webdav}` : s.cloudOnly ? `WebDAV only. Opens from ${s.path}` : "";
     const webdavBtns = el("div", { class: "set-btns" },
-      s.webdav ? null : btn("Mac + WebDAV", () => run(() => s.cloudOnly
-        ? ctx.pick("Choose a place on this Mac for the copy").then((w) => w && ctx.toMac(w, "this Mac", true))
+      s.webdav ? null : btn(t("Mac + WebDAV"), () => run(() => s.cloudOnly
+        ? ctx.pick(t("Choose a place on this Mac for the copy")).then((w) => w && ctx.toMac(w, "this Mac", true))
         : ctx.toWebdav(), s.cloudOnly ? "moved" : "changed")),
-      s.cloudOnly ? null : btn("WebDAV only", () => run(ctx.toCloudOnly, "tocloud")));
+      s.cloudOnly ? null : btn(t("WebDAV only"), () => run(ctx.toCloudOnly, "tocloud")));
 
     const gs = s.githubStatus;
     const github = s.github
       ? el("div", { class: "st-gh" },
           el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · saved ${ago(gs && gs.ago)}`),
-          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, `${gs.too_big.length} file${gs.too_big.length === 1 ? " is" : "s are"} over 95 MB and stay${gs.too_big.length === 1 ? "s" : ""} out of the backup.`) : null,
-          el("div", {}, btn("Stop backup", () => run(() => ctx.stopGithub(s.github), "changed"), "st-stop")))
-      : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), "Turn on backup"));
+          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, t("{0} file{1} over 95 MB and stay{2} out of the backup.", gs.too_big.length, gs.too_big.length === 1 ? " is" : "s are", gs.too_big.length === 1 ? "s" : "")) : null,
+          el("div", {}, btn(t("Stop backup"), () => run(() => ctx.stopGithub(s.github), "changed"), "st-stop")))
+      : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), t("Turn on backup")));
 
     const card = el("div", { class: "dlg storage", role: "dialog" },
-      el("div", { class: "dlg-title" }, `Storage and backup: ${ctx.name}`),
+      el("div", { class: "dlg-title" }, t("Storage and backup: {0}", ctx.name)),
       el("div", { class: "st-where" }, icon(s.cloudOnly || s.cloud || s.webdav ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
-        s.cloudOnly ? null : btn("Show encrypted files", () => ctx.reveal())),
+        s.cloudOnly ? null : btn(t("Show encrypted files"), () => ctx.reveal())),
       s.offline ? el("div", { class: "st-warn" },
-        el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud and can't open yet.`),
-        btn("Download now", () => ctx.download())) : null,
-      el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, "Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password.")),
-      tabbed([{ title: "Stored in", rows: [
-      option("laptop", "This Mac only",
-        "A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup.",
+        el("span", {}, t("{0} file{1} only in the cloud and can't open yet.", s.offline, s.offline === 1 ? " is" : "s are")),
+        btn(t("Download now"), () => ctx.download())) : null,
+      el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, t("Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password."))),
+      tabbed([{ title: t("Stored in"), rows: [
+      option("laptop", t("This Mac only"),
+        t("A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup."),
         macOnly,
         macOnly ? null : el("div", {}, s.webdav
-          ? btn("Keep on this Mac only", () => run(ctx.stopWebdav, "changed"))
-          : btn("Move to this Mac", async () => { const w = await ctx.pick("Choose a place on this Mac"); if (w) toPlace(w, "this Mac"); }))),
-      option("cloud", "This Mac + cloud", "Your cloud only gets encrypted files. Only you can read them, with your password.",
+          ? btn(t("Keep on this Mac only"), () => run(ctx.stopWebdav, "changed"))
+          : btn(t("Move to this Mac"), async () => { const w = await ctx.pick(t("Choose a place on this Mac")); if (w) toPlace(w, "this Mac"); }))),
+      option("cloud", t("This Mac + cloud"), t("Your cloud only gets encrypted files. Only you can read them, with your password."),
         !macOnly,
-        sub("Synced folder", "A folder your cloud app keeps in sync, like iCloud Drive or Dropbox.", folderSynced, chips),
-        sub("WebDAV", "A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server.",
+        sub(t("Synced folder"), t("A folder your cloud app keeps in sync, like iCloud Drive or Dropbox."), folderSynced, chips),
+        sub(t("WebDAV"), t("A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server."),
           !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns))] },
-      { title: "Backup", rows: [
-      option("lock", "Private GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB.",
-        !!s.github, el("div", { class: "st-gh-note" }, "Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup."), github),
-      option("cloud", "Amazon S3 or Cloudflare R2", "An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size.",
+      { title: t("Backup"), rows: [
+      option("lock", t("Private GitHub"), t("A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB."),
+        !!s.github, el("div", { class: "st-gh-note" }, t("Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup.")), github),
+      option("cloud", t("Amazon S3 or Cloudflare R2"), t("An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size."),
         !!s.s3, s.s3
           ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
-              el("div", {}, btn("Stop backup", () => run(ctx.stopS3, "changed"), "st-stop")))
-          : el("div", {}, btn("Turn on backup", () => run(ctx.toS3, "changed")))),
-      option("file", "Backup file", "One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file.",
-        false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null))))] }]),
-      el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
+              el("div", {}, btn(t("Stop backup"), () => run(ctx.stopS3, "changed"), "st-stop")))
+          : el("div", {}, btn(t("Turn on backup"), () => run(ctx.toS3, "changed")))),
+      option("file", t("Backup file"), t("One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file."),
+        false, el("div", {}, btn(t("Save backup file"), () => run(ctx.saveBackup, null))))] }]),
+      el("div", { class: "st-note" }, t("Moving locks the memory first. Unlock it again after.")),
       err,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Close"))));
     return { card };
   });
 }
@@ -140,24 +141,24 @@ export function openAIPanel(ctx, start = "tasks") {
       first = null;
     };
     let first = start;   // the first tab shown already has fresh data
-    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"], ["approvals", "Approvals"], ["apps", "AI apps"]]) {
+    for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"], ["approvals", "Approvals"], ["apps", t("AI apps")]]) {
       if (!views[k]) continue;
       tabs.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
     }
     const card = el("div", { class: "dlg activity", role: "dialog" },
-      el("div", { class: "act-head" }, el("div", { class: "ai-head-left" }, el("div", { class: "dlg-title" }, "AI"), tabs), tools),
+      el("div", { class: "act-head" }, el("div", { class: "ai-head-left" }, el("div", { class: "dlg-title" }, t("AI")), tabs), tools),
       body,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Close"))));
     show(start);
     return { card, focus: start === "tasks" ? tasks.focus : null };
   });
 }
 
 function activityView(ctx, done) {
-  const filter = el("select", { class: "act-filter", "aria-label": "Which app" });
+  const filter = el("select", { class: "act-filter", "aria-label": t("Which app") });
   const apps = () => {   // the app picker, only when more than one app did something
     const names = [...new Set(ctx.rows.map((r) => r.app))], cur = filter.value;
-    filter.replaceChildren(el("option", { value: "" }, "All AI apps"), ...names.map((a) => el("option", { value: a }, a)));
+    filter.replaceChildren(el("option", { value: "" }, t("All AI apps")), ...names.map((a) => el("option", { value: a }, a)));
     filter.value = names.includes(cur) ? cur : "";
     filter.classList.toggle("hidden", names.length < 2);
   };
@@ -165,28 +166,28 @@ function activityView(ctx, done) {
   const draw = () => {
     const rows = ctx.rows.filter((r) => !filter.value || r.app === filter.value);
     list.replaceChildren(...(rows.length ? rows.map((r) => {
-      const pathBtn = r.path ? el("button", { class: "act-path", type: "button", title: "Open this note",
+      const pathBtn = r.path ? el("button", { class: "act-path", type: "button", title: t("Open this note"),
                                               onclick: () => { done(null); ctx.open(r.path); } }, r.path) : null;
       return el("div", { class: "act-row" + (/changed|added|created/.test(r.what) ? " write" : "") },
         el("div", { class: "act-time", title: new Date(r.t * 1000).toLocaleString() }, clock(r.t), el("span", {}, ago(r.ago))),
         el("div", { class: "act-main" },
           el("div", { class: "act-line" }, el("b", {}, r.app), ` ${r.what} `, pathBtn,
-            r.canUndo ? el("button", { class: "btn small act-undo", type: "button", title: "Put the note back as it was before this change",
+            r.canUndo ? el("button", { class: "btn small act-undo", type: "button", title: t("Put the note back as it was before this change"),
               onclick: async (e) => {
                 const b = e.currentTarget; b.disabled = true;
-                try { await ctx.undo(r); r.canUndo = false; b.replaceWith(el("span", { class: "act-undone" }, "Undone")); }
+                try { await ctx.undo(r); r.canUndo = false; b.replaceWith(el("span", { class: "act-undone" }, t("Undone"))); }
                 catch (err) { b.disabled = false; b.title = err.message; ctx.fail(err.message); }
               } }, "Undo") : null),
           r.detail ? el("div", { class: "act-detail" }, r.detail) : null,
           el("div", { class: "act-folder" }, r.folderName)));
-    }) : [el("div", { class: "act-empty" }, "No AI app has used your notes since they were unlocked.")]));
+    }) : [el("div", { class: "act-empty" }, t("No AI app has used your notes since they were unlocked."))]));
   };
   filter.addEventListener("change", draw);
   apps(); draw();
   // Fetched again each time the tab opens, so what an AI app did while the panel was open shows up.
   const refresh = async () => { try { ctx.rows = await ctx.reload(); apps(); draw(); } catch (e) { ctx.fail(e.message); } };
   return { tools: [filter], refresh,
-           body: [el("div", { class: "mf-hint" }, "What AI apps did with your unlocked notes. Kept only until you lock."), list] };
+           body: [el("div", { class: "mf-hint" }, t("What AI apps did with your unlocked notes. Kept only until you lock.")), list] };
 }
 
 // Your yeses (unlocks, AI apps let in, what each may reach), each sealed: a line changed later shows as broken.
@@ -198,10 +199,10 @@ function approvalsView(rows) {
       el("div", { class: "act-main" },
         el("div", { class: "act-line" }, r.what),
         el("div", { class: "act-folder" }, [r.detail, r.how && `by ${r.how}`].filter(Boolean).join(" · "))),
-      el("span", { class: "seal", title: r.sealed ? "Sealed: unchanged since it was written" : "Changed or removed after it was written" },
+      el("span", { class: "seal", title: r.sealed ? "Sealed: unchanged since it was written" : t("Changed or removed after it was written") },
         r.sealed ? icon("check", 14, 2) : "!")))
-    : [el("div", { class: "act-empty" }, "Nothing yet.")]));
-  return { tools: [], body: [el("div", { class: "mf-hint" }, "Your last 20 yeses. Each one is sealed, so a later change shows."), list] };
+    : [el("div", { class: "act-empty" }, t("Nothing yet."))]));
+  return { tools: [], body: [el("div", { class: "mf-hint" }, t("Your last 20 yeses. Each one is sealed, so a later change shows.")), list] };
 }
 
 function tasksView(ctx, done) {
@@ -215,18 +216,18 @@ function tasksView(ctx, done) {
   const draw = () => {
     const items = [...todo].sort((a, b) => (a.done - b.done) || (b.t - a.t));
     list.replaceChildren(...(items.length ? items.map((i) => {
-      const box = el("input", { type: "checkbox", class: "todo-check", "aria-label": "Done" });
+      const box = el("input", { type: "checkbox", class: "todo-check", "aria-label": t("Done") });
       box.checked = !!i.done;
       box.addEventListener("change", () => act(() => ctx.set(i.id, box.checked)));
       return el("div", { class: "todo-row" + (i.done ? " done" : "") }, box,
         el("div", { class: "act-main" },
           el("button", { class: "act-path", type: "button", title: i.path, onclick: () => { done(null); ctx.open(i.path); } }, ctx.label(i.path)),
-          el("div", { class: "act-detail" }, i.ask || "No request: just read it."),
-          i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : "Ticked off by you"}${i.result ? ": " + i.result : ""}`)
-                 : el("div", { class: "act-folder" }, `Given ${ago(Math.max(0, Date.now() / 1000 - i.t))}`)),
-        el("button", { class: "icon-btn todo-x", type: "button", title: "Remove from the list", "aria-label": "Remove",
+          el("div", { class: "act-detail" }, i.ask || t("No request: just read it.")),
+          i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : t("Ticked off by you")}${i.result ? ": " + i.result : ""}`)
+                 : el("div", { class: "act-folder" }, t("Given {0}", ago(Math.max(0, Date.now() / 1000 - i.t))))),
+        el("button", { class: "icon-btn todo-x", type: "button", title: t("Remove from the list"), "aria-label": t("Remove"),
                        onclick: () => act(() => ctx.remove(i.id)) }, icon("x", 14)));
-    }) : [el("div", { class: "act-empty" }, "No tasks yet. Open a note and press the sparkle button to give your AI a task.")]));
+    }) : [el("div", { class: "act-empty" }, t("No tasks yet. Open a note and press the sparkle button to give your AI a task."))]));
   };
   draw();
   // Stay current while open: the AI may tick things off meanwhile.
@@ -239,7 +240,7 @@ function tasksView(ctx, done) {
   let give = null, ask = null;
   if (ctx.path) {
     ask = el("textarea", { class: "dlg-input todo-ask", rows: "3", spellcheck: "true",
-                           placeholder: "What should the AI do with this note? (optional)\nFor example: fix typos and make it shorter." });
+                           placeholder: t("What should the AI do with this note? (optional)\nFor example: fix typos and make it shorter.") });
     const add = () => act(async () => {
       const t = await ctx.give(ask.value);
       ask.value = "";
@@ -247,12 +248,12 @@ function tasksView(ctx, done) {
     });
     ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } });
     give = el("div", { class: "todo-give" },
-      el("div", { class: "dlg-sub" }, "Give AI a task with ", el("b", {}, ctx.label(ctx.path))),
+      el("div", { class: "dlg-sub" }, t("Give AI a task with "), el("b", {}, ctx.label(ctx.path))),
       ask,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn primary", type: "button", onclick: add }, "Add task")));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn primary", type: "button", onclick: add }, t("Add task"))));
   }
   return { focus: ask, body: [give,
-    el("div", { class: "mf-hint" }, "Ask your AI: \u201cDo my Phygital Memory tasks.\u201d You can undo its changes in Activity."),
+    el("div", { class: "mf-hint" }, t("Ask your AI: \u201cDo my Phygital Memory tasks.\u201d You can undo its changes in Activity.")),
     list, err].filter(Boolean) };
 }
 
@@ -267,18 +268,18 @@ export function openTrash(ctx) {
       el("span", { class: "trash-ic" }, icon(i.kind === "folder" ? "folder" : "file", 14)),
       el("div", { class: "act-main" },
         el("div", { class: "act-line" }, i.name.replace(/\.md$/i, "")),
-        el("div", { class: "act-folder" }, `Was at ${i.path}${i.t ? " · " + new Date(i.t * 1000).toLocaleString() : ""}`)),
+        el("div", { class: "act-folder" }, t("Was at {0}{1}", i.path, i.t ? " · " + new Date(i.t * 1000).toLocaleString() : ""))),
       el("button", { class: "btn small", type: "button", onclick: async () => {
         err.textContent = "";
         try { const j = await ctx.restore(i.id); items = j.items; draw(); if (i.kind !== "folder") { done(null); ctx.open(j.path); } }
         catch (e) { err.textContent = e.message; }
-      } }, "Restore"))) : [el("div", { class: "act-empty" }, "The trash is empty.")]));
+      } }, t("Restore")))) : [el("div", { class: "act-empty" }, t("The trash is empty."))]));
     draw();
     const card = el("div", { class: "dlg activity", role: "dialog" },
-      el("div", { class: "dlg-title" }, "Trash"),
-      el("div", { class: "mf-hint" }, "Things stay here for 7 days, then they're deleted for good. Restore puts each one back where it was, never over something already there."),
+      el("div", { class: "dlg-title" }, t("Trash")),
+      el("div", { class: "mf-hint" }, t("Things stay here for 7 days, then they're deleted for good. Restore puts each one back where it was, never over something already there.")),
       list, err,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Close"))));
     return { card };
   });
 }
@@ -291,29 +292,29 @@ export function openGithubSignIn(ctx) {
     let alive = true, timer = null;
     const finish = (v) => { alive = false; clearTimeout(timer); done(v); };
     const code = el("div", { class: "gh-code" }, "");
-    const line = el("div", { class: "dlg-sub" }, "Asking GitHub for a sign-in code");
+    const line = el("div", { class: "dlg-sub" }, t("Asking GitHub for a sign-in code"));
     const err = el("div", { class: "dlg-err" });
     const copy = el("button", { class: "btn small", type: "button", disabled: true,
-      onclick: () => navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = "Copied"; }) }, "Copy code");
+      onclick: () => navigator.clipboard.writeText(code.textContent).then(() => { copy.textContent = t("Copied"); }) }, t("Copy code"));
     const card = el("div", { class: "dlg gh-signin", role: "dialog" },
-      el("div", { class: "dlg-title" }, "Sign in with GitHub"),
+      el("div", { class: "dlg-title" }, t("Sign in with GitHub")),
       line, code, el("div", { class: "gh-row" }, copy),
-      el("div", { class: "mf-hint" }, "The app's GitHub key stays in this Mac's Keychain. Remove it on GitHub any time: Settings › Applications."),
+      el("div", { class: "mf-hint" }, t("The app's GitHub key stays in this Mac's Keychain. Remove it on GitHub any time: Settings › Applications.")),
       err,
-      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => finish(null) }, "Cancel")));
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => finish(null) }, t("Cancel"))));
     (async () => {
       try {
         const s = await ctx.start();
         code.textContent = s.code; copy.disabled = false;
-        line.textContent = `Your browser opened ${s.url.replace(/^https:\/\//, "")}. Type this code there and press Authorize.`;
+        line.textContent = t("Your browser opened {0}. Type this code there and press Authorize.", s.url.replace(/^https:\/\//, ""));
         let wait = (s.interval || 5) * 1000;
         const tick = async () => {
           if (!alive) return;
           try {
             const r = await ctx.poll();
             if (r.state === "done") { finish(r.account || ""); return; }
-            if (r.state === "denied") { err.textContent = "GitHub said no, so nothing was connected."; return; }
-            if (r.state === "expired") { err.textContent = "The code ran out. Close this and press Connect GitHub again."; return; }
+            if (r.state === "denied") { err.textContent = t("GitHub said no, so nothing was connected."); return; }
+            if (r.state === "expired") { err.textContent = t("The code ran out. Close this and press Connect GitHub again."); return; }
             if (r.state === "slow") wait += 5000;
           } catch (e) { err.textContent = e.message; }
           timer = setTimeout(tick, wait);
@@ -347,14 +348,14 @@ export function pickRepo(repos) {
       el("button", { class: "todo-row repo-row", type: "button", onclick: () => done(r.repo) },
         el("span", { class: "trash-ic" }, githubMark()),
         el("div", { class: "act-main" }, el("div", { class: "act-line" }, r.name), el("div", { class: "act-folder" }, `${r.repo}${r.pushed ? " · last change " + when(r.pushed) : ""}`))))
-      : [el("div", { class: "act-empty" }, "No Phygital Memory repos found on this GitHub account.")]));
+      : [el("div", { class: "act-empty" }, t("No Phygital Memory repos found on this GitHub account."))]));
     const card = el("div", { class: "dlg activity", role: "dialog" },
-      el("div", { class: "dlg-title" }, "Open from GitHub"),
-      el("div", { class: "mf-hint" }, "Your private Phygital Memory repos. Pick one, then unlock it with its password."),
+      el("div", { class: "dlg-title" }, t("Open from GitHub")),
+      el("div", { class: "mf-hint" }, t("Your private Phygital Memory repos. Pick one, then unlock it with its password.")),
       list,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", type: "button", onclick: () => done("") }, "Another repo"),
-        el("button", { class: "btn", type: "button", onclick: () => done(null) }, "Cancel")));
+        el("button", { class: "btn", type: "button", onclick: () => done("") }, t("Another repo")),
+        el("button", { class: "btn", type: "button", onclick: () => done(null) }, t("Cancel"))));
     return { card };
   });
 }
@@ -370,13 +371,13 @@ export function openCloud(ctx) {
     const err = el("div", { class: "dlg-err" });
     const actions = el("div", { class: "dlg-actions" });
     const keep = ctx.move && ctx.move.keepMac;   // Mac + WebDAV: a copy goes up and stays in sync, the Mac copy stays
-    const top = keep ? `Sync "${ctx.move.name}" with WebDAV` : ctx.move ? `Move "${ctx.move.name}" to WebDAV` : "Open from WebDAV";
+    const top = keep ? `Sync "${ctx.move.name}" with WebDAV` : ctx.move ? `Move "${ctx.move.name}" to WebDAV` : t("Open from WebDAV");
     const title = el("div", { class: "dlg-title" }, top);
     let submit = null;
     const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
     const busy = (b) => card.classList.toggle("busy", b);
     const btn = (label, fn, cls) => el("button", { class: "btn " + (cls || ""), type: "button", onclick: fn }, label);
-    const cancel = btn("Cancel", () => done(null));
+    const cancel = btn(t("Cancel"), () => done(null));
     const row = (ic, main, sub, fn) => el("button", { class: "todo-row repo-row", type: "button", onclick: fn },
       el("span", { class: "trash-ic" }, icon(ic, 16)),
       el("div", { class: "act-main" }, el("div", { class: "act-line" }, main), el("div", { class: "act-folder" }, sub)));
@@ -385,30 +386,30 @@ export function openCloud(ctx) {
       if (!ctx.clouds.length) { login(); return; }   // nothing connected yet: straight to the form
       title.textContent = top; err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, keep ? "Pick the server. Only encrypted files go up. The copy on this Mac stays."
-          : ctx.move ? "Pick the server. Only encrypted files go up. Once all have arrived, the copy on this Mac goes to the Trash."
-          : "Open a memory that's on a WebDAV server. Nothing is kept on this Mac. The server only gets encrypted files."),
+        el("div", { class: "mf-hint" }, keep ? t("Pick the server. Only encrypted files go up. The copy on this Mac stays.")
+          : ctx.move ? t("Pick the server. Only encrypted files go up. Once all have arrived, the copy on this Mac goes to the Trash.")
+          : t("Open a memory that's on a WebDAV server. Nothing is kept on this Mac. The server only gets encrypted files.")),
         el("div", { class: "act-list" },
-          ...ctx.clouds.map((c) => row("cloud", c.where, `Connected as ${c.user}`, () => look(c))),
-          row("plus", "Another server", "Nextcloud, ownCloud, Synology, Koofr or any WebDAV server", () => login())));
+          ...ctx.clouds.map((c) => row("cloud", c.where, t("Connected as {0}", c.user), () => look(c))),
+          row("plus", t("Another server"), t("Nextcloud, ownCloud, Synology, Koofr or any WebDAV server"), () => login())));
       actions.replaceChildren(cancel);
     };
 
     const login = (prefill = {}) => {
-      title.textContent = "Connect to WebDAV";
+      title.textContent = t("Connect to WebDAV");
       err.textContent = ""; err.classList.remove("ok");
       const server = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.server || "",
-        placeholder: "Server address, like cloud.example.com", "aria-label": "Server" });
-      const user = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.user || "", placeholder: "User name", "aria-label": "User name" });
-      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password or app password", "aria-label": "Password" });
+        placeholder: t("Server address, like cloud.example.com"), "aria-label": t("Server") });
+      const user = el("input", { class: "dlg-input", spellcheck: "false", autocomplete: "off", value: prefill.user || "", placeholder: t("User name"), "aria-label": t("User name") });
+      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password or app password"), "aria-label": t("Password") });
       const fields = () => {
-        if (!server.value.trim() || !user.value.trim() || !pw.value) { err.classList.remove("ok"); err.textContent = "Fill in all three."; return null; }
+        if (!server.value.trim() || !user.value.trim() || !pw.value) { err.classList.remove("ok"); err.textContent = t("Fill in all three."); return null; }
         return { server: server.value, user: user.value, password: pw.value };
       };
       const test = async () => {
         const f = fields(); if (!f) return;
         err.classList.remove("ok"); err.textContent = ""; busy(true);
-        try { const j = await ctx.test(f); err.classList.add("ok"); err.textContent = `Connected to ${j.where}.`; }
+        try { const j = await ctx.test(f); err.classList.add("ok"); err.textContent = t("Connected to {0}.", j.where); }
         catch (e) { err.textContent = e.message; }
         busy(false);
       };
@@ -421,9 +422,9 @@ export function openCloud(ctx) {
         } catch (e) { err.textContent = e.message; busy(false); }
       };
       body.replaceChildren(server, user, pw,
-        el("div", { class: "st-gh-note" }, "For Nextcloud, make an app password: Settings › Security. The password stays in this Mac's Keychain."));
-      actions.replaceChildren(ctx.clouds.length ? btn("Back", () => { pw.value = ""; pick(); }) : cancel,
-        btn("Test connection", test), btn("Connect", submit, "primary"));
+        el("div", { class: "st-gh-note" }, t("For Nextcloud, make an app password: Settings › Security. The password stays in this Mac's Keychain.")));
+      actions.replaceChildren(ctx.clouds.length ? btn(t("Back"), () => { pw.value = ""; pick(); }) : cancel,
+        btn(t("Test connection"), test), btn(t("Connect"), submit, "primary"));
       server.value ? (prefill.user ? pw : user).focus() : server.focus();
     };
 
@@ -439,43 +440,43 @@ export function openCloud(ctx) {
     };
 
     const list = (conn, memories) => {
-      title.textContent = "Memories in your cloud"; err.textContent = ""; submit = null;
+      title.textContent = t("Memories in your cloud"); err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, "Pick one, then unlock it with its password. It opens from the server, nothing is downloaded."),
+        el("div", { class: "mf-hint" }, t("Pick one, then unlock it with its password. It opens from the server, nothing is downloaded.")),
         el("div", { class: "act-list" }, ...(memories.length
           ? memories.map((m) => row("lock", m.name, m.path, () => done({ conn, path: m.path })))
-          : [el("div", { class: "act-empty" }, "No memories found in this cloud yet.")])));
-      actions.replaceChildren(btn("Back", pick), btn("New memory here", () => create(conn, memories), "primary"));
+          : [el("div", { class: "act-empty" }, t("No memories found in this cloud yet."))])));
+      actions.replaceChildren(btn(t("Back"), pick), btn(t("New memory here"), () => create(conn, memories), "primary"));
     };
 
     const moveTo = (conn) => {
       title.textContent = top; err.textContent = "";
-      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder on the server (empty: the top)", "aria-label": "Folder on the server" });
+      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: t("Folder on the server (empty: the top)"), "aria-label": t("Folder on the server") });
       submit = () => done({ conn, move: { parent: parent.value.trim().replace(/^\/+|\/+$/g, "") } });
       body.replaceChildren(parent,
-        el("div", { class: "st-gh-note" }, keep ? "A big memory can take a while to upload." : "It locks first. A big memory can take a while to upload. Your password stays the same."));
-      actions.replaceChildren(btn("Back", pick), btn(keep ? "Sync" : "Move", submit, "primary"));
+        el("div", { class: "st-gh-note" }, keep ? "A big memory can take a while to upload." : t("It locks first. A big memory can take a while to upload. Your password stays the same.")));
+      actions.replaceChildren(btn(t("Back"), pick), btn(keep ? "Sync" : "Move", submit, "primary"));
       parent.focus();
     };
 
     const create = (conn, memories) => {
-      title.textContent = "New memory in your cloud"; err.textContent = "";
-      const name = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Name", "aria-label": "Name" });
-      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder in the cloud (empty: the top)", "aria-label": "Folder in the cloud" });
-      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password (8 or more characters)", "aria-label": "Password" });
-      const pw2 = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password again", "aria-label": "Password again" });
+      title.textContent = t("New memory in your cloud"); err.textContent = "";
+      const name = el("input", { class: "dlg-input", spellcheck: "false", placeholder: t("Name"), "aria-label": t("Name") });
+      const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: t("Folder in the cloud (empty: the top)"), "aria-label": t("Folder in the cloud") });
+      const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password (8 or more characters)"), "aria-label": t("Password") });
+      const pw2 = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password again"), "aria-label": t("Password again") });
       submit = () => {
         const n = name.value.trim();
-        if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = "Pick a simple name (no / \\ : * ? \" < > |)."; return; }
-        if (pw.value.length < 8) { err.textContent = "The password needs at least 8 characters."; return; }
-        if (pw.value !== pw2.value) { err.textContent = "The two passwords differ."; return; }
+        if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = t("Pick a simple name (no / \\ : * ? \" < > |)."); return; }
+        if (pw.value.length < 8) { err.textContent = t("The password needs at least 8 characters."); return; }
+        if (pw.value !== pw2.value) { err.textContent = t("The two passwords differ."); return; }
         const out = { conn, create: { parent: parent.value.trim().replace(/^\/+|\/+$/g, ""), name: n, password: pw.value } };
         pw.value = pw2.value = "";
         done(out);
       };
       body.replaceChildren(name, parent, pw, pw2,
-        el("div", { class: "st-gh-note" }, "This password unlocks the memory. Nobody can reset it, so keep it somewhere safe."));
-      actions.replaceChildren(btn("Back", () => { pw.value = pw2.value = ""; list(conn, memories); }), btn("Create", submit, "primary"));
+        el("div", { class: "st-gh-note" }, t("This password unlocks the memory. Nobody can reset it, so keep it somewhere safe.")));
+      actions.replaceChildren(btn(t("Back"), () => { pw.value = pw2.value = ""; list(conn, memories); }), btn(t("Create"), submit, "primary"));
       name.focus();
     };
 
@@ -492,29 +493,29 @@ export function openS3(ctx) {
     let kind = "s3";
     const err = el("div", { class: "dlg-err" });
     const body = el("div", { class: "cl-body" });
-    const title = el("div", { class: "dlg-title" }, ctx.restore ? "Open from Amazon S3 or Cloudflare R2" : "Back up to Amazon S3 or Cloudflare R2");
+    const title = el("div", { class: "dlg-title" }, ctx.restore ? "Open from Amazon S3 or Cloudflare R2" : t("Back up to Amazon S3 or Cloudflare R2"));
     const actions = el("div", { class: "dlg-actions" });
     const card = el("div", { class: "dlg storage cloud-dlg", role: "dialog" }, title, body, err, actions);
     const busy = (b) => card.classList.toggle("busy", b);
     const btn = (label, fn, cls) => el("button", { class: "btn " + (cls || ""), type: "button", onclick: fn }, label);
     const input = (ph, label, type = "text") => el("input", { class: "dlg-input", type, spellcheck: "false", autocomplete: "off", placeholder: ph, "aria-label": label });
     const bucket = input("Bucket name, like my-notes-backup", "Bucket");
-    const keyId = input("Access Key ID", "Access Key ID");
-    const secret = input("Secret Access Key", "Secret Access Key", "password");
+    const keyId = input("Access Key ID", t("Access Key ID"));
+    const secret = input("Secret Access Key", t("Secret Access Key"), "password");
     const where = input("Region, like eu-west-1", "Region");
     const hint = el("div", { class: "st-gh-note" });
     const drawHint = () => { hint.textContent = kind === "r2"
-      ? "Cloudflare shows three values after you make an API token. Use the Access Key ID, the Secret Access Key and the S3 endpoint. You don't need the Token value."
-      : "From your IAM user's access key in AWS. The region is where the bucket is, like eu-west-1."; };
+      ? t("Cloudflare shows three values after you make an API token. Use the Access Key ID, the Secret Access Key and the S3 endpoint. You don't need the Token value.")
+      : t("From your IAM user's access key in AWS. The region is where the bucket is, like eu-west-1."); };
     drawHint();
     const tabs = el("div", { class: "seg", role: "radiogroup" });
-    const drawTabs = () => tabs.replaceChildren(...[["s3", "Amazon S3"], ["r2", "Cloudflare R2"]].map(([k, t]) =>
+    const drawTabs = () => tabs.replaceChildren(...[["s3", t("Amazon S3")], ["r2", t("Cloudflare R2")]].map(([k, t]) =>
       el("button", { class: "seg-b" + (kind === k ? " on" : ""), type: "button", onclick: () => {
-        kind = k; drawTabs(); drawHint(); where.placeholder = k === "r2" ? "S3 endpoint, like https://ID.r2.cloudflarestorage.com" : "Region, like eu-west-1";
+        kind = k; drawTabs(); drawHint(); where.placeholder = k === "r2" ? "S3 endpoint, like https://ID.r2.cloudflarestorage.com" : t("Region, like eu-west-1");
         where.setAttribute("aria-label", k === "r2" ? "S3 endpoint" : "Region"); } }, t)));
     drawTabs();
     const fields = () => {
-      if (![bucket, keyId, secret, where].every((i) => i.value.trim())) { err.classList.remove("ok"); err.textContent = "Fill in all four."; return null; }
+      if (![bucket, keyId, secret, where].every((i) => i.value.trim())) { err.classList.remove("ok"); err.textContent = t("Fill in all four."); return null; }
       return { kind, bucket: bucket.value.trim(), keyId: keyId.value.trim(), secret: secret.value, where: where.value.trim() };
     };
     const go = async (fn) => {
@@ -523,21 +524,21 @@ export function openS3(ctx) {
       try { await fn(f); } catch (e) { err.textContent = e.message; }
       busy(false);
     };
-    const test = () => go(async (f) => { const j = await ctx.test(f); err.classList.add("ok"); err.textContent = `Connected to ${j.where}.`; });
+    const test = () => go(async (f) => { const j = await ctx.test(f); err.classList.add("ok"); err.textContent = t("Connected to {0}.", j.where); });
     const next = () => go(async (f) => {
       if (!ctx.restore) { const j = await ctx.connect(f); secret.value = ""; done({ conn: j.conn, bucket: j.bucket }); return; }
       const j = await ctx.memories(f);
       secret.value = "";
-      title.textContent = "Backups in this bucket";
+      title.textContent = t("Backups in this bucket");
       body.replaceChildren(el("div", { class: "act-list" }, ...(j.memories.length ? j.memories.map((m) =>
         el("button", { class: "todo-row repo-row", type: "button", onclick: () => done({ conn: j.conn, path: m.path }) },
           el("span", { class: "trash-ic" }, icon("lock", 16)), el("div", { class: "act-main" }, el("div", { class: "act-line" }, m.name),
-            el("div", { class: "act-folder" }, m.path)))) : [el("div", { class: "act-empty" }, "No backups found in this bucket.")])));
-      actions.replaceChildren(btn("Cancel", () => done(null)));
+            el("div", { class: "act-folder" }, m.path)))) : [el("div", { class: "act-empty" }, t("No backups found in this bucket."))])));
+      actions.replaceChildren(btn(t("Cancel"), () => done(null)));
     });
     body.replaceChildren(tabs, bucket, keyId, secret, where, hint,
-      el("div", { class: "st-gh-note" }, "The app never makes or deletes buckets. The secret key stays in this Mac's Keychain."));
-    actions.replaceChildren(btn("Cancel", () => done(null)), btn("Test connection", test), btn(ctx.restore ? "Find backups" : "Back up", next, "primary"));
+      el("div", { class: "st-gh-note" }, t("The app never makes or deletes buckets. The secret key stays in this Mac's Keychain.")));
+    actions.replaceChildren(btn(t("Cancel"), () => done(null)), btn(t("Test connection"), test), btn(ctx.restore ? "Find backups" : t("Back up"), next, "primary"));
     return { card, focus: bucket, submit: next };
   });
 }

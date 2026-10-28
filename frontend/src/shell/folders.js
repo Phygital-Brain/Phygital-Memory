@@ -1,5 +1,6 @@
 // The folder switcher menu and the "create a locked folder" form. Names and paths from the server are only ever
 // put in as text.
+import { t } from "./i18n.js";
 import { el, icon } from "./dom.js";
 import { modal } from "./dialogs.js";
 import { closeMenu } from "./menu.js";
@@ -49,25 +50,25 @@ export function switcherItems(ctx) {
   const cur = ctx.list.find((f) => f.id === ctx.currentId);
   const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id));
   const mine = rows.filter((_, i) => !ctx.list[i].joined), theirs = rows.filter((_, i) => ctx.list[i].joined);
-  const items = [...mine, ...(theirs.length ? [{ sep: true }, { node: el("div", { class: "fo-head" }, "Shared with me") }, ...theirs] : []), { sep: true },
-    actionRow("plus", "New memory", ctx.createNew),
-    { label: "Open memory", icon: "folder", cls: "fo-menu-item", sub: [
-      { label: "From this Mac", fn: ctx.openOther },
-      ...(ctx.fromGithub ? [{ label: "From GitHub", fn: ctx.fromGithub }] : []),
-      ...(ctx.fromCloud ? [{ label: "From WebDAV", fn: ctx.fromCloud }] : []),
-      ...(ctx.fromS3 ? [{ label: "From Amazon S3 or Cloudflare R2", fn: ctx.fromS3 }] : []),
-      ...(ctx.fromBackup ? [{ label: "From a backup file", fn: ctx.fromBackup }] : []),
-      ...(ctx.fromInvite ? [{ label: "From an invite", fn: ctx.fromInvite }] : []),
-      ...(ctx.fromMac ? [{ label: "From my other Mac", fn: ctx.fromMac }] : [])] },
-    actionRow("grid", "Manage memories", ctx.manage)];
+  const items = [...mine, ...(theirs.length ? [{ sep: true }, { node: el("div", { class: "fo-head" }, t("Shared with me")) }, ...theirs] : []), { sep: true },
+    actionRow("plus", t("New memory"), ctx.createNew),
+    { label: t("Open memory"), icon: "folder", cls: "fo-menu-item", sub: [
+      { label: t("From this Mac"), fn: ctx.openOther },
+      ...(ctx.fromGithub ? [{ label: t("From GitHub"), fn: ctx.fromGithub }] : []),
+      ...(ctx.fromCloud ? [{ label: t("From WebDAV"), fn: ctx.fromCloud }] : []),
+      ...(ctx.fromS3 ? [{ label: t("From Amazon S3 or Cloudflare R2"), fn: ctx.fromS3 }] : []),
+      ...(ctx.fromBackup ? [{ label: t("From a backup file"), fn: ctx.fromBackup }] : []),
+      ...(ctx.fromInvite ? [{ label: t("From an invite"), fn: ctx.fromInvite }] : []),
+      ...(ctx.fromMac ? [{ label: t("From my other Mac"), fn: ctx.fromMac }] : [])] },
+    actionRow("grid", t("Manage memories"), ctx.manage)];
   if (cur) {
     items.push({ sep: true },
-      ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", "Storage and backup", ctx.storage)] : []),
+      ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", t("Storage and backup"), ctx.storage)] : []),
       ...(ctx.share ? [actionRow("share", "Share", ctx.share)] : []),
-      ...(ctx.ai ? [actionRow("pulse", "AI tasks and activity", ctx.ai)] : []),
-      ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : "Show in Finder", ctx.finder.toggle)] : []),
+      ...(ctx.ai ? [actionRow("pulse", t("AI tasks and activity"), ctx.ai)] : []),
+      ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : t("Show in Finder"), ctx.finder.toggle)] : []),
       ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),
-      actionRow("lock", "Lock memory", ctx.lockThis, anyOpen ? { label: "Lock all", fn: ctx.lockAll } : null));
+      actionRow("lock", t("Lock memory"), ctx.lockThis, anyOpen ? { label: t("Lock all"), fn: ctx.lockAll } : null));
   }
   return items;
 }
@@ -90,18 +91,18 @@ export function manageFolders(list, actions) {
             !f.exists ? "Not found at this place" : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : ""))),
         el("div", { class: "mf-actions" },
           btn(open ? "Open" : "Unlock", actions.switchTo),
-          btn("Rename", actions.rename),
-          open ? btn("Lock", actions.lock) : null,
-          btn("Remove", actions.forget, "danger"))));
+          btn(t("Rename"), actions.rename),
+          open ? btn(t("Lock"), actions.lock) : null,
+          btn(t("Remove"), actions.forget, "danger"))));
     }
-    if (!list.length) body.append(el("div", { class: "mf-empty" }, "No folders yet."));
+    if (!list.length) body.append(el("div", { class: "mf-empty" }, t("No folders yet.")));
     const card = el("div", { class: "dlg mf", role: "dialog" },
-      el("div", { class: "dlg-title" }, "Folders"),
-      el("div", { class: "mf-hint" }, "Each memory is encrypted with its own password. Remove only takes it off this list. Nothing is deleted."),
+      el("div", { class: "dlg-title" }, t("Folders")),
+      el("div", { class: "mf-hint" }, t("Each memory is encrypted with its own password. Remove only takes it off this list. Nothing is deleted.")),
       body,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, "Open memory"),
-        el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, "New memory")));
+        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, t("Open memory")),
+        el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, t("New memory"))));
     return { card };
   });
 }
@@ -111,10 +112,10 @@ export function manageFolders(list, actions) {
 export function createFolderForm(pick) {
   return modal((done) => {
     let parent = "";
-    const name = el("input", { class: "dlg-input", spellcheck: "false", placeholder: "Folder name", "aria-label": "Folder name" });
-    const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password (8 or more characters)", "aria-label": "Password" });
-    const pw2 = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: "Password again", "aria-label": "Password again" });
-    const where = el("span", { class: "dlg-where" }, "Choose where to make it");
+    const name = el("input", { class: "dlg-input", spellcheck: "false", placeholder: t("Folder name"), "aria-label": t("Folder name") });
+    const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password (8 or more characters)"), "aria-label": t("Password") });
+    const pw2 = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password again"), "aria-label": t("Password again") });
+    const where = el("span", { class: "dlg-where" }, t("Choose where to make it"));
     const err = el("div", { class: "dlg-err" });
     const choose = el("button", { class: "btn small", type: "button", onclick: async () => {
       choose.disabled = true;
@@ -124,22 +125,22 @@ export function createFolderForm(pick) {
     } }, icon("folder", 13), "Choose");
     const submit = () => {
       const n = name.value.trim();
-      if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = "Pick a simple name (no / \\ : * ? \" < > |)."; return; }
-      if (!parent) { err.textContent = "Choose where to make the folder."; return; }
-      if (pw.value.length < 8) { err.textContent = "The password needs at least 8 characters."; return; }
-      if (pw.value !== pw2.value) { err.textContent = "The two passwords differ."; return; }
+      if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = t("Pick a simple name (no / \\ : * ? \" < > |)."); return; }
+      if (!parent) { err.textContent = t("Choose where to make the folder."); return; }
+      if (pw.value.length < 8) { err.textContent = t("The password needs at least 8 characters."); return; }
+      if (pw.value !== pw2.value) { err.textContent = t("The two passwords differ."); return; }
       const out = { parent, name: n, password: pw.value };
       pw.value = pw2.value = "";
       done(out);
     };
     const card = el("div", { class: "dlg", role: "dialog" },
-      el("div", { class: "dlg-title" }, "New folder"),
+      el("div", { class: "dlg-title" }, t("New folder")),
       name, pw, pw2,
       el("div", { class: "dlg-where-row" }, where, choose),
       err,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", onclick: () => { pw.value = pw2.value = ""; done(null); } }, "Cancel"),
-        el("button", { class: "btn primary", onclick: submit }, "Create")));
+        el("button", { class: "btn", onclick: () => { pw.value = pw2.value = ""; done(null); } }, t("Cancel")),
+        el("button", { class: "btn primary", onclick: submit }, t("Create"))));
     return { card, focus: name, submit };
   });
 }

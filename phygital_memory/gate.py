@@ -165,6 +165,7 @@ class Gate:
     async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
         """An AI app asks to come in: park the request until the person answers in the app, and send the browser
         to a page that waits for that answer."""
+        who = await asyncio.to_thread(who_waits, str(params.redirect_uri))
         with self._lock:
             now = time.time()
             self.pending = {r: p for r, p in self.pending.items() if now - p["at"] < 600}
@@ -172,8 +173,16 @@ class Gate:
                 raise AuthorizeError("temporarily_unavailable", "Too many sign-ins waiting. Try again in a few minutes.")
             rid = secrets.token_urlsafe(16)
             self.pending[rid] = {"at": now, "client": client.client_id, "params": params,
-                                 "name": (client.client_name or "An AI app")[:60], "answer": None}
+                                 "name": (client.client_name or "An AI app")[:60], "answer": None,
+                                 "who": who}
             return f"{ISSUER}/allow/{rid}"
+
+    def proofs(self, nonce: str) -> list[str]:
+        """For the Claude Desktop bridge: proof that this is the real app, before it sends a key. Each answer is
+        HMAC(key fingerprint, nonce): only something that holds the fingerprints can make one, and none reveals a key."""
+        import hmac
+        with self._lock:
+            return [hmac.new(fp.encode(), nonce.encode(), hashlib.sha256).hexdigest() for fp in self.tokens]
 
     def name_of(self, rid: str) -> str:
         with self._lock:
@@ -188,7 +197,7 @@ class Gate:
         """Sign-ins the person hasn't answered yet, for the Allow window in the app."""
         with self._lock:
             now = time.time()
-            return [{"id": r, "name": p["name"]} for r, p in self.pending.items()
+            return [{"id": r, "name": p["name"], "who": p.get("who", "")} for r, p in self.pending.items()
                     if p["answer"] is None and now - p["at"] < 600]
 
     def answer(self, rid: str, allow: bool, folders=None, write: bool = False) -> None:
@@ -275,3 +284,26 @@ def _clean_folders(folders):
     if folders == "all" or folders is None:
         return "all"
     return [str(f) for f in folders][:200]
+
+
+def who_waits(redirect_uri: str) -> str:
+    """Which program on this Mac gets the answer: the one listening on the sign-in's return address (a name an app
+    gives itself proves nothing; this does). Plain words, or "" when it can't tell."""
+    import subprocess
+    from urllib.parse import urlsplit
+    u = urlsplit(redirect_uri)
+    if u.scheme not in ("http", "https"):
+        return f"the app that opens {u.scheme}:// links"
+    if u.hostname not in ("127.0.0.1", "localhost", "::1") or not u.port:
+        return ""
+    try:
+        out = subprocess.run(["lsof", "-nP", f"-iTCP:{u.port}", "-sTCP:LISTEN", "-Fp"], capture_output=True, text=True, timeout=3).stdout
+        pid = next((l[1:] for l in out.splitlines() if l.startswith("p")), "")
+        exe = subprocess.run(["ps", "-o", "comm=", "-p", pid], capture_output=True, text=True, timeout=3).stdout.strip() if pid else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if not exe:
+        return "nothing is listening for the answer yet"
+    app = next((part[:-4] for part in exe.split("/") if part.endswith(".app")), "")
+    return f"{app} ({exe})" if app else exe
+

@@ -18,9 +18,17 @@ try:
     def ana(name):
         return next((x for x in api(B, "folders")["folders"] if x["name"] == name), None)
 
+    waited = []   # shares that waited on Ana's list until she said yes (nothing arrives by itself)
+
+    def take(name):
+        for o in api(B, "shareoffers").get("offers", []):
+            if o["label"] == name:
+                waited.append((name, ana(name) is None))
+                api(B, "shareofferaccept", {"id": o["id"]})
+
     def opened(name, secs=90):
         got = {}
-        wait(lambda: ana(name) and got.update(api(B, "keyunlock", {"folder": ana(name)["id"]})) or got.get("pass"), secs)
+        wait(lambda: take(name) or ana(name) and got.update(api(B, "keyunlock", {"folder": ana(name)["id"]})) or got.get("pass"), secs)
         return got
 
     def files(port, folder, pw):
@@ -43,6 +51,8 @@ try:
     ideas = api(A, "shareadd", {"path": "Ideas", "id": aid, "role": "view", "folder": fa}, pa).get("share")
     g = opened("Ideas")
     check(g.get("role") == "view", "2. known person: Ideas arrives with no invite, view only", g)
+    check(("Ideas", True) in waited, "it waited for Ana's yes before coming onto her Mac", waited)
+    check(ana("Ideas") and ana("Ideas").get("aiHidden"), "and came in hidden from AI", ana("Ideas"))
     check(api(B, "save", {"path": "Ana.md", "text": "x", "new": True, "folder": ana("Ideas")["id"]}, g.get("pass")).get("status"),
           "view only: she can't add a note")
     api(A, "sharerole", {"share": ideas, "id": aid, "role": "edit", "folder": fa}, pa)

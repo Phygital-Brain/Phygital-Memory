@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./shell/i18n.js";
 import { openAddFiles } from "./shell/addfiles.js";
 import { openShare, joinDialog } from "./shell/share.js";
 import { linkMacDialog, joinMacDialog } from "./shell/link.js";
@@ -11,7 +12,7 @@ import { askText, askPassword, confirmDialog, choiceDialog, showRecoveryKey, rec
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
-import { openSettings, closeSettings, onSettings, settings } from "./shell/settings.js";
+import { openSettings, closeSettings, onSettings, settings, languagePicker } from "./shell/settings.js";
 import { aiAppsView, allowDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
@@ -86,7 +87,7 @@ let joinedSeen = null;   // shared-with-me items already known, to say once when
 async function refreshFolders() {
   try { folderList = (await api("folders")).folders || []; } catch { return folderList; }
   const joined = folderList.filter((f) => f.joined);
-  if (joinedSeen) for (const f of joined) if (!joinedSeen.has(f.id)) toastOk(`"${f.name}" was shared with you. It's under Shared with me.`);
+  if (joinedSeen) for (const f of joined) if (!joinedSeen.has(f.id)) toastOk(t("\"{0}\" was shared with you. It's under Shared with me.", f.name));
   joinedSeen = new Set(joined.map((f) => f.id));
   drawSwitcher();
   watchFolders();
@@ -100,7 +101,7 @@ function resetState() {
 
 // The empty page's search: Engram results as you type, a click opens one, Enter opens the full search.
 function emptySearch() {
-  const input = el("input", { name: "q", placeholder: "Search your notes", spellcheck: "false", autocomplete: "off", "aria-label": "Search your notes" });
+  const input = el("input", { name: "q", placeholder: t("Search your notes"), spellcheck: "false", autocomplete: "off", "aria-label": t("Search your notes") });
   const list = el("div", { class: "empty-results" });
   let token = 0, timer = null;
   const run = async () => {
@@ -112,7 +113,7 @@ function emptySearch() {
     list.replaceChildren(...(rows.length ? rows.slice(0, 6).map((r) => el("button", { class: "er-row", type: "button",
       onclick: () => { input.value = ""; list.replaceChildren(); openAt(r.path, r.heading.split(" > ").slice(1).join(" > ")); } },
       el("span", { class: "er-title" }, r.heading.split(" > ").join(" › ")),
-      el("span", { class: "er-snip" }, r.snippet))) : [el("div", { class: "er-none" }, "Nothing found yet.")]));
+      el("span", { class: "er-snip" }, r.snippet))) : [el("div", { class: "er-none" }, t("Nothing found yet."))]));
   };
   input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 150); });
   return el("div", { class: "empty-search-wrap" },
@@ -228,10 +229,10 @@ async function pickFolder(prompt, start) {
 // Another Mac: bring a private "NAME-Phygital-Memory" repo down from GitHub, then unlock it with its password.
 // The ways to open a memory, the same everywhere (the memory menu's submenu, the unlock screen).
 function openMenuItems() {
-  return [{ label: "From this Mac", fn: openOtherFolder }, { label: "From GitHub", fn: openFromGithub },
-    { label: "From WebDAV", fn: openFromCloud }, { label: "From Amazon S3 or Cloudflare R2", fn: openFromS3 },
-    { label: "From a backup file", fn: openFromBackup }, { label: "From an invite", fn: joinFromInvite },
-    { label: "From my other Mac", fn: joinOtherMac }];
+  return [{ label: t("From this Mac"), fn: openOtherFolder }, { label: t("From GitHub"), fn: openFromGithub },
+    { label: t("From WebDAV"), fn: openFromCloud }, { label: t("From Amazon S3 or Cloudflare R2"), fn: openFromS3 },
+    { label: t("From a backup file"), fn: openFromBackup }, { label: t("From an invite"), fn: joinFromInvite },
+    { label: t("From my other Mac"), fn: joinOtherMac }];
 }
 
 // A backup back in: a zip the app saved, or a memory's masterkey.cryptomator file. The Mac's chooser picks it.
@@ -241,7 +242,7 @@ async function openFromBackup() {
     const j = await api("openbackup");
     if (j.cancelled) return;
     await refreshFolders();
-    toastOk(`"${j.folder.name}" is back. Unlock it with its password or recovery key.`);
+    toastOk(t("\"{0}\" is back. Unlock it with its password or recovery key.", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -255,7 +256,7 @@ async function openFromS3() {
     const j = await api("froms3", v);
     if (j.cancelled) return;
     await refreshFolders();
-    toastOk(`"${j.folder.name}" is back. Unlock it with its password.`);
+    toastOk(t("\"{0}\" is back. Unlock it with its password.", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -268,7 +269,7 @@ async function recoverWithKey() {
   try {
     const j = await api("recover", { folder: fid, ...v });
     setPass(j.pass, fid);
-    toastOk("New password set. Use it from now on.");
+    toastOk(t("New password set. Use it from now on."));
     await enterApp();
   } catch (e) { toastErr(e.message); }
 }
@@ -283,7 +284,7 @@ async function openFromGithub() {
   const known = new Set(folderList.map((f) => f.github).filter(Boolean));
   let repo = await pickRepo(repos.filter((r) => !known.has(r.repo)));
   if (repo === "") {   // "Another repo": type it
-    repo = await askText("Open from GitHub", "", "Open", (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
+    repo = await askText("Open from GitHub", "", t("Open"), (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
   }
   if (!repo) return;
   try {
@@ -291,7 +292,7 @@ async function openFromGithub() {
     const j = await api("fromgithub", { repo });
     if (j.cancelled) return;
     await refreshFolders();
-    toastOk(`Brought "${j.folder.name}" down from GitHub. Unlock it with its password.`);
+    toastOk(t("Brought \"{0}\" down from GitHub. Unlock it with its password.", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -309,12 +310,12 @@ async function openFromCloud(quiet = false) {
       await refreshFolders();
       await switchTo(j.folder.id);
       if (currentFolder() === j.folder.id) await unlockCurrent(v.create.password);
-      toastOk(`Created "${j.folder.name}" in your cloud.`);
+      toastOk(t("Created \"{0}\" in your cloud.", j.folder.name));
       return;
     }
     const j = await api("fromcloud", { conn: v.conn, path: v.path });
     await refreshFolders();
-    if (!quiet) toastOk(`Added "${j.folder.name}". Unlock it with its password.`);
+    if (!quiet) toastOk(t("Added \"{0}\". Unlock it with its password.", j.folder.name));
     await switchTo(j.folder.id);
     return j.folder.id;
   } catch (e) { toastErr(e.message); }
@@ -326,7 +327,7 @@ async function ensureName() {
   let n;
   try { n = await api("myname"); } catch (e) { toastErr(e.message); return false; }
   if (n.name) return true;
-  const v = await askText("Your name", n.suggest || "", "Save", (x) => (x.trim() ? "" : "Add a name. It's what others see when you share."));
+  const v = await askText("Your name", n.suggest || "", t("Save"), (x) => (x.trim() ? "" : t("Add a name. It's what others see when you share.")));
   if (!v) return false;
   try { await api("myname", { name: v.trim() }); return true; } catch (e) { toastErr(e.message); return false; }
 }
@@ -340,16 +341,16 @@ async function openShareHere(path = null) {
   openShare({
     name: what, part: !!path, load: () => api("shareinfo", at), invite: (role) => api("shareinvite", { role, ...at }),
     answer: (id, allow, share) => shareApi("shareanswer", { id, allow, ...at, ...(share ? { share } : {}) }), role: (id, role) => shareApi("sharerole", { id, role, ...at }),
-    remove: async (id) => { if (await confirmDialog(`Remove them from "${what}"?`, "Remove", true, "They get nothing new from now on, and their app deletes its copy when it next connects. Anything they already copied out stays with them.")) await shareApi("shareremove", { id, ...at }); },
+    remove: async (id) => { if (await confirmDialog(t("Remove them from \"{0}\"?", what), t("Remove"), true, t("They get nothing new from now on, and their app deletes its copy when it next connects. Anything they already copied out stays with them."))) await shareApi("shareremove", { id, ...at }); },
     openPart: (p) => openShareHere(p),
     people: () => api("sharepeople", at), add: (id, role) => shareApi("shareadd", { id, role, ...at }),
     forget: async (id, name) => {
-      if (await confirmDialog(`Forget ${name}?`, "Forget", true, "They're removed from everything you share, their app deletes its copies, and they leave this list. To share with them again, send a new invite."))
+      if (await confirmDialog(t("Forget {0}?", name), t("Forget"), true, t("They're removed from everything you share, their app deletes its copies, and they leave this list. To share with them again, send a new invite.")))
         await shareApi("shareforget", { id });
     },
     history: () => api("sharehistory", at),
     stopPart: async (share, p) => {
-      if (await confirmDialog(`Stop sharing "${p}"?`, "Stop sharing", true, "Nobody gets changes to it any more. Copies they already have stay with them.")) await shareApi("sharestop", { share });
+      if (await confirmDialog(t("Stop sharing \"{0}\"?", p), t("Stop sharing"), true, t("Nobody gets changes to it any more. Copies they already have stay with them."))) await shareApi("sharestop", { share });
     },
     storage: openStoragePanel,
   });
@@ -362,13 +363,13 @@ async function linkOtherMac() {
     start: () => api("linkstart"), status: () => api("linkstatus"), cancel: () => api("linkcancel").catch(() => {}),
     answer: (memories, seen) => shareApi("linkanswer", { memories, seen }),
   });
-  if (r) toastOk(`"${r.name}" is linked.` + (r.memories ? " Your memories go to it while both Macs are on." : ""));
+  if (r) toastOk(t("\"{0}\" is linked.", r.name) + (r.memories ? " Your memories go to it while both Macs are on." : ""));
 }
 
 async function joinOtherMac() {
   const r = await joinMacDialog({ join: (link) => shareApi("linkjoin", { link }), wait: () => api("linkwait") });
   if (!r) { api("linkcancel").catch(() => {}); return; }
-  toastOk(`Linked to "${r.from}".` + (r.memories.length ? ` ${r.memories.join(", ")} will show up once the files are here. Open with the same password.` : ""));
+  toastOk(t("Linked to \"{0}\".", r.from) + (r.memories.length ? ` ${r.memories.join(", ")} will show up once the files are here. Open with the same password.` : ""));
   const before = new Set(folderList.map((f) => f.id));
   const t = setInterval(async () => {   // the first memory to arrive opens at its unlock page
     const f = (await refreshFolders()).find((x) => !before.has(x.id) && !x.joined);
@@ -409,14 +410,14 @@ async function watchShare() {
   for (const q of r) {
     if (shareAsked.has(q.id)) continue;
     shareAsked.add(q.id);
-    const how = await choiceDialog(`"${q.name}" wants to join "${q.what || curInfo()?.name || "this memory"}"`,
-      `They used your invite (${q.role === "view" ? "Can view" : "Can edit"}). Let them in only if you sent it to them.`
+    const how = await choiceDialog(t("\"{0}\" wants to join \"{1}\"", q.name, q.what || curInfo()?.name || "this memory"),
+      `They used your invite (${q.role === "view" ? "Can view" : t("Can edit")}). Let them in only if you sent it to them.`
         + (q.safety ? ` Their safety code is "${q.safety}". Check it matches what they see.` : ""),
-      [["no", "Say no"], ["yes", "Let in", "primary"]], "Later");
+      [["no", t("Say no")], ["yes", t("Let in"), "primary"]], "Later");
     if (!how) { shareAsked.delete(q.id); continue; }
     try {
       await shareApi("shareanswer", { id: q.id, allow: how === "yes", ...(q.share ? { share: q.share } : {}) });
-      toastOk(how === "yes" ? `${q.name} is in. The files go to them now.` : "Said no.");
+      toastOk(how === "yes" ? `${q.name} is in. The files go to them now.` : t("Said no."));
     }
     catch (e) { toastErr(e.message); }
   }
@@ -424,17 +425,17 @@ async function watchShare() {
 
 async function openOtherFolder() {
   try {
-    const p = await pickFolder("Choose a locked notes folder");
+    const p = await pickFolder(t("Choose a locked notes folder"));
     if (!p) return;
     const j = await api("addfolder", { path: p });
     await refreshFolders();
-    toastOk(`Added "${j.folder.name}".`);
+    toastOk(t("Added \"{0}\".", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
 
 async function createNewFolder() {
-  const v = await createFolderForm(() => pickFolder("Choose where to put the new folder"));
+  const v = await createFolderForm(() => pickFolder(t("Choose where to put the new folder")));
   if (!v) return;
   try {
     toast("Making the folder");
@@ -442,27 +443,27 @@ async function createNewFolder() {
     await refreshFolders();
     await switchTo(j.folder.id);
     if (currentFolder() === j.folder.id) await unlockCurrent(v.password);
-    toastOk(`Created "${j.folder.name}".`);
+    toastOk(t("Created \"{0}\".", j.folder.name));
   } catch (e) { toastErr(e.message); }
 }
 
 async function renameFolder(id) {
   const info = (id && folderList.find((f) => f.id === id)) || curInfo();
   if (!info) return;
-  const v = await askText("Rename folder", info.name, "Rename", (x) => (x.trim() ? "" : "Name can't be empty."));
+  const v = await askText("Rename folder", info.name, t("Rename"), (x) => (x.trim() ? "" : t("Name can't be empty.")));
   if (v == null) return;
   try {
     const j = await api("renamefolder", { folder: info.id, name: v.trim() });
     await refreshFolders();
     if (j.folder && j.folder.warning) toastErr(j.folder.warning);
-    else if (j.folder && j.folder.github) toastOk(`Renamed. The GitHub repo is now ${j.folder.github}.`);
+    else if (j.folder && j.folder.github) toastOk(t("Renamed. The GitHub repo is now {0}.", j.folder.github));
   } catch (e) { toastErr(e.message); }
 }
 
 async function forgetFolder(id) {
   const info = (id && folderList.find((f) => f.id === id)) || curInfo();
   if (!info) return;
-  const ok = await confirmDialog(`Remove "${info.name}" from the list? Nothing is deleted. You can add it again later.`, "Remove from list", true);
+  const ok = await confirmDialog(t("Remove \"{0}\" from the list? Nothing is deleted. You can add it again later.", info.name), t("Remove from list"), true);
   if (!ok) return;
   const fid = info.id;
   try {
@@ -473,7 +474,7 @@ async function forgetFolder(id) {
   await refreshFolders();
   const next = folderList.find((f) => views.has(f.id) && hasPass(f.id)) || folderList[0];
   if (next) await switchTo(next.id); else { setFolder(null); showUnlock(); }
-  toast(`Removed "${info.name}" from the list.`);
+  toast(t("Removed \"{0}\" from the list.", info.name));
 }
 
 async function lockFolder(id) {
@@ -503,17 +504,17 @@ const touchTried = new Set(); // memories whose Touch ID ask already came up by 
 
 function drawUnlock() {
   const info = curInfo();
-  const kids = [knot(44), el("div", { class: "wordmark" }, "Phygital Memory")];
+  const kids = [knot(44), el("div", { class: "wordmark" }, t("Phygital Memory"))];
   const links = [];
   let list = null;
   if (info) {
-    const pw = el("input", { type: "password", placeholder: "Password", autocomplete: "off", "aria-label": "Password" });
-    const err = el("div", { class: "unlock-err" }, info.exists || (info.joined && info.syncthing) ? "" : "Can't find this memory. It may have moved, or its drive isn't connected.");
-    const btn = el("button", { class: "btn primary", type: "submit" }, "Unlock");
+    const pw = el("input", { type: "password", placeholder: t("Password"), autocomplete: "off", "aria-label": t("Password") });
+    const err = el("div", { class: "unlock-err" }, info.exists || (info.joined && info.syncthing) ? "" : t("Can't find this memory. It may have moved, or its drive isn't connected."));
+    const btn = el("button", { class: "btn primary", type: "submit" }, t("Unlock"));
     kids.push(el("div", { class: "unlock-folder" }, info.name));
     if (folderList.length > 1) {   // every memory on show beside the card: one click switches, no list to open
-      list = el("div", { class: "unlock-list", role: "list", "aria-label": "Your memories" },
-        el("div", { class: "ul-head" }, el("span", {}, "Your memories"), el("span", {}, String(folderList.length))),
+      list = el("div", { class: "unlock-list", role: "list", "aria-label": t("Your memories") },
+        el("div", { class: "ul-head" }, el("span", {}, t("Your memories")), el("span", {}, String(folderList.length))),
         ...folderList.map((f) => {
           const open = unlocked(f.id);
           return el("button", { class: "ul-mem" + (f.id === info.id ? " on" : ""), type: "button", role: "listitem", "aria-current": f.id === info.id ? "true" : null,
@@ -523,8 +524,8 @@ function drawUnlock() {
         }));
     }
     if (info.joined) {   // shared with this person: it opens with their own key, no password
-      const open = el("button", { class: "btn primary", type: "submit" }, "Open");
-      kids.push(el("div", { class: "unlock-sub" }, "Shared with you. It opens with your own key."), open, err);
+      const open = el("button", { class: "btn primary", type: "submit" }, t("Open"));
+      kids.push(el("div", { class: "unlock-sub" }, t("Shared with you. It opens with your own key.")), open, err);
       const tryOpen = async (e) => {
         e?.preventDefault();
         if (!e && (!document.body.contains(open) || currentFolder() !== info.id)) return;   // this screen is gone
@@ -537,7 +538,7 @@ function drawUnlock() {
             err.classList.add("hint");
             err.textContent = j.files || j.safety
               ? `Waiting for the owner to let you in. Your safety code is "${j.safety}". It should match what they see. Keep both apps open.`
-              : "Getting the files from the owner's Mac. Keep both apps open.";
+              : t("Getting the files from the owner's Mac. Keep both apps open.");
           }
           else {
             setPass(j.pass, info.id);
@@ -553,17 +554,17 @@ function drawUnlock() {
       if (info.syncthing) setTimeout(tryOpen, 300);   // once on screen: shows the safety code while waiting
       unlockEl._focus = () => open.focus();
     } else {
-      const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), "Unlock with Touch ID");
+      const touch = el("button", { class: "btn unlock-touch hidden", type: "button" }, icon("finger", 16, 1.8), t("Unlock with Touch ID"));
       let on = false, setUp = false;   // setUp: Touch ID pressed before it was on, so this password turns it on
       const viaTouch = async () => {
-        if (!on) { setUp = true; err.classList.add("hint"); err.textContent = "Type your password once. Next time, Touch ID."; pw.focus(); return; }
+        if (!on) { setUp = true; err.classList.add("hint"); err.textContent = t("Type your password once. Next time, Touch ID."); pw.focus(); return; }
         err.textContent = ""; touch.disabled = true;
         try { await unlockCurrent(TOUCH); } catch (x) { err.textContent = x.message; pw.focus(); }
         touch.disabled = false;
       };
       touch.addEventListener("click", viaTouch);
-      kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This memory is locked." : "Your notes are locked."), pw, btn, touch, err,
-        el("button", { class: "link-btn unlock-recover", type: "button", onclick: recoverWithKey }, "Forgot it? Use your recovery key"));
+      kids.push(el("div", { class: "unlock-sub" }, folderList.length > 1 ? "This memory is locked." : t("Your notes are locked.")), pw, btn, touch, err,
+        el("button", { class: "link-btn unlock-recover", type: "button", onclick: recoverWithKey }, t("Forgot it? Use your recovery key")));
       if (info.exists) api("touchidinfo", { folder: info.id }).then((j) => {
         if (!j.available || currentFolder() !== info.id || !touch.isConnected) return;
         on = j.on;
@@ -581,20 +582,21 @@ function drawUnlock() {
       unlockEl._focus = () => pw.focus();
     }
   } else {
-    kids.push(el("div", { class: "unlock-sub" }, "No memory yet. Open one or make a new one."));
+    kids.push(el("div", { class: "unlock-sub" }, t("No memory yet. Open one or make a new one.")));
     unlockEl._submit = (e) => e.preventDefault();
     unlockEl._focus = null;
   }
   if (backId && backId !== currentFolder() && views.has(backId)) {
     const b = folderList.find((f) => f.id === backId);
-    if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, `Back to ${b.name}`));
+    if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, t("Back to {0}", b.name)));
   }
   links.push(el("button", { class: "link-btn", type: "button", onclick: (e) => {
       const r = e.currentTarget.getBoundingClientRect();
       showMenu(openMenuItems(), r.left, r.bottom + 4);
-    } }, "Open memory"),
-    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New memory"));
-  kids.push(el("div", { class: "unlock-links" }, ...links));
+    } }, t("Open memory")),
+    el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, t("New memory")));
+  kids.push(el("div", { class: "unlock-links" }, ...links),
+    el("div", { class: "unlock-lang" }, languagePicker(() => drawUnlock())));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(unlockDrag, el("div", { class: "unlock-wrap" + (list ? " many" : "") }, form, list));
 }
@@ -613,7 +615,7 @@ function drawSwitcher() {
   if (!sbName) return;
   const info = curInfo();
   sbName.textContent = info ? info.name : "Phygital Memory";
-  sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : "No folder yet";
+  sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : t("No folder yet");
   sbPath.title = info ? info.path : "";
   sbTile.replaceChildren(knot(28));
   refreshBar();
@@ -639,7 +641,7 @@ async function openManage() {
 
 function buildApp() {
   sidebarEl = el("aside", { class: "sidebar" });
-  const resize = el("div", { class: "sb-resize", title: "Drag to resize" });
+  const resize = el("div", { class: "sb-resize", title: t("Drag to resize") });
   resize.addEventListener("pointerdown", (e) => {
     resize.setPointerCapture(e.pointerId);
     resize.classList.add("on");
@@ -656,11 +658,11 @@ function buildApp() {
     showMenu(SORTS.map(([k, t, hint]) => ({ label: t, hint, check: cur === k, fn: () => { setPref("sortMode", k); renderTree(); } })), r.left, r.bottom + 4);
   });
 
-  sbName = el("div", { class: "sb-name" }, "Phygital Memory");
+  sbName = el("div", { class: "sb-name" }, t("Phygital Memory"));
   sbPath = el("div", { class: "sb-folder" }, "");
   sbTile = el("div", { class: "sb-tile" });
-  sbBadge = el("span", { class: "fo-badge hidden", title: "Another folder is open in Finder" }, "Finder");
-  const sbHead = el("button", { class: "sb-head sb-switch", title: "Switch folder (⇧⌘O)", "aria-haspopup": "menu", onclick: openSwitcher },
+  sbBadge = el("span", { class: "fo-badge hidden", title: t("Another folder is open in Finder") }, t("Finder"));
+  const sbHead = el("button", { class: "sb-head sb-switch", title: t("Switch folder (⇧⌘O)"), "aria-haspopup": "menu", onclick: openSwitcher },
     sbTile,
     el("div", { class: "sb-titles" }, sbName, sbPath),
     sbBadge, el("span", { class: "sb-chev" }, icon("updown", 14)));
@@ -673,37 +675,37 @@ function buildApp() {
   treeEl.addEventListener("contextmenu", (e) => {
     if (e.target !== treeEl) return;
     e.preventDefault();
-    showMenu([{ label: "New note", fn: () => newNote("") }, { label: "New folder", fn: () => newFolder("") }, { sep: true },
-      { label: "Import", sub: [{ label: "Files", fn: () => importInto("", false) }, { label: "Folder", fn: () => importInto("", true) }] }], e.clientX, e.clientY);
+    showMenu([{ label: t("New note"), fn: () => newNote("") }, { label: t("New folder"), fn: () => newFolder("") }, { sep: true },
+      { label: t("Import"), sub: [{ label: t("Files"), fn: () => importInto("", false) }, { label: t("Folder"), fn: () => importInto("", true) }] }], e.clientX, e.clientY);
   });
   dropFromFinder(treeEl);
 
-  homeRowEl = el("div", { class: "row home-row", role: "button", tabindex: "0", title: "Home (⇧⌘H)", onclick: () => goHome() },
-    el("span", { class: "chev none" }, icon("chevron", 12, 2)), icon("home", 18), el("span", { class: "row-name" }, "Home"));
+  homeRowEl = el("div", { class: "row home-row", role: "button", tabindex: "0", title: t("Home (⇧⌘H)"), onclick: () => goHome() },
+    el("span", { class: "chev none" }, icon("chevron", 12, 2)), icon("home", 18), el("span", { class: "row-name" }, t("Home")));
   homeRowEl.addEventListener("keydown", (e) => { if (e.key === "Enter") goHome(); });
-  graphRowEl = el("div", { class: "row nav-graph", role: "button", tabindex: "0", title: "Graph view (⌘G)", onclick: () => openGraph() },
-    icon("graph", 18), el("span", { class: "row-name" }, "Graph"));
+  graphRowEl = el("div", { class: "row nav-graph", role: "button", tabindex: "0", title: t("Graph view (⌘G)"), onclick: () => openGraph() },
+    icon("graph", 18), el("span", { class: "row-name" }, t("Graph")));
   graphRowEl.addEventListener("keydown", (e) => { if (e.key === "Enter") openGraph(); });
   selBarEl = el("div", { class: "sel-bar hidden" });
-  finderBtn = el("button", { class: "icon-btn hidden", title: "Show in Finder", "aria-label": "Show in Finder", onclick: toggleFinder }, icon("folder", 17));
+  finderBtn = el("button", { class: "icon-btn hidden", title: t("Show in Finder"), "aria-label": t("Show in Finder"), onclick: toggleFinder }, icon("folder", 17));
 
   sidebarEl.append(
     el("div", { class: "win-drag", "data-tauri-drag-region": "" }),   // the window buttons sit here; drag the window by it
     sbHead,
     el("div", { class: "sb-home" }, homeRowEl, graphRowEl),
     el("div", { class: "sb-section" },
-      el("span", {}, "NOTES"),
+      el("span", {}, t("NOTES")),
       el("span", { class: "sb-actions" },
-        ib("plus", "New note", () => newNote()),
-        ib("folderplus", "New subfolder", () => newFolder()),
-        ib("collapse", "Collapse all", () => { state.open.clear(); renderTree(); }),
+        ib("plus", t("New note"), () => newNote()),
+        ib("folderplus", t("New subfolder"), () => newFolder()),
+        ib("collapse", t("Collapse all"), () => { state.open.clear(); renderTree(); }),
         sortBtn,
         ib("select", "Select", () => setSelecting(!state.selecting)))),
     selBarEl,
     treeEl,
     el("div", { class: "sb-foot" },
       statusBar(),
-      el("span", { class: "sb-foot-btns" }, ib("unlock", "Unlocked. Click to lock this folder", () => lockFolder()), ib("trash", "Trash", openTrashPanel), finderBtn, ib("gear", "Settings (⌘,)", openSettingsHere))),
+      el("span", { class: "sb-foot-btns" }, ib("unlock", t("Unlocked. Click to lock this folder"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -712,25 +714,25 @@ function buildApp() {
   paneHost = el("div", { class: "panes" });
   const empty = el("div", { class: "empty" },
     el("div", { class: "empty-card" }, icon("file", 28, 1.4),
-      el("div", { class: "empty-title" }, "Nothing open yet"),
-      el("div", { class: "empty-sub" }, "Pick a note on the left, or start a new one."),
+      el("div", { class: "empty-title" }, t("Nothing open yet")),
+      el("div", { class: "empty-sub" }, t("Pick a note on the left, or start a new one.")),
       emptySearch(),
       el("div", { class: "empty-actions" },
-        el("button", { class: "btn primary", onclick: () => newNote() }, icon("plus", 14, 2), "New note")),
-      el("div", { class: "empty-keys" }, "⌘N new · ⌘K find · ⌘G graph")));
+        el("button", { class: "btn primary", onclick: () => newNote() }, icon("plus", 14, 2), t("New note"))),
+      el("div", { class: "empty-keys" }, t("⌘N new · ⌘K find · ⌘G graph"))));
   paneHost.append(empty);
   paneHost._empty = empty;
 
   noteTools = el("div", { class: "note-tools hidden" },
-    el("button", { class: "icon-btn", title: "Undo (⌘Z)", "aria-label": "Undo", onclick: () => editAct("undo") }, icon("undo", 18)),
-    el("button", { class: "icon-btn", title: "Redo (⇧⌘Z)", "aria-label": "Redo", onclick: () => editAct("redo") }, icon("redo", 18)),
-    el("button", { class: "icon-btn", title: "Give AI a task with this note", "aria-label": "Give AI a task", onclick: giveToAI }, icon("sparkle", 18)),
-    el("button", { class: "icon-btn", title: "Version history", "aria-label": "Version history", onclick: toggleVersions }, icon("clock", 18)));
+    el("button", { class: "icon-btn", title: t("Undo (⌘Z)"), "aria-label": t("Undo"), onclick: () => editAct("undo") }, icon("undo", 18)),
+    el("button", { class: "icon-btn", title: t("Redo (⇧⌘Z)"), "aria-label": t("Redo"), onclick: () => editAct("redo") }, icon("redo", 18)),
+    el("button", { class: "icon-btn", title: t("Give AI a task with this note"), "aria-label": t("Give AI a task"), onclick: giveToAI }, icon("sparkle", 18)),
+    el("button", { class: "icon-btn", title: t("Version history"), "aria-label": t("Version history"), onclick: toggleVersions }, icon("clock", 18)));
   blPill = el("button", { class: "bl-pill hidden", onclick: toggleBacklinks });
   paneHost.append(statusEl, noteTools, blPill);
 
   // A small search bar beside the graph button: typing here opens the search page with what you typed.
-  const topSearchInput = el("input", { class: "top-search-input", type: "search", placeholder: "Search", spellcheck: "false", "aria-label": "Search notes" });
+  const topSearchInput = el("input", { class: "top-search-input", type: "search", placeholder: t("Search"), spellcheck: "false", "aria-label": t("Search notes") });
   topSearchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); const q = topSearchInput.value.trim(); topSearchInput.value = ""; topSearchInput.blur(); openSearchView(q); }
     else if (e.key === "Escape") { topSearchInput.value = ""; topSearchInput.blur(); }
@@ -739,10 +741,10 @@ function buildApp() {
     const q = topSearchInput.value;
     if (q.trim().length >= 2) { topSearchInput.value = ""; openSearchView(q); }
   });
-  const searchBtn = el("label", { class: "top-search", title: "Search every note (⇧⌘F)" },
-    icon("search", 14), topSearchInput, el("kbd", {}, "⇧⌘F"));
+  const searchBtn = el("label", { class: "top-search", title: t("Search every note (⇧⌘F)") },
+    icon("search", 14), topSearchInput, el("kbd", {}, t("⇧⌘F")));
   appEl.replaceChildren(sidebarEl, el("main", { class: "main" }, el("div", { class: "tabbar" }, tabsEl,
-    el("button", { class: "tab-plus", title: "New note (⌘N)", "aria-label": "New note", onclick: () => newNote() }, icon("plus", 17)),
+    el("button", { class: "tab-plus", title: t("New note (⌘N)"), "aria-label": t("New note"), onclick: () => newNote() }, icon("plus", 17)),
     el("span", { class: "tabbar-gap", "data-tauri-drag-region": "" }), searchBtn), paneHost));
 }
 
@@ -757,7 +759,7 @@ async function enterApp() {
   await loadFiles();
   renderTabs();
   loadLinks();
-  checkFinder(true).then(() => {   // "Desktop icon when unlocked" (on by default, in Settings): no Finder window
+  checkFinder(true).then(() => {   // t("Desktop icon when unlocked") (on by default, in Settings): no Finder window
     if (settings().desktopIcon && finder.available && !finder.shown && loadedFolder === currentFolder()) desktopIcon();
   });
   goHome();
@@ -773,7 +775,7 @@ function preloadGraph() {
   pregraph = null;
   setTimeout(() => {
     if (loadedFolder !== fid || state.tabs.some((t) => t.kind === "graph")) return;
-    const tab = { path: GRAPH_ID, title: "Graph", kind: "graph", dirty: false, sig: "", folder: fid };
+    const tab = { path: GRAPH_ID, title: t("Graph"), kind: "graph", dirty: false, sig: "", folder: fid };
     makeGraphPane(tab);
     pregraph = tab;
     loadGraph(tab);
@@ -787,7 +789,7 @@ function toggleHidden() {
   setPref("showHidden", !getPref("showHidden", false));
   state.files = visibleFiles();
   renderTree();
-  toast(getPref("showHidden", false) ? "Showing hidden files" : "Hidden files hidden");
+  toast(getPref("showHidden", false) ? "Showing hidden files" : t("Hidden files hidden"));
 }
 
 async function loadFiles() {
@@ -808,8 +810,8 @@ function tellConflict(path, copy) {
   const key = currentFolder() + ":" + copy;
   if (toldConflicts.has(key)) return;
   toldConflicts.add(key);
-  toast(`"${label(path)}" was changed in two places. Both versions are kept: the other one is "${label(copy)}".`);
-  if (state.active && state.active.path === path) flashStatus("Kept both versions", "warn");
+  toast(t("\"{0}\" was changed in two places. Both versions are kept: the other one is \"{1}\".", label(path), label(copy)));
+  if (state.active && state.active.path === path) flashStatus(t("Kept both versions"), "warn");
 }
 
 async function loadLinks() {
@@ -842,7 +844,7 @@ function drawFinder() {
   if (!finderBtn) return;
   finderBtn.classList.toggle("hidden", !finder.available);
   finderBtn.classList.toggle("on", finder.shown);
-  finderBtn.title = finder.shown ? "Close the Finder folder" : "Show in Finder";
+  finderBtn.title = finder.shown ? "Close the Finder folder" : t("Show in Finder");
   clearInterval(finderTimer); finderTimer = null;
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
 }
@@ -856,14 +858,14 @@ async function openSettingsHere() {
     let n = (await api("myname")).name;
     me = { name: n, set: async (v) => { try { n = (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); } return n; } };
     const ap = await api("approverinfo");
-    me.approver = { label: !ap.set ? "Not set up yet" : ap.kind === "chip" ? "Touch ID (security chip)" : "Approval password",
+    me.approver = { label: !ap.set ? "Not set up yet" : ap.kind === "chip" ? "Touch ID (security chip)" : t("Approval password"),
       signed: ap.signed, setUp: ap.set ? null : () => setUpApprover(ap.chip) };
     me.macs = { list: (await api("mymacs")).macs, link: linkOtherMac };
     me.licenses = async () => { try { showLicenses((await api("licenses")).text); } catch (e) { toastErr(e.message); } };
   } catch {}
   openSettings(info && unlocked(info.id) ? {
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
-      const password = v ? await askPassword("Your password, once, to unlock with Touch ID from now on", "Turn on") : "";
+      const password = v ? await askPassword(t("Your password, once, to unlock with Touch ID from now on"), t("Turn on")) : "";
       if (v && !password) return false;
       try { return (await api("touchid", { on: v, password })).on; } catch (e) { toastErr(e.message); return !v; }
     } } : null,
@@ -874,7 +876,7 @@ async function openSettingsHere() {
     revealVault: info.cloudOnly ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     aiHidden: !!info.aiHidden,
     recoveryKey: async () => {
-      const password = await askPassword("Your password, to show the recovery key", "Show");
+      const password = await askPassword(t("Your password, to show the recovery key"), t("Show"));
       if (!password) return;
       try { showRecoveryKey((await api("recoverykey", { password })).words); } catch (e) { toastErr(e.message); }
     },
@@ -925,10 +927,10 @@ async function watchAllow() {
     asked.add(req.id);
     let folders = [];
     try { folders = (await api("aiapps")).folders || []; } catch {}
-    const v = await allowDialog(req.name, folders);
+    const v = await allowDialog(req.name, folders, req.who);
     try {
       await api("allowanswer", { id: req.id, ...v });
-      if (v.allow) toastOk(`“${req.name}” can use your notes now. Change it any time in Settings › AI apps.`);
+      if (v.allow) toastOk(t("“{0}” can use your notes now. Change it any time in Settings › AI apps.", req.name));
       document.dispatchEvent(new Event("ai-apps-changed"));
     } catch (e) { toastErr(e.message); }
   }
@@ -955,7 +957,7 @@ async function refreshBar() {
   try { b = await api("bar"); } catch { return; }
   barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 16, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
-  barEls.cloud.title = (b.cloudOnly ? `Stored in ${b.cloud} only` : b.cloud ? `Stored on this Mac and in ${b.cloud}` : "Stored on this Mac only")
+  barEls.cloud.title = (b.cloudOnly ? `Stored in ${b.cloud} only` : b.cloud ? `Stored on this Mac and in ${b.cloud}` : t("Stored on this Mac only"))
     + (b.backup ? `. Backed up to ${b.backup}` : "") + ". Encrypted: only you can read it, with your password.";
   const h = b.cloudHealth;   // a cloud memory whose cloud refuses saves (full): say so once, keep the icon amber
   barEls.cloud.classList.toggle("warn", !!(h && h.problem));
@@ -979,7 +981,7 @@ function drawAI() {
   const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
   barEls.ai.title = "AI: tasks and activity\n"
     + (openTasks ? `${openTasks} task${openTasks === 1 ? "" : "s"} waiting\n` : "No tasks waiting\n")
-    + (aiApps.length ? "Using your notes: " + aiApps.map((a) => `${a.name}, ${ago(a.ago)}`).join("; ") : "No AI app is using your notes right now.");
+    + (aiApps.length ? t("Using your notes: ") + aiApps.map((a) => `${a.name}, ${ago(a.ago)}`).join("; ") : t("No AI app is using your notes right now."));
   barEls.ai.setAttribute("aria-label", openTasks ? `AI, ${openTasks} tasks waiting` : "AI");
 }
 
@@ -990,9 +992,9 @@ async function moveToCloud(info) {
   const v = await openCloud({ clouds, move: { name: info.name }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
   if (!v) return false;
   if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-  toast(`Locking "${info.name}" and uploading its encrypted files`);
+  toast(t("Locking \"{0}\" and uploading its encrypted files", info.name));
   await api("tocloud", { folder: info.id, conn: v.conn, parent: v.move.parent });
-  toastOk(`"${info.name}" now lives in your cloud. Unlock it again to keep working.`);
+  toastOk(t("\"{0}\" now lives in your cloud. Unlock it again to keep working.", info.name));
   return true;
 }
 
@@ -1006,11 +1008,11 @@ async function openStoragePanel() {
     name: info.name, storage,
     pick: (prompt, start) => pickFolder(prompt, start),
     move: async (parent, label) => {
-      if (!await confirmDialog(`Move "${info.name}" to ${label}? It locks first, then moves.`, "Move", false)) return false;
+      if (!await confirmDialog(t("Move \"{0}\" to {1}? It locks first, then moves.", info.name, label), t("Move"), false)) return false;
       await saveAll();
       if (storage.webdav) await api("stopwebdav");
       await api("movefolder", { parent });
-      toastOk(`Moved to ${label}. Unlock it to keep working.`);
+      toastOk(t("Moved to {0}. Unlock it to keep working.", label));
       return true;
     },
     toMac: async (parent, label, keepSync) => {
@@ -1020,7 +1022,7 @@ async function openStoragePanel() {
       await saveAll();
       toast("Downloading the encrypted files");
       await api("tomac", { parent, keepSync });
-      toastOk(`Done. Unlock "${info.name}" to keep working.`);
+      toastOk(t("Done. Unlock \"{0}\" to keep working.", info.name));
       return true;
     },
     toWebdav: async () => {
@@ -1030,29 +1032,29 @@ async function openStoragePanel() {
       if (!v) return false;
       toast("Uploading the encrypted files");
       await api("towebdav", { conn: v.conn, parent: v.move.parent });
-      toastOk(`"${info.name}" now stays in sync with WebDAV.`);
+      toastOk(t("\"{0}\" now stays in sync with WebDAV.", info.name));
       return true;
     },
     toCloudOnly: async () => {
       if (storage.webdav) {   // already on the server: the Mac copy goes, after a last sync
-        if (!await confirmDialog(`Keep "${info.name}" on WebDAV only? The copy on this Mac goes to the Trash after a last sync.`, "WebDAV only", false)) return false;
+        if (!await confirmDialog(t("Keep \"{0}\" on WebDAV only? The copy on this Mac goes to the Trash after a last sync.", info.name), t("WebDAV only"), false)) return false;
         await saveAll();
         await api("tocloud", { conn: {}, parent: "" });
-        toastOk(`"${info.name}" now opens from WebDAV. Unlock it to keep working.`);
+        toastOk(t("\"{0}\" now opens from WebDAV. Unlock it to keep working.", info.name));
         return true;
       }
       return "tocloud";
     },
     stopWebdav: async () => {
-      if (!await confirmDialog(`Stop syncing "${info.name}" with WebDAV? Your notes stay on this Mac. The copy on the server stays until you delete it.`, "Stop syncing", true)) return false;
+      if (!await confirmDialog(t("Stop syncing \"{0}\" with WebDAV? Your notes stay on this Mac. The copy on the server stays until you delete it.", info.name), t("Stop syncing"), true)) return false;
       await api("stopwebdav");
       return true;
     },
     stopGithub: async (repo) => {
-      if (!await confirmDialog(`Stop the GitHub backup? Your notes don't change. The repo ${repo} stays on GitHub until you delete it.`, "Stop backup", true)) return false;
+      if (!await confirmDialog(t("Stop the GitHub backup? Your notes don't change. The repo {0} stays on GitHub until you delete it.", repo), t("Stop backup"), true)) return false;
       await api("stopgithub");
       refreshBar();
-      if (await confirmDialog("Backup stopped. Open the repo on GitHub to delete it?", "Open on GitHub", false)) await api("openrepo", { repo });
+      if (await confirmDialog(t("Backup stopped. Open the repo on GitHub to delete it?"), t("Open on GitHub"), false)) await api("openrepo", { repo });
       return true;
     },
     toGithub: async () => {
@@ -1061,14 +1063,14 @@ async function openStoragePanel() {
         account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
         if (!account) return false;
       }
-      if (!await confirmDialog(`Back up "${info.name}" to a new private repo on GitHub (${account})? Only encrypted files go up.`, "Back up", false)) return false;
+      if (!await confirmDialog(t("Back up \"{0}\" to a new private repo on GitHub ({1})? Only encrypted files go up.", info.name, account), t("Back up"), false)) return false;
       toast("Making the private repo and uploading");
       const j = await api("togithub");
       if (j.existing) {   // backed up before, then stopped: that repo is still on GitHub
-        if (!await confirmDialog(`"${info.name}" already has a repo on GitHub: ${j.existing}. Use it again? If a note differs, both versions are kept.`, "Use it again", false)) return false;
+        if (!await confirmDialog(t("\"{0}\" already has a repo on GitHub: {1}. Use it again? If a note differs, both versions are kept.", info.name, j.existing), t("Use it again"), false)) return false;
         await api("togithub", { reuse: j.existing });
       }
-      toastOk("Backed up to GitHub. It updates a few seconds after each change.");
+      toastOk(t("Backed up to GitHub. It updates a few seconds after each change."));
       refreshBar();
       return true;
     },
@@ -1077,21 +1079,21 @@ async function openStoragePanel() {
       if (!v) return false;
       toast("Uploading the encrypted files");
       await api("tos3", { conn: v.conn, bucket: v.bucket });
-      toastOk("Backed up. It updates a few seconds after each change.");
+      toastOk(t("Backed up. It updates a few seconds after each change."));
       return true;
     },
     stopS3: async () => {
-      if (!await confirmDialog("Stop the Amazon S3 or Cloudflare R2 backup?", "Stop backup", true, "Your notes don't change. What's in the bucket stays until you delete it there.")) return false;
+      if (!await confirmDialog(t("Stop the Amazon S3 or Cloudflare R2 backup?"), t("Stop backup"), true, t("Your notes don't change. What's in the bucket stays until you delete it there."))) return false;
       await api("stops3");
       return true;
     },
     saveBackup: async () => {
       await saveAll();
       const j = await api("savebackup");
-      if (!j.cancelled) toastOk(`Saved "${j.name}" (${(j.size / 1e6).toFixed(1)} MB), encrypted.`);
+      if (!j.cancelled) toastOk(t("Saved \"{0}\" ({1} MB), encrypted.", j.name, (j.size / 1e6).toFixed(1)));
       return false;   // the window stays open
     },
-    download: async () => { const j = await api("download"); toastOk(`Downloading ${j.asked} file${j.asked === 1 ? "" : "s"}.`); },
+    download: async () => { const j = await api("download"); toastOk(t("Downloading {0} file{1}.", j.asked, j.asked === 1 ? "" : "s")); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
   });
   if (result === "tocloud") {   // the panel closes first, then the cloud steps
@@ -1109,7 +1111,7 @@ async function openTrashPanel() {
     restore: async (id) => {
       const j = await api("trashrestore", { id });
       await loadFiles(); loadLinks();
-      toastOk(`Restored "${label(j.path)}".`);
+      toastOk(t("Restored \"{0}\".", label(j.path)));
       return { path: j.path, items: (await api("trashlist")).items || [] };
     },
     open: (p) => openPath(p),
@@ -1121,15 +1123,15 @@ async function openTrashPanel() {
 function copyPathMenu(path, anchor) {
   const r = anchor.getBoundingClientRect();
   const copy = (text, what) => navigator.clipboard.writeText(text)
-    .then(() => toastOk(`${what} copied`)).catch(() => toastErr("Couldn't copy."));
+    .then(() => toastOk(t("{0} copied", what))).catch(() => toastErr(t("Couldn't copy.")));
   const name = path.split("/").pop().replace(/\.md$/i, "");
   const items = [
-    { label: "Copy path", hint: path, fn: () => copy(path, "Path") },
-    { label: "Copy link", hint: `[[${name}]]`, fn: () => copy(`[[${name}]]`, "Link") },
+    { label: t("Copy path"), hint: path, fn: () => copy(path, "Path") },
+    { label: t("Copy link"), hint: `[[${name}]]`, fn: () => copy(`[[${name}]]`, "Link") },
   ];
   if (finder.shown && finder.where) {
     const full = `${finder.where}/${path}`;
-    items.push({ label: "Copy Finder path", hint: shortPath(full), fn: () => copy(full, "Finder path") });
+    items.push({ label: t("Copy Finder path"), hint: shortPath(full), fn: () => copy(full, t("Finder path")) });
   }
   showMenu(items, r.left, r.bottom + 4);
 }
@@ -1146,7 +1148,7 @@ async function revealInFinder(path) {
 async function toggleFinder() {
   if (finder.shown) { hideFinder(); return; }
   if (!finder.confirmed) {
-    const ok = await confirmDialog("While it's open in Finder, any app on this Mac can read your notes, AI apps too. It closes when you lock.", "Show in Finder", false);
+    const ok = await confirmDialog(t("While it's open in Finder, any app on this Mac can read your notes, AI apps too. It closes when you lock."), t("Show in Finder"), false);
     if (!ok) return;
     finder.confirmed = true;
   }
@@ -1157,7 +1159,7 @@ async function toggleFinder() {
     const s = await api("finder", { do: "show" });
     if (fid !== loadedFolder) { refreshFolders(); return; }
     finder.shown = !!s.shown; finder.where = s.where || "";
-    if (finder.shown) toastOk("Opened in Finder."); else toastErr("Couldn't open Finder.");
+    if (finder.shown) toastOk(t("Opened in Finder.")); else toastErr(t("Couldn't open Finder."));
   } catch (e) { toastErr(e.message); }
   finderBtn.disabled = false;
   drawFinder();
@@ -1206,9 +1208,9 @@ async function syncFromDisk() {
 // ---------- tree ----------
 let dragPath = null;
 const SORTS = [
-  ["recent", "Recently modified", "Newest edits first"],
-  ["az", "Name A–Z", "Alphabetical"],
-  ["za", "Name Z–A", "Reverse alphabetical"],
+  ["recent", t("Recently modified"), t("Newest edits first")],
+  ["az", t("Name A–Z"), "Alphabetical"],
+  ["za", t("Name Z–A"), t("Reverse alphabetical")],
 ];
 
 function buildTree(files = state.files.filter((f) => !isDot(f.path))) {   // hidden files live in Hidden Notes
@@ -1277,10 +1279,10 @@ function renderTree() {
   if (roots.length) {
     const open = state.open.has(HIDDEN_GROUP);
     rows.push(el("div", { class: "tree-gap", "aria-hidden": "true" }),
-      el("div", { class: "row hidden-group", role: "treeitem", style: "padding-left:8px", title: "Hidden files from anywhere in this memory. They stay in their own places.",
+      el("div", { class: "row hidden-group", role: "treeitem", style: "padding-left:8px", title: t("Hidden files from anywhere in this memory. They stay in their own places."),
                   onclick: () => { open ? state.open.delete(HIDDEN_GROUP) : state.open.add(HIDDEN_GROUP); renderTree(); } },
         el("span", { class: "chev" + (open ? " open" : "") }, icon("chevron", 12, 2)), icon("folder", 18),
-        el("span", { class: "row-name" }, "Hidden Notes"), el("span", { class: "row-where" }, String(roots.length))));
+        el("span", { class: "row-name" }, t("Hidden Notes")), el("span", { class: "row-where" }, String(roots.length))));
     if (open) for (const n of sortKids(roots, "")) {
       rows.push(rowFor(n, 1, dirOf(n.path)));
       state.visible.push(n.path);
@@ -1308,13 +1310,13 @@ function drawSelBar() {
   const show = state.selecting || state.sel.size > 0;
   selBarEl.classList.toggle("hidden", !show);
   if (!show) return;
-  const trash = el("button", { class: "btn small danger", disabled: !state.sel.size, title: "Move to trash", onclick: () => trashMany([...state.sel]) }, "Trash");
+  const trash = el("button", { class: "btn small danger", disabled: !state.sel.size, title: t("Move to trash"), onclick: () => trashMany([...state.sel]) }, t("Trash"));
   selBarEl.replaceChildren(
     el("span", { class: "sel-count" }, state.sel.size ? `${state.sel.size} selected` : "Select"),
     el("span", { class: "sel-btns" },
-      state.selecting ? el("button", { class: "btn small", onclick: () => { state.sel = new Set(state.visible.filter((p) => p)); renderTree(); } }, "All") : null,
+      state.selecting ? el("button", { class: "btn small", onclick: () => { state.sel = new Set(state.visible.filter((p) => p)); renderTree(); } }, t("All")) : null,
       trash,
-      el("button", { class: "btn small", onclick: () => setSelecting(false) }, "Done")));
+      el("button", { class: "btn small", onclick: () => setSelecting(false) }, t("Done"))));
 }
 
 function dropZone(e, row, n) {
@@ -1348,7 +1350,7 @@ function rowFor(n, depth, where = "") {
   const ic = folder ? icon("folder", 18) : icon(isImg(n.name) ? "image" : "file", 18);
   if (folder) { ic.classList.add("ic-fill"); ic.style.color = folderColor(n.path); }
   const pinned = getPref("pins", []).includes(n.path);
-  const more = el("button", { class: "row-more", title: "More", "aria-label": "More", onclick: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); rowMenu(n, r.left, r.bottom + 4); } }, icon("more", 15));
+  const more = el("button", { class: "row-more", title: t("More"), "aria-label": t("More"), onclick: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); rowMenu(n, r.left, r.bottom + 4); } }, icon("more", 15));
   const row = el("div", {
     class: "row" + (cur ? " active" : "") + (state.sel.has(n.path) ? " sel" : "") + (isDot(n.path) ? " dotfile" : ""), role: "treeitem", draggable: true, style: `padding-left:${8 + depth * 14}px`,
     onclick: (e) => {
@@ -1372,7 +1374,7 @@ function rowFor(n, depth, where = "") {
     oncontextmenu: (e) => {
       e.preventDefault();
       if (state.sel.size > 1 && state.sel.has(n.path)) {
-        showMenu([{ label: `Move ${state.sel.size} items to trash`, cls: "danger", fn: () => trashMany([...state.sel]) }], e.clientX, e.clientY);
+        showMenu([{ label: t("Move {0} items to trash", state.sel.size), cls: "danger", fn: () => trashMany([...state.sel]) }], e.clientX, e.clientY);
         return;
       }
       if (state.sel.size) { state.sel.clear(); renderTree(); }
@@ -1386,9 +1388,9 @@ function rowFor(n, depth, where = "") {
   ic,
   el("span", { class: "row-name" }, folder || !isMd(n.name) ? n.name : label(n.name)),
   where ? el("span", { class: "row-where", title: where }, where) : null,
-  pinned ? el("span", { class: "row-pin", title: "Pinned" }, icon("pin", 11, 2)) : null,
-  (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: "Private for AI: it asks first" }, icon("lock", 11, 2)) : null,
-  state.shared?.[n.path] ? el("span", { class: "row-pin row-shared", title: "Shared with " + state.shared[n.path] }, icon("share", 11, 2)) : null,
+  pinned ? el("span", { class: "row-pin", title: t("Pinned") }, icon("pin", 11, 2)) : null,
+  (state.aiPrivate || []).includes(n.path) ? el("span", { class: "row-pin", title: t("Private for AI: it asks first") }, icon("lock", 11, 2)) : null,
+  state.shared?.[n.path] ? el("span", { class: "row-pin row-shared", title: t("Shared with ") + state.shared[n.path] }, icon("share", 11, 2)) : null,
   more);
   row._node = n;   // files dragged in from Finder find their folder through this
   row.addEventListener("dragover", (e) => {
@@ -1414,19 +1416,19 @@ function clearDropMarks() { document.querySelectorAll(".row.drop,.row.drop-befor
 // Sharing changes are approved with the person's own key (Phygital Key): Touch ID through this Mac's security chip,
 // or an approval password. Set up once, the first time; then each change asks for the fingerprint or the password.
 async function setUpApprover(chip) {
-  const how = chip ? await choiceDialog("Approve sharing with Touch ID?",
-    "Letting someone in, adding, removing or forgetting a person will ask for your fingerprint, and the app keeps a signed record of each yes (Phygital Key). The key stays in this Mac's security chip.",
-    [["password", "Use a password"], ["chip", "Use Touch ID", "primary"]]) : "password";
+  const how = chip ? await choiceDialog(t("Approve sharing with Touch ID?"),
+    t("Letting someone in, adding, removing or forgetting a person will ask for your fingerprint, and the app keeps a signed record of each yes (Phygital Key). The key stays in this Mac's security chip."),
+    [["password", t("Use a password")], ["chip", t("Use Touch ID"), "primary"]]) : "password";
   if (!how) return false;
   try {
     if (how === "chip") { await api("approversetup", { kind: "chip" }); return true; }
-    const pw = await askPassword("Choose a password for approving sharing changes (12 or more characters)", "Next");
+    const pw = await askPassword(t("Choose a password for approving sharing changes (12 or more characters)"), t("Next"));
     if (!pw) return false;
-    if (pw.length < 12) { toastErr("Use at least 12 characters. A short sentence works well."); return false; }
-    const again = await askPassword("Type it again", "Save");
-    if (again !== pw) { toastErr("Those don't match."); return false; }
+    if (pw.length < 12) { toastErr(t("Use at least 12 characters. A short sentence works well.")); return false; }
+    const again = await askPassword(t("Type it again"), t("Save"));
+    if (again !== pw) { toastErr(t("Those don't match.")); return false; }
     await api("approversetup", { kind: "password", password: pw });
-    toastOk("Set. Sharing changes now ask for this password.");
+    toastOk(t("Set. Sharing changes now ask for this password."));
     return true;
   } catch (e) { toastErr(e.message); return false; }
 }
@@ -1475,17 +1477,17 @@ async function shareApi(action, body = {}) {
     try { return await api(action, body); }
     catch (e) {
       const d = e.data || {};
-      if (d.needApprover) { if (!(await setUpApprover(d.chip))) throw new Error("Not approved."); continue; }
+      if (d.needApprover) { if (!(await setUpApprover(d.chip))) throw new Error(t("Not approved.")); continue; }
       if (d.needPassword) {
-        const pw = await askPassword(`Approve: ${d.what}`, "Approve");
-        if (!pw) throw new Error("Not approved.");
+        const pw = await askPassword(t("Approve: {0}", d.what), t("Approve"));
+        if (!pw) throw new Error(t("Not approved."));
         body = { ...body, approverPassword: pw };
         continue;
       }
       throw e;
     }
   }
-  throw new Error("Not approved.");
+  throw new Error(t("Not approved."));
 }
 
 // What of this memory is shared, and with whom, for the right-click menu (owner only).
@@ -1502,28 +1504,28 @@ function sharingItem(path, sh) {
   const who = part ? part.who : [];
   const others = sh.people.filter((p) => !who.some((w) => w.id === p.id));
   const done = (msg) => () => { toastOk(msg); loadShared(); };
-  const add = (p) => ({ label: `Add ${p.name}`, sub: [["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t,
+  const add = (p) => ({ label: t("Add {0}", p.name), sub: [["edit", t("Can edit")], ["view", t("Can view")]].map(([r, t]) => ({ label: t,
     fn: () => shareApi("shareadd", { path, id: p.id, role: r }).then(done(`${p.name} can now ${r === "edit" ? "edit" : "view"} it. It shows up in their app by itself.`), (e) => toastErr(e.message)) })) });
-  const invite = { label: "Invite someone new", fn: () => openShareHere(path) };
+  const invite = { label: t("Invite someone new"), fn: () => openShareHere(path) };
   const above = !part && sh.parts.filter((p) => path.startsWith(p.path + "/") && p.who.length).sort((a, b) => b.path.length - a.path.length)[0];
   if (above) {   // inside a shared folder: it goes with it, managed there
     const top = above.path.split("/").pop();
-    return { label: "Sharing", cls: "mi-accent", value: `through ${top}`, sub: [
-      ...above.who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view" })),
-      { sep: true }, { label: `Manage in ${top}`, fn: () => openShareHere(above.path) }] };
+    return { label: t("Sharing"), cls: "mi-accent", value: `through ${top}`, sub: [
+      ...above.who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : t("Can view") })),
+      { sep: true }, { label: t("Manage in {0}", top), fn: () => openShareHere(above.path) }] };
   }
-  if (!part) return others.length ? { label: "Share", sub: [...others.map(add), { sep: true }, invite] } : { label: "Share", fn: () => openShareHere(path) };
-  return { label: "Sharing", cls: "mi-accent", value: who.length === 1 ? "1 person" : `${who.length} people`, sub: [
-    ...who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : "Can view", sub: [
-      ...[["edit", "Can edit"], ["view", "Can view"]].map(([r, t]) => ({ label: t, check: p.role === r,
+  if (!part) return others.length ? { label: t("Share"), sub: [...others.map(add), { sep: true }, invite] } : { label: t("Share"), fn: () => openShareHere(path) };
+  return { label: t("Sharing"), cls: "mi-accent", value: who.length === 1 ? "1 person" : `${who.length} people`, sub: [
+    ...who.map((p) => ({ label: p.name, value: p.role === "edit" ? "Can edit" : t("Can view"), sub: [
+      ...[["edit", t("Can edit")], ["view", t("Can view")]].map(([r, t]) => ({ label: t, check: p.role === r,
         fn: () => shareApi("sharerole", { path, id: p.id, role: r }).then(done(`${p.name}: ${t}.`), (e) => toastErr(e.message)) })),
       { sep: true },
-      { label: "Remove", cls: "danger", fn: async () => {
-        if (await confirmDialog(`Remove ${p.name} from "${path}"?`, "Remove", true, "Their own key stops working here."))
+      { label: t("Remove"), cls: "danger", fn: async () => {
+        if (await confirmDialog(t("Remove {0} from \"{1}\"?", p.name, path), t("Remove"), true, t("Their own key stops working here.")))
           shareApi("shareremove", { path, id: p.id }).then(done(`${p.name} removed.`), (e) => toastErr(e.message));
       } }] })),
     { sep: true }, ...others.map(add), invite,
-    { label: "Sharing window", fn: () => openShareHere(path) }] };
+    { label: t("Sharing window"), fn: () => openShareHere(path) }] };
 }
 
 // Shared folders and files get a small symbol in the sidebar: {path: "Ana, Tom"}.
@@ -1540,43 +1542,43 @@ async function rowMenu(n, x, y) {
   const items = [];
   if (folder) {
     items.push(
-      { label: "New note", fn: () => newNote(n.path) },
-      { label: "New folder", fn: () => newFolder(n.path) },
+      { label: t("New note"), fn: () => newNote(n.path) },
+      { label: t("New folder"), fn: () => newFolder(n.path) },
       { label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) },
-      { label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : "Private for AI", fn: () => toggleAiPrivate(n.path) },
+      { label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : t("Private for AI"), fn: () => toggleAiPrivate(n.path) },
       { sep: true },
-      { label: "Import", sub: [{ label: "Files", fn: () => importInto(n.path, false) }, { label: "Folder", fn: () => importInto(n.path, true) }] });
+      { label: t("Import"), sub: [{ label: t("Files"), fn: () => importInto(n.path, false) }, { label: t("Folder"), fn: () => importInto(n.path, true) }] });
   } else {
-    items.push({ label: "Open in new tab", fn: () => openPath(n.path) });
+    items.push({ label: t("Open in new tab"), fn: () => openPath(n.path) });
     items.push({ label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) });
-    items.push({ label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : "Private for AI", fn: () => toggleAiPrivate(n.path) });
-    if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : "Set as Home", fn: () => setHome(n.path) });
+    items.push({ label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : t("Private for AI"), fn: () => toggleAiPrivate(n.path) });
+    if (isMd(n.path)) items.push({ label: getPref("home") === n.path ? "Unset Home" : t("Set as Home"), fn: () => setHome(n.path) });
     items.push({ sep: true });
   }
   if (sh) items.push(sharingItem(n.path, sh));
   items.push(
-    { label: "Export", fn: () => exportPath(n.path) },
-    { label: "Show in Finder", fn: () => revealInFinder(n.path) },
-    { label: "Rename", fn: () => renameDialog(n) });
+    { label: t("Export"), fn: () => exportPath(n.path) },
+    { label: t("Show in Finder"), fn: () => revealInFinder(n.path) },
+    { label: t("Rename"), fn: () => renameDialog(n) });
   if (folder) {
     const own = colorsPref()[n.path];
     const swatch = (c) => el("button", { class: "swatch" + ((c ? own === c : !own) ? " on" : "") + (c ? "" : " auto"), style: c ? `background:${c}` : null,
-      title: c ? "Colour" : "Auto colour", "aria-label": c ? "Colour " + c : "Auto colour",
+      title: c ? "Colour" : t("Auto colour"), "aria-label": c ? t("Colour ") + c : t("Auto colour"),
       onclick: () => { closeMenu(); setMapPref("colors", n.path, c); renderTree(); } });
-    const colourRow = el("div", { class: "menu-item mi-colour", role: "group", "aria-label": "Colour" },
-      el("span", { class: "mi-main" }, "Colour"), el("span", { class: "swatches" }, ...PALETTE.map(swatch), swatch(null)));
+    const colourRow = el("div", { class: "menu-item mi-colour", role: "group", "aria-label": t("Colour") },
+      el("span", { class: "mi-main" }, t("Colour")), el("span", { class: "swatches" }, ...PALETTE.map(swatch), swatch(null)));
     const mode = folderMode(n.path), ownSort = getPref("folderSort", {})[n.path], manual = (getPref("order", {})[n.path] || []).length;
     items.push(
       { sep: true },
-      { label: "Sort by", value: ownSort ? SORTS.find(([k]) => k === ownSort)?.[1] : "Default", sub: [
+      { label: t("Sort by"), value: ownSort ? SORTS.find(([k]) => k === ownSort)?.[1] : "Default", sub: [
         ...SORTS.map(([k, t, hint]) => ({ label: t, hint, check: mode === k, fn: () => { setMapPref("folderSort", n.path, k); setMapPref("order", n.path, null); renderTree(); } })),
-        ...(ownSort ? [{ sep: true }, { label: "Use the default sort", fn: () => { setMapPref("folderSort", n.path, null); renderTree(); } }] : []),
-        ...(manual ? [{ sep: true }, { label: "Reset dragged order", fn: () => { setMapPref("order", n.path, null); renderTree(); } }] : []),
+        ...(ownSort ? [{ sep: true }, { label: t("Use the default sort"), fn: () => { setMapPref("folderSort", n.path, null); renderTree(); } }] : []),
+        ...(manual ? [{ sep: true }, { label: t("Reset dragged order"), fn: () => { setMapPref("order", n.path, null); renderTree(); } }] : []),
       ] },
       { node: colourRow },
       { sep: true });
   }
-  items.push({ label: "Move to trash", cls: "danger", fn: () => trashDialog(n) });
+  items.push({ label: t("Move to trash"), cls: "danger", fn: () => trashDialog(n) });
   showMenu(items, x, y);
 }
 
@@ -1626,8 +1628,8 @@ async function addToMemory({ dir = "", entries = null, start = null }) {
   let files = null, token = null;
   if (entries) {
     files = [];
-    try { for (const en of entries) await readDropped(en, "", files); } catch { toastErr("Couldn't read what was dropped."); return; }
-    if (!files.length) { toastErr("Nothing to add: only hidden files or empty folders."); return; }
+    try { for (const en of entries) await readDropped(en, "", files); } catch { toastErr(t("Couldn't read what was dropped.")); return; }
+    if (!files.length) { toastErr(t("Nothing to add: only hidden files or empty folders.")); return; }
   }
   const count = (n) => `${n} file${n === 1 ? "" : "s"}`;
   const dropLabel = files && (entries.length === 1 && entries[0].isDirectory ? `The folder "${entries[0].name}" (${count(files.length)})`
@@ -1647,7 +1649,7 @@ async function addToMemory({ dir = "", entries = null, start = null }) {
   const into = v.how === "ai" ? "Inbox" : v.dir;
   let added = [];
   if (files) {
-    toast(`Adding ${count(files.length)}`);
+    toast(t("Adding {0}", count(files.length)));
     for (const f of files) {
       try { added.push(await uploadStream((into ? into + "/" : "") + f.rel, f.file)); } catch (e) { toastErr(`${baseName(f.rel)}: ${e.message}`); }
     }
@@ -1677,7 +1679,7 @@ async function exportPath(path) {
   try {
     const j = await api("export", { path });
     if (j.cancelled) return;
-    toastOk(`Exported "${label(path)}". That copy is not encrypted.`);
+    toastOk(t("Exported \"{0}\". That copy is not encrypted.", label(path)));
   } catch (e) { toastErr(e.message); }
 }
 
@@ -1701,15 +1703,15 @@ function togglePin(path) {
 }
 function setHome(path) {
   if (getPref("home") === path) { setPref("home", null); toast("Home is back to the built-in page."); }
-  else { setPref("home", path); toastOk(`"${label(path)}" is now Home.`); }
+  else { setPref("home", path); toastOk(t("\"{0}\" is now Home.", label(path))); }
   renderTree(); refreshHome();
 }
 
 // ---------- file operations ----------
 function validName(name) {
-  if (!name.trim()) return "Name can't be empty.";
+  if (!name.trim()) return t("Name can't be empty.");
   if (BAD_NAME.test(name)) return 'Names can\'t have / \\ : * ? " < > |';
-  if (name.trim().startsWith(".")) return "Name can't start with a dot.";
+  if (name.trim().startsWith(".")) return t("Name can't start with a dot.");
   return "";
 }
 
@@ -1739,7 +1741,7 @@ async function moveInto(from, folder) {
   if (folder === from || folder.startsWith(from + "/")) return;
   if (dirOf(from) === folder) return;
   const to = join(folder, baseName(from));
-  if (exists(to)) { toastErr(`"${baseName(from)}" already exists there.`); return; }
+  if (exists(to)) { toastErr(t("\"{0}\" already exists there.", baseName(from))); return; }
   try { await moveItem(from, to); if (folder) state.open.add(folder); renderTree(); } catch (e) { toastErr(e.message); }
 }
 
@@ -1757,13 +1759,13 @@ async function renameTo(n, input) {
 
 async function renameDialog(n) {
   const isNote = n.kind !== "folder" && isMd(n.path);
-  const v = await askText("Rename", isNote ? label(n.path) : baseName(n.path), "Rename", (val) => validName(val));
+  const v = await askText("Rename", isNote ? label(n.path) : baseName(n.path), t("Rename"), (val) => validName(val));
   if (v == null) return;
   try { await renameTo(n, v); } catch (e) { toastErr(e.message); }
 }
 
 async function trashDialog(n) {
-  const ok = await confirmDialog(`Move "${isMd(n.name) ? label(n.name) : n.name}" to trash?`, "Move to trash", true, "You can restore it from Trash for 7 days.");
+  const ok = await confirmDialog(t("Move \"{0}\" to trash?", isMd(n.name) ? label(n.name) : n.name), t("Move to trash"), true, t("You can restore it from Trash for 7 days."));
   if (!ok) return;
   await doTrash([n.path]);
 }
@@ -1773,14 +1775,14 @@ async function trashMany(paths) {
   const top = paths.filter((p) => !paths.some((q) => q !== p && p.startsWith(q + "/")));
   const name = (p) => isMd(p) ? label(p) : baseName(p);
   const list = top.slice(0, 5).map(name).join(", ") + (top.length > 5 ? ` and ${top.length - 5} more` : "");
-  if (!await confirmDialog(`Move ${top.length === 1 ? `"${name(top[0])}"` : `${top.length} items`} to the trash?`, "Move to trash", true,
-    `${top.length === 1 ? "" : list + ". "}You can restore them from Trash for 7 days.`)) return;
+  if (!await confirmDialog(top.length === 1 ? t("Move \"{0}\" to the trash?", name(top[0])) : t("Move {0} items to the trash?", top.length),
+    t("Move to trash"), true, (top.length === 1 ? "" : list + ". ") + t("You can restore them from Trash for 7 days."))) return;
   const folders = top.filter((p) => state.files.some((f) => f.path === p && f.kind === "folder"));
   const inside = state.files.filter((f) => f.kind === "file" && folders.some((d) => f.path.startsWith(d + "/"))).length;
   if (folders.length || top.length > 10) {
     const what = [folders.length && `${folders.length} folder${folders.length === 1 ? "" : "s"} with ${inside} file${inside === 1 ? "" : "s"} inside`,
       top.length - folders.length && `${top.length - folders.length} more item${top.length - folders.length === 1 ? "" : "s"}`].filter(Boolean).join(", and ");
-    if (!await confirmDialog("Are you sure?", "Yes, move to trash", true, `This moves ${what}.`)) return;
+    if (!await confirmDialog(t("Are you sure?"), t("Yes, move to trash"), true, t("This moves {0}.", what))) return;
   }
   state.sel.clear();
   state.selecting = false;
@@ -1814,10 +1816,10 @@ async function newNote(dir = "", opts = {}) {
 }
 
 async function newFolder(dir = "") {
-  const v = await askText("New subfolder", "", "Create", (val) => validName(val));
+  const v = await askText("New subfolder", "", t("Create"), (val) => validName(val));
   if (v == null) return;
   const path = join(dir, v.trim());
-  if (exists(path)) { toastErr(`"${path}" already exists.`); return; }
+  if (exists(path)) { toastErr(t("\"{0}\" already exists.", path)); return; }
   try { await api("mkdir", { path }); if (dir) state.open.add(dir); await loadFiles(); } catch (e) { toastErr(e.message); }
 }
 
@@ -1837,10 +1839,10 @@ function findNote(target, cur) {
 async function followLink(target, tab) {
   const found = findNote(target, tab);
   if (found) return openPath(found);
-  const t = target.split("#")[0].trim().replace(/\.md$/i, "");
-  if (!t || BAD_NAME.test(t.replace(/\//g, ""))) { toastErr("Can't make a note with that name."); return; }
-  const ok = await confirmDialog(`No note called "${t}". Create it?`, "Create", false);
-  if (ok) newNote(dirOf(t), { name: baseName(t) + ".md" });
+  const want = target.split("#")[0].trim().replace(/\.md$/i, "");
+  if (!want || BAD_NAME.test(want.replace(/\//g, ""))) { toastErr(t("Can't make a note with that name.")); return; }
+  const ok = await confirmDialog(t("No note called \"{0}\". Create it?", want), t("Create"), false);
+  if (ok) newNote(dirOf(want), { name: baseName(want) + ".md" });
 }
 
 // ---------- tabs ----------
@@ -1848,7 +1850,7 @@ function withLoading(promise) {
   let sk = null;
   const timer = setTimeout(() => {
     paneHost._empty.classList.add("hidden");
-    sk = el("div", { class: "pane skeleton", "aria-busy": "true", "aria-label": "Opening note" },
+    sk = el("div", { class: "pane skeleton", "aria-busy": "true", "aria-label": t("Opening note") },
       el("div", { class: "note-col" }, el("div", { class: "sk-line sk-title" }),
         ...[92, 100, 84, 96, 60, 0, 88, 97, 72].map((w) => el("div", { class: "sk-line", style: w ? `width:${w}%` : "height:14px;background:none" }))));
     paneHost.append(sk);
@@ -1892,13 +1894,13 @@ function makeFileTab(path) {
   const body = el("div", { class: "file-view" });
   const pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, el("h1", { class: "img-title" }, baseName(path)), body));
   paneHost.append(pane);
-  const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, `Can't open this file: ${e.message}`)); };
+  const fail = (e) => { body.replaceChildren(el("p", { class: "file-note" }, t("Can't open this file: {0}", e.message))); };
   const tab = { path, kind: "image", make: "file", pane, dirty: false, folder: currentFolder() };
   if (tooBigToOpen(path)) {   // never pulled into the app whole: it opens from Finder, or as an exported copy
-    body.replaceChildren(el("p", { class: "file-note" }, "Over 25 MB, too big to open here. Open it from Finder or export a copy."),
+    body.replaceChildren(el("p", { class: "file-note" }, t("Over 25 MB, too big to open here. Open it from Finder or export a copy.")),
       el("div", { class: "sel-btns" },
-        el("button", { class: "btn", type: "button", onclick: () => revealInFinder(path) }, "Show in Finder"),
-        el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, "Export")));
+        el("button", { class: "btn", type: "button", onclick: () => revealInFinder(path) }, t("Show in Finder")),
+        el("button", { class: "btn", type: "button", onclick: () => exportPath(path) }, t("Export"))));
     return tab;
   }
   if (CSV.test(path) || TEXT_EXT.test(path) || /^\.[^.]/.test(baseName(path)) && !/\.(png|jpe?g|gif|webp|pdf|docx)$/i.test(path)) {
@@ -1919,8 +1921,8 @@ function makeFileTab(path) {
     body.replaceChildren(media);
   } else {
     body.replaceChildren(el("p", { class: "file-note" },
-      "This kind of file can't be previewed here. Open it in its own app, or use Show in Finder."),
-      el("button", { class: "btn small file-open", type: "button", onclick: () => openInApp(path) }, "Open in its app"));
+      t("This kind of file can't be previewed here. Open it in its own app, or use Show in Finder.")),
+      el("button", { class: "btn small file-open", type: "button", onclick: () => openInApp(path) }, t("Open in its app")));
   }
   return tab;
 }
@@ -1934,7 +1936,7 @@ function editableFile(tab, body, fail) {
     const tooBig = text.length > EDIT_MAX_CHARS || (csv && parseCsv(text, /\.tsv$/i.test(tab.path) ? "\t" : ",").length > CSV_EDIT_MAX_ROWS);
     if (tooBig) {
       tab.editable = false;
-      body.replaceChildren(el("div", { class: "file-ro" }, "Too big to edit here, shown read-only."),
+      body.replaceChildren(el("div", { class: "file-ro" }, t("Too big to edit here, shown read-only.")),
         csv ? csvTable(text, tab.path) : el("pre", { class: "file-text" }, text.slice(0, EDIT_MAX_CHARS)));
       return;
     }
@@ -1951,8 +1953,8 @@ function editableFile(tab, body, fail) {
   readFileForEdit(tab.path).then((text) => {
     if (text !== null) { tab.show(text); return; }
     tab.editable = false;   // not clean UTF-8: editing would damage it
-    readFileText(tab.path).then((t) => body.replaceChildren(el("div", { class: "file-ro" }, "This file isn't plain UTF-8 text, so it's shown read-only."),
-      csv ? csvTable(t, tab.path) : el("pre", { class: "file-text" }, t.slice(0, EDIT_MAX_CHARS)))).catch(fail);
+    readFileText(tab.path).then((text) => body.replaceChildren(el("div", { class: "file-ro" }, t("This file isn't plain UTF-8 text, so it's shown read-only.")),
+      csv ? csvTable(text, tab.path) : el("pre", { class: "file-text" }, text.slice(0, EDIT_MAX_CHARS)))).catch(fail);
   }).catch(fail);
 }
 
@@ -1976,7 +1978,7 @@ async function openInApp(path) {
     await toggleFinder();
     if (!finder.shown) return;
   }
-  try { await api("finder", { do: "openfile", path }); toastOk("Opened. Changes you save there go back into the locked folder."); }
+  try { await api("finder", { do: "openfile", path }); toastOk(t("Opened. Changes you save there go back into the locked folder.")); }
   catch (e) { toastErr(e.message); }
 }
 
@@ -2056,13 +2058,13 @@ async function makeNoteTab(path) {
   const j = await api("read", { path });
   const { fm, body } = parseFM(j.text || "");
   const tab = { path, kind: "note", folder: currentFolder(), base: j.text || "", fm, body, dirty: false, saving: false, ver: 0, timer: null, chain: Promise.resolve(), err: null, editor: null };
-  tab.titleEl = el("input", { class: "title", spellcheck: "false", "aria-label": "Note title", value: label(path) });
+  tab.titleEl = el("input", { class: "title", spellcheck: "false", "aria-label": t("Note title"), value: label(path) });
   tab.titleErr = el("div", { class: "title-err" });
-  tab.crumbText = el("button", { class: "crumb-path", type: "button", title: "Copy path",
+  tab.crumbText = el("button", { class: "crumb-path", type: "button", title: t("Copy path"),
                                  onclick: (e) => copyPathMenu(tab.path, e.currentTarget) });
   tab.crumbEl = el("div", { class: "crumb" }, tab.crumbText,
-    el("button", { class: "crumb-btn", type: "button", title: "Show this note in Finder",
-                   onclick: () => revealInFinder(tab.path) }, icon("folder", 13), "Show in Finder"));
+    el("button", { class: "crumb-btn", type: "button", title: t("Show this note in Finder"),
+                   onclick: () => revealInFinder(tab.path) }, icon("folder", 13), t("Show in Finder")));
   tab.propsEl = el("div", { class: "props" });
   tab.host = el("div", { class: "editor-host" });
   tab.pane = el("div", { class: "pane hidden" }, el("div", { class: "note-col" }, tab.crumbEl, tab.titleEl, tab.titleErr, tab.propsEl, tab.host));
@@ -2220,7 +2222,7 @@ function renderStatus() {
   const t = state.active;
   let s = "", cls = "";
   if (t && (t.kind === "note" || t.editable)) {
-    if (t.err) { s = "Save failed"; cls = "bad"; }
+    if (t.err) { s = t("Save failed"); cls = "bad"; }
     else if (statusFlash && statusFlash.tab === t && Date.now() < statusFlash.until) { s = statusFlash.text; cls = statusFlash.tone; }
     else if (t.saving) s = "Saving";
     else if (t.dirty) s = "Unsaved";
@@ -2295,12 +2297,12 @@ async function closeMany(list) { for (const t of list) await closeTab(t); }
 function tabMenu(tab, x, y) {
   const i = state.tabs.indexOf(tab);
   showMenu([
-    { label: "Close", fn: () => closeTab(tab) },
-    { label: "Close others", fn: () => closeMany(state.tabs.filter((t) => t !== tab)) },
-    { label: "Close tabs to the right", fn: () => closeMany(state.tabs.slice(i + 1)) },
-    ...(isSpecial(tab) ? [] : [{ sep: true }, { label: "Show in Finder", fn: () => revealInFinder(tab.path) }]),
+    { label: t("Close"), fn: () => closeTab(tab) },
+    { label: t("Close others"), fn: () => closeMany(state.tabs.filter((t) => t !== tab)) },
+    { label: t("Close tabs to the right"), fn: () => closeMany(state.tabs.slice(i + 1)) },
+    ...(isSpecial(tab) ? [] : [{ sep: true }, { label: t("Show in Finder"), fn: () => revealInFinder(tab.path) }]),
     { sep: true },
-    { label: "Close all", fn: () => closeMany([...state.tabs]) },
+    { label: t("Close all"), fn: () => closeMany([...state.tabs]) },
   ], x, y);
 }
 
@@ -2315,22 +2317,22 @@ function renderTabs() {
   if (graphRowEl) {
     const on = !!(state.active && state.active.kind === "graph" && state.tabs.includes(state.active));
     graphRowEl.classList.toggle("active", on);
-    graphRowEl.title = on ? "Close the graph (⌘G)" : "Graph view (⌘G)";
+    graphRowEl.title = on ? "Close the graph (⌘G)" : t("Graph view (⌘G)");
   }
   const fname = (curInfo() || {}).name || "";
   for (const t of state.tabs) if (t.crumbText) t.crumbText.textContent = [fname, ...t.path.split("/")].filter(Boolean).join("  /  ");
-  const nodes = state.tabs.map((t) => {
-    const on = t === state.active;
+  const nodes = state.tabs.map((k) => {
+    const on = k === state.active;
     const el1 = el("div", {
-      class: "tab" + (on ? " active" : ""), role: "tab", title: isSpecial(t) ? t.title : t.path,
-      onclick: () => activate(t),
-      oncontextmenu: (e) => { e.preventDefault(); tabMenu(t, e.clientX, e.clientY); },
-      onauxclick: (e) => { if (e.button === 1) { e.preventDefault(); closeTab(t); } },
+      class: "tab" + (on ? " active" : ""), role: "tab", title: isSpecial(k) ? k.title : k.path,
+      onclick: () => activate(k),
+      oncontextmenu: (e) => { e.preventDefault(); tabMenu(k, e.clientX, e.clientY); },
+      onauxclick: (e) => { if (e.button === 1) { e.preventDefault(); closeTab(k); } },
       onmousedown: (e) => { if (e.button === 1) e.preventDefault(); },
-    }, isSpecial(t) ? icon(t.kind === "graph" ? "graph" : t.kind === "search" ? "search" : "home", 13) : null,
-    el("span", { class: "tab-label" }, tabLabel(t)),
-    t.dirty ? el("span", { class: "dot", title: "Unsaved" }) : null,
-    el("button", { class: "tab-x", title: "Close", "aria-label": "Close tab", onclick: (e) => { e.stopPropagation(); closeTab(t); } }, icon("x", 12, 2)));
+    }, isSpecial(k) ? icon(k.kind === "graph" ? "graph" : k.kind === "search" ? "search" : "home", 13) : null,
+    el("span", { class: "tab-label" }, tabLabel(k)),
+    k.dirty ? el("span", { class: "dot", title: t("Unsaved") }) : null,
+    el("button", { class: "tab-x", title: t("Close"), "aria-label": t("Close tab"), onclick: (e) => { e.stopPropagation(); closeTab(k); } }, icon("x", 12, 2)));
     return el1;
   });
   tabsEl.replaceChildren(...nodes);   // the + button sits outside the strip, so it never scrolls away
@@ -2366,7 +2368,7 @@ function openHomeTab() {
     const body = el("div", { class: "note-col home" });
     const pane = el("div", { class: "pane hidden" }, body);
     paneHost.append(pane);
-    tab = { path: HOME_ID, title: "Home", kind: "home", pane, body, dirty: false };
+    tab = { path: HOME_ID, title: t("Home"), kind: "home", pane, body, dirty: false };
     state.tabs.push(tab);
   }
   activate(tab);
@@ -2390,13 +2392,13 @@ function renderHome(tab) {
   const pinned = getPref("pins", []).map((p) => state.files.find((f) => f.path === p)).filter(Boolean);
   const status = el("div", { class: "home-status" }), ai = el("div", { class: "home-ai" }), leaving = el("div", { class: "home-leaving" });
   tab.body.replaceChildren(
-    el("div", { class: "home-top" }, el("h1", { class: "home-title" }, "Home"),
+    el("div", { class: "home-top" }, el("h1", { class: "home-title" }, t("Home")),
       homeClock()),
     status,
-    ...(pinned.length ? [el("h2", { class: "home-h" }, "Pinned"), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
+    ...(pinned.length ? [el("h2", { class: "home-h" }, t("Pinned")), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
     ai,
-    el("h2", { class: "home-h" }, "Recent notes"),
-    recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write one."),
+    el("h2", { class: "home-h" }, t("Recent notes")),
+    recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, t("No notes yet. Press ⌘N to write one.")),
     leaving);
   homeExtras(status, ai, leaving);
 }
@@ -2420,33 +2422,42 @@ function homeClock() {
 const TRASH_DAYS = 7;
 async function homeExtras(status, ai, leaving) {
   const get = (a) => api(a).catch(() => ({}));
-  const [bar, store, todo, act, trash, reqs] = await Promise.all([get("bar"), get("storage"), get("aitodo"), get("aiactivity"), get("trashlist"), get("sharerequests")]);
+  const [bar, store, todo, act, trash, reqs, offers] = await Promise.all([get("bar"), get("storage"), get("aitodo"), get("aiactivity"), get("trashlist"), get("sharerequests"), get("shareoffers")]);
   if (!status.isConnected) return;
   const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
-  const bits = [el("span", { class: "hs-ok" }, "Locked on disk"),
-    el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : "This Mac only")];
+  const bits = [el("span", { class: "hs-ok" }, t("Locked on disk")),
+    el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : t("This Mac only"))];
   const problems = [];
-  for (const [name, st] of [["GitHub backup", store.github && store.githubStatus], ["S3 backup", store.s3 && store.s3Status]]) {
+  for (const [name, st] of [[t("GitHub backup"), store.github && store.githubStatus], ["S3 backup", store.s3 && store.s3Status]]) {
     if (!st) continue;
-    if (st.error) problems.push([`${name} stopped: ${st.error}`, "Storage", openStoragePanel]);
-    else bits.push(el("span", {}, `${name} saved ${ago(st.ago)}`));
+    if (st.error) problems.push([`${name} stopped: ${st.error}`, [["Storage", openStoragePanel]]]);
+    else bits.push(el("span", {}, t("{0} saved {1}", name, ago(st.ago))));
   }
-  if (bar.cloudHealth && bar.cloudHealth.problem) problems.push([bar.cloudHealth.problem, "Storage", openStoragePanel]);
-  for (const r of reqs.requests || []) problems.push([`${r.name || "Someone"} asks to join ${r.what || "this memory"}`, "Share", () => openShareHere()]);
+  if (bar.cloudHealth && bar.cloudHealth.problem) problems.push([bar.cloudHealth.problem, [["Storage", openStoragePanel]]]);
+  for (const r of reqs.requests || []) problems.push([`${r.name || "Someone"} asks to join ${r.what || "this memory"}`, [["Share", () => openShareHere()]]]);
+  for (const o of offers.offers || []) {   // more shared with you: nothing comes onto this Mac without a yes
+    const answer = (action, done) => async () => {
+      try { await api(action, { id: o.id }); await refreshFolders(); toastOk(done); } catch (x) { toastErr(x.message); }
+      refreshHome();
+    };
+    problems.push([`"${o.label}" is shared with you. It comes in hidden from AI.`,
+      [["Add", answer("shareofferaccept", `"${o.label}" is under Shared with me.`)], [t("Not now"), answer("shareofferignore", t("Left out."))]]]);
+  }
   status.replaceChildren(el("div", { class: "hs-line" }, ...bits.flatMap((b, i) => (i ? [el("span", { class: "hs-dot" }, "·"), b] : [b]))),
-    ...problems.map(([text, btn, fn]) => el("div", { class: "hs-problem" }, el("span", {}, text),
-      el("button", { class: "btn small", type: "button", onclick: fn }, btn))));
+    ...problems.map(([text, btns]) => el("div", { class: "hs-problem" }, el("span", {}, text),
+      el("span", { class: "set-btns" }, ...btns.map(([label, fn]) =>
+        el("button", { class: "btn small", type: "button", onclick: fn }, label))))));
 
   const open = (todo.todo || []).filter((t) => !t.done);
   const finished = (todo.todo || []).filter((t) => t.done).sort((a, b) => (b.done_t || 0) - (a.done_t || 0)).slice(0, 3);   // kept in the memory, so they're here after a restart
   const work = (act.activity || []).slice(0, 3);   // only since this unlock
   if (open.length || finished.length || work.length) {
-    ai.replaceChildren(el("h2", { class: "home-h" }, "Your AI"),
+    ai.replaceChildren(el("h2", { class: "home-h" }, t("Your AI")),
       el("div", { class: "home-list" },
         ...open.slice(0, 3).map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("sparkle", 15),
-          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.ask || "Read it"), el("span", { class: "hi-time hi-wait" }, "waiting"))),
+          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.ask || t("Read it")), el("span", { class: "hi-time hi-wait" }, "waiting"))),
         ...finished.map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("check", 15),
-          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.result ? `${t.by ? t.by + ": " : ""}${t.result}` : t.ask || "Read it"),
+          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.result ? `${t.by ? t.by + ": " : ""}${t.result}` : t.ask || t("Read it")),
           el("span", { class: "hi-time hi-done" }, "done"))),
         ...work.map((r) => {
           const row = el("div", { class: "home-item hi-work" }, icon("pulse", 15),
@@ -2454,22 +2465,22 @@ async function homeExtras(status, ai, leaving) {
             el("span", { class: "hi-time" }, ago(r.ago)));
           if (r.canUndo) row.append(el("button", { class: "btn small", type: "button", onclick: async (e) => {
             e.currentTarget.disabled = true;
-            try { await api("undoai", { id: r.undo, folder: r.folder }); await syncFromDisk(); toastOk("Undone. The AI's version is kept in version history."); refreshHome(); }
+            try { await api("undoai", { id: r.undo, folder: r.folder }); await syncFromDisk(); toastOk(t("Undone. The AI's version is kept in version history.")); refreshHome(); }
             catch (x) { toastErr(x.message); }
           } }, "Undo"));
           return row;
         }),
-        el("button", { class: "home-more", type: "button", onclick: () => openAI(open.length ? "tasks" : "activity") }, "All AI tasks and activity")));
+        el("button", { class: "home-more", type: "button", onclick: () => openAI(open.length ? "tasks" : "activity") }, t("All AI tasks and activity"))));
   }
 
   const soon = (trash.items || []).map((i) => ({ ...i, left: TRASH_DAYS - (Date.now() / 1000 - i.t) / 86400 })).filter((i) => i.t && i.left < 2);
   if (soon.length) {
-    leaving.replaceChildren(el("h2", { class: "home-h" }, "Leaving the trash soon"),
+    leaving.replaceChildren(el("h2", { class: "home-h" }, t("Leaving the trash soon")),
       el("div", { class: "home-list" }, ...soon.slice(0, 5).map((i) => el("div", { class: "home-item" }, icon("trash", 15),
         el("span", { class: "hi-name" }, i.name.replace(/\.md$/i, "")), el("span", { class: "hi-dir" }, dirOf(i.path)),
         el("span", { class: "hi-time" }, i.left < 1 ? "goes today" : "goes tomorrow"),
         el("button", { class: "btn small", type: "button", onclick: async () => {
-          try { await api("trashrestore", { id: i.id }); await syncFromDisk(); toastOk(`"${i.name.replace(/\.md$/i, "")}" is back.`); refreshHome(); }
+          try { await api("trashrestore", { id: i.id }); await syncFromDisk(); toastOk(t("\"{0}\" is back.", i.name.replace(/\.md$/i, ""))); refreshHome(); }
           catch (x) { toastErr(x.message); }
         } }, "Restore")))));
   }
@@ -2480,7 +2491,7 @@ async function homeExtras(status, ai, leaving) {
 function openSearchView(q) {
   let tab = state.tabs.find((t) => t.kind === "search");
   if (!tab) {
-    tab = { path: SEARCH_ID, title: "Search", kind: "search", dirty: false };
+    tab = { path: SEARCH_ID, title: t("Search"), kind: "search", dirty: false };
     makeSearchPane(tab);
     state.tabs.push(tab);
   }
@@ -2554,7 +2565,7 @@ async function openAI(start, path) {
       give: async (ask) => {
         const j = await api("handtoai", { path, ask });
         navigator.clipboard.writeText("Do my Phygital Memory tasks.").catch(() => {});
-        toastOk("Added to AI tasks. Copied \u201cDo my Phygital Memory tasks.\u201d for your AI chat.");
+        toastOk(t("Added to AI tasks. Copied \u201cDo my Phygital Memory tasks.\u201d for your AI chat."));
         return j.todo || [];
       },
       set: async (id, done) => (await api("aitodoset", { id, done })).todo || [],
@@ -2587,7 +2598,7 @@ async function watchTodo() {
   const now = new Set(todo.filter((i) => i.done).map((i) => i.id));
   now.folder = currentFolder();
   if (todoDone && todoDone.folder === now.folder) {
-    for (const i of todo) if (i.done && !todoDone.has(i.id) && i.by !== "you") toastOk(`${i.by || "Your AI"} finished “${label(i.path)}”.`);
+    for (const i of todo) if (i.done && !todoDone.has(i.id) && i.by !== "you") toastOk(t("{0} finished “{1}”.", i.by || t("Your AI"), label(i.path)));
   }
   todoDone = now;
   openTasks = todo.filter((i) => !i.done).length;
@@ -2603,7 +2614,7 @@ function openGraph() {
     state.tabs.push(tab);
   }
   if (!tab) {
-    tab = { path: GRAPH_ID, title: "Graph", kind: "graph", dirty: false, sig: "" };
+    tab = { path: GRAPH_ID, title: t("Graph"), kind: "graph", dirty: false, sig: "" };
     makeGraphPane(tab);
     state.tabs.push(tab);
   }
@@ -2668,8 +2679,8 @@ function drawPill() {
 }
 function toggleBacklinks() {
   if (blCard) { closeBacklinks(); return; }
-  blCard = el("div", { class: "bl-card", role: "dialog", "aria-label": "Backlinks" },
-    el("div", { class: "bl-head" }, "Linked from"),
+  blCard = el("div", { class: "bl-card", role: "dialog", "aria-label": t("Backlinks") },
+    el("div", { class: "bl-head" }, t("Linked from")),
     ...blData.map((b) => el("button", { class: "bl-item", onclick: () => { closeBacklinks(); openPath(b.path); } },
       el("div", { class: "bl-name" }, label(b.path)), b.line ? el("div", { class: "bl-line" }, b.line) : null)));
   paneHost.append(blCard);
@@ -2683,12 +2694,12 @@ function renderProps(tab) {
   host.replaceChildren();
   const fm = tab.fm;
   if (fm.mode === "raw") {
-    host.append(el("div", { class: "props-label" }, "Properties (shown as written, read-only)"), el("pre", { class: "props-raw" }, fm.raw));
+    host.append(el("div", { class: "props-label" }, t("Properties (shown as written, read-only)")), el("pre", { class: "props-raw" }, fm.raw));
     return;
   }
   const changed = () => { fm.changed = true; fm.mode = "props"; touch(tab); };
   const rows = fm.props.map((p) => {
-    const keyIn = el("input", { class: "prop-key", value: p.key, spellcheck: "false", "aria-label": "Property name" });
+    const keyIn = el("input", { class: "prop-key", value: p.key, spellcheck: "false", "aria-label": t("Property name") });
     keyIn.addEventListener("change", () => {
       const k = keyIn.value.trim();
       if (!KEY_OK.test(k) || fm.props.some((q) => q !== p && q.key === k)) { keyIn.value = p.key; return; }
@@ -2697,8 +2708,8 @@ function renderProps(tab) {
     let val;
     if (p.kind === "list") {
       const chips = p.items.map((it, i) => el("span", { class: "chip" }, (p.key === "tags" ? "#" : "") + it,
-        el("button", { class: "chip-x", "aria-label": "Remove", onclick: () => { p.items.splice(i, 1); changed(); renderProps(tab); } }, "×")));
-      const add = el("input", { class: "chip-add", placeholder: "Add", "aria-label": "Add item" });
+        el("button", { class: "chip-x", "aria-label": t("Remove"), onclick: () => { p.items.splice(i, 1); changed(); renderProps(tab); } }, "×")));
+      const add = el("input", { class: "chip-add", placeholder: t("Add"), "aria-label": t("Add item") });
       const commit = () => {
         const v = add.value.trim().replace(/^#/, "").replace(/,$/, "");
         if (!v) return false;
@@ -2718,10 +2729,10 @@ function renderProps(tab) {
       val = el("div", { class: "prop-val" }, inp);
     }
     return el("div", { class: "prop" }, keyIn, val,
-      el("button", { class: "prop-rm", title: "Remove property", "aria-label": "Remove property", onclick: () => { fm.props.splice(fm.props.indexOf(p), 1); changed(); renderProps(tab); } }, icon("x", 12, 2)));
+      el("button", { class: "prop-rm", title: t("Remove property"), "aria-label": t("Remove property"), onclick: () => { fm.props.splice(fm.props.indexOf(p), 1); changed(); renderProps(tab); } }, icon("x", 12, 2)));
   });
   const addBtn = el("button", { class: "prop-add" + (rows.length ? "" : " faint"), onclick: () => {
-    const inp = el("input", { class: "prop-key new", placeholder: "Property name", spellcheck: "false" });
+    const inp = el("input", { class: "prop-key new", placeholder: t("Property name"), spellcheck: "false" });
     const done = (ok) => {
       const k = inp.value.trim();
       if (ok && KEY_OK.test(k) && !fm.props.some((q) => q.key === k)) {
@@ -2747,7 +2758,7 @@ function closeSearch() { if (searchEl) { searchEl.remove(); searchEl = null; } }
 function openSearch() {
   if (searchEl) { searchEl.querySelector("input").focus(); return; }
   let items = [], sel = 0, token = 0, timer = null;
-  const input = el("input", { class: "s-input", placeholder: "Search notes or jump to one", spellcheck: "false", "aria-label": "Search" });
+  const input = el("input", { class: "s-input", placeholder: t("Search notes or jump to one"), spellcheck: "false", "aria-label": t("Search") });
   const list = el("div", { class: "s-list" });
   const box = el("div", { class: "s-box", role: "dialog" }, el("div", { class: "s-bar" }, icon("search", 16), input), list);
   searchEl = el("div", { class: "overlay", onmousedown: (e) => { if (e.target === searchEl) closeSearch(); } }, box);
@@ -2760,7 +2771,7 @@ function openSearch() {
     }, icon("file", 15),
     el("div", { class: "s-text" },
       el("div", { class: "s-title" }, label(it.path), it.heading ? el("span", { class: "s-head" }, " › " + it.heading) : null, dirOf(it.path) ? el("span", { class: "s-path" }, dirOf(it.path)) : null),
-      it.snippet ? el("div", { class: "s-snip" }, it.snippet) : null))) : [el("div", { class: "s-none" }, input.value ? "Nothing found." : "No notes yet.")]));
+      it.snippet ? el("div", { class: "s-snip" }, it.snippet) : null))) : [el("div", { class: "s-none" }, input.value ? "Nothing found." : t("No notes yet."))]));
   };
   const mark = () => {
     [...list.children].forEach((c, i) => c.classList.toggle("sel", i === sel));
@@ -2849,6 +2860,7 @@ window.phygitalOpenFolder = async (id) => {
 };
 
 (async function start() {
+  await useLanguage(settings().lang);   // the app's words, before anything draws
   sealAnimation(true);   // the splash screen, while the app gets ready behind it
   await refreshFolders();
   if (folderList.length) {

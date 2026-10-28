@@ -1,20 +1,21 @@
 // Slash menu: "/" at the start of a line (or after only spaces) opens a list of blocks to insert.
+import { t } from "./../shell/i18n.js";
 import { syntaxTree } from "@codemirror/language";
 import "./quick.css";
 
 // text = what to insert, caret = where the caret lands inside it (default: the end)
 export const SLASH_ITEMS = [
-  { label: "Heading 1", keys: "h1 heading title", text: "# " },
-  { label: "Heading 2", keys: "h2 heading subtitle", text: "## " },
-  { label: "Heading 3", keys: "h3 heading", text: "### " },
-  { label: "Bullet list", keys: "bullet list ul unordered", text: "- " },
-  { label: "Numbered list", keys: "numbered ordered list ol 1", text: "1. " },
-  { label: "Task", keys: "task todo check checkbox checklist", text: "- [ ] " },
-  { label: "Quote", keys: "quote blockquote cite", text: "> " },
-  { label: "Callout", keys: "callout note admonition info", text: "> [!note] \n> ", caret: 10 },
-  { label: "Code block", keys: "code fence snippet pre", text: "```\n\n```", caret: 4 },
-  { label: "Table", keys: "table grid", text: "|  |  |  |\n| --- | --- | --- |\n|  |  |  |", caret: 2 },
-  { label: "Divider", keys: "divider hr rule line separator", text: "---\n" },
+  { label: t("Heading 1"), keys: "h1 heading title", text: "# " },
+  { label: t("Heading 2"), keys: "h2 heading subtitle", text: "## " },
+  { label: t("Heading 3"), keys: "h3 heading", text: "### " },
+  { label: t("Bullet list"), keys: "bullet list ul unordered", text: "- " },
+  { label: t("Numbered list"), keys: "numbered ordered list ol 1", text: "1. " },
+  { label: t("Task"), keys: "task todo check checkbox checklist", text: "- [ ] " },
+  { label: t("Quote"), keys: "quote blockquote cite", text: "> " },
+  { label: t("Callout"), keys: "callout note admonition info", text: "> [!note] \n> ", caret: 10 },
+  { label: t("Code block"), keys: "code fence snippet pre", text: "```\n\n```", caret: 4 },
+  { label: t("Table"), keys: "table grid", text: "|  |  |  |\n| --- | --- | --- |\n|  |  |  |", caret: 2 },
+  { label: t("Divider"), keys: "divider hr rule line separator", text: "---\n" },
 ];
 
 export function matchSlash(items, query) {

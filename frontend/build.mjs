@@ -9,7 +9,18 @@ const OUT = fileURLToPath(new URL("../phygital_memory/web/", import.meta.url)); 
 rmSync(join(OUT, "assets"), { recursive: true, force: true });   // no old chunks left behind
 mkdirSync(join(OUT, "assets"), { recursive: true });
 
+// The app's languages (core/languages, see scripts/i18n.py): their list goes into the page, each one next to it.
+const LANG_DIR = fileURLToPath(new URL("../languages/", import.meta.url));
+const langs = existsSync(join(LANG_DIR, "languages.json")) ? JSON.parse(readFileSync(join(LANG_DIR, "languages.json"), "utf8")) : [["en", "English"]];
+function copyLanguages() {
+  for (const [code] of langs) {
+    const f = join(LANG_DIR, `${code}.json`);
+    if (code !== "en" && existsSync(f)) copyFileSync(f, join(OUT, "assets", `lang-${code}.json`));
+  }
+}
+
 const options = {
+  define: { "globalThis.PM_LANGUAGES": JSON.stringify(langs) },
   entryPoints: { app: "src/main.js", "graph-worker": "src/shell/graph-worker.js" },
   splitting: true,
   chunkNames: "chunk-[hash]",
@@ -28,6 +39,7 @@ const options = {
     setup(build) {
       build.onEnd((result) => {
         copyFileSync("src/index.html", join(OUT, "index.html"));
+        copyLanguages();
         if (result.metafile) writeLicences(result.metafile);
       });
     },
