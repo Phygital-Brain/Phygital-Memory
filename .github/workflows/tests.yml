@@ -3,11 +3,19 @@
 # test_docx needs pandoc to make its sample files, so it runs on the Mac too.)
 name: tests
 
+# GitHub minutes cost money on a private repo, and a Mac minute counts as ten. A push runs only the engine tests on
+# Linux (cheap). Everything else (Mac, Windows, the built app, WebDAV, the window) runs when started by hand:
+#   gh workflow run tests.yml -f full=true
 on:
   push:
     branches: [main]   # (a pull request is tested once, below, not twice)
   pull_request:
   workflow_dispatch:
+    inputs:
+      full:
+        description: "Every system and every check"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -24,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest, ubuntu-22.04]
+        os: ${{ fromJSON(inputs.full && '["macos-14", "windows-latest", "ubuntu-22.04"]' || '["ubuntu-22.04"]') }}
     defaults:
       run:
         working-directory: core
@@ -50,6 +58,7 @@ jobs:
 
   built:
     name: built engine (${{ matrix.os }})
+    if: inputs.full   # by hand only (see the top)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -87,6 +96,7 @@ jobs:
 
   webdav:
     name: WebDAV, with WebDAV only (${{ matrix.os }})
+    if: inputs.full   # by hand only (see the top)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -122,6 +132,7 @@ jobs:
 
   window:
     name: app window (${{ matrix.os }})
+    if: inputs.full   # by hand only (see the top)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
