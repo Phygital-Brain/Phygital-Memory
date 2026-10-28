@@ -133,8 +133,15 @@ def _linux_dialog(zenity: list[str], kdialog: list[str]) -> subprocess.Completed
     return None
 
 
+def _no_chooser() -> None:
+    """A server has no screen to show a file chooser on."""
+    if os.environ.get("PHYGITAL_MEMORY_SERVER") == "1":
+        raise RuntimeError("That needs a computer's file chooser, so it isn't on the server. Use the desktop app for it.")
+
+
 def pick_files(prompt: str) -> list[str]:
     """Several files at once."""
+    _no_chooser()
     if MAC:
         out = _osascript(["set picked to choose file with prompt (item 1 of argv) with multiple selections allowed",
                           'set out to ""', "repeat with f in picked", "set out to out & POSIX path of f & linefeed",
@@ -151,6 +158,7 @@ def pick_files(prompt: str) -> list[str]:
 
 def pick_save(prompt: str, name: str) -> str | None:
     """Where to put an exported file. The dialog itself asks before replacing one."""
+    _no_chooser()
     if MAC:
         out = _osascript(["return POSIX path of (choose file name with prompt (item 1 of argv) default name (item 2 of argv))"],
                          prompt, name)
@@ -166,6 +174,7 @@ def pick_save(prompt: str, name: str) -> str | None:
 
 def pick_folder(prompt: str, start: str | None = None) -> str | None:
     """A folder. start: where the picker opens."""
+    _no_chooser()
     start = start if start and Path(start).is_dir() else None
     if MAC:
         if start:

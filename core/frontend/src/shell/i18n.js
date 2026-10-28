@@ -6,7 +6,7 @@ import { PC } from "./pc-words.js";
 
 let words = {};
 let lang = "en";
-const MAC = /Mac/.test(navigator.platform || navigator.userAgent);
+const MAC = /Mac/.test(navigator.platform || navigator.userAgent) && !document.documentElement.dataset.server;   // a server's page says "computer" even on a Mac
 // Texts that name the Mac use PC's wording on every system ("This computer"), except those about the Mac's own parts,
 // which keep their real names on a Mac.
 const MAC_ONLY = /Finder|Keychain|Touch ID|security chip/;

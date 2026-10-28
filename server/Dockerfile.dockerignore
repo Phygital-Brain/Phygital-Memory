@@ -1,0 +1,12 @@
+**
+!core/frontend/package.json
+!core/frontend/package-lock.json
+!core/frontend/build.mjs
+!core/frontend/src/
+!core/languages/
+!core/pyproject.toml
+!core/uv.lock
+!core/phygital_memory/
+core/phygital_memory/web/
+**/__pycache__
+!LICENSE

@@ -11,5 +11,6 @@
 - Make it a Phygital Brain: one setup page builds the folders, rules and first notes, connects an AI app, and leaves one AI task to finish the rest.
 - The screens come in 41 languages. The translations were made with AI and checked by a script. Native speakers have not read them yet.
 - Runs on Mac (one universal download for Apple and Intel), Windows (x64, and Windows on ARM through emulation) and Linux (x64 and ARM: `.deb`, `.rpm` and AppImage). Windows is built but not fully tested yet. The Mac and Windows downloads are not code-signed.
+- Phygital Memory Server: the same app on your own server, with a passphrase login, and the AI door at your own https address, so AI apps on the web and on phones can connect, and a Docker image built with each release. It keeps in step with your computer through Link my computer or the same WebDAV storage. See [docs/server.md](docs/server.md).
 - Updates itself from the latest GitHub Release. Updates are signed with the project's update key, so only real releases install.
 - License: AGPL-3.0-only.

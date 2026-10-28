@@ -52,6 +52,8 @@ Tests that talk to WebDAV, S3, GitHub or Syncthing use offline stand-ins, set by
 3. Push to `main`, then tag it `vX.Y.Z` and push the tag. GitHub builds the Mac, Windows and Linux apps (`.github/workflows/release.yml`) and puts them, with `latest.json` for the updater, in one draft release. You can also start it by hand: `gh workflow run release.yml`, or `gh workflow run release.yml -f only=<runner>` for one system.
 4. Check the draft, add the changelog notes, and publish it by hand. The apps already installed find it the next time they open.
 
+The same tag also builds the server image (`.github/workflows/server-image.yml`) and puts it on the Packages page as `ghcr.io/phygital-brain/phygital-memory`, with the version and `latest`.
+
 On GitHub, a push to `main` runs only the Linux engine tests. The full test matrix runs when started by hand: `gh workflow run tests.yml -f full=true`. On a Mac, `bash rebuild.sh` still makes the `.dmg` locally.
 
 ## Writing docs
@@ -86,6 +88,7 @@ AGPL-3.0-only. Before you send a contribution, read "Other licenses, and contrib
 | [`core/packaging/`](core/packaging) | Turns the engine into one program, plus the Touch ID and Keychain helper (Mac only). |
 | [`core/scripts/`](core/scripts) | Small tools, such as `i18n.py` for the screen texts. |
 | [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
+| [`server/`](server) | Phygital Memory Server: the Docker image, Compose and deploy files ([guide](docs/server.md)). |
 | [`brand/`](brand) | Logo, colours, icons and the brand guide. |
 | [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 

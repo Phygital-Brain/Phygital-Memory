@@ -78,6 +78,8 @@ For when you want to change how the app looks or behaves, or find where somethin
 
 Set by the window for the program, never by you: `PHYGITAL_MEMORY_SHELL_TOKEN`, `PHYGITAL_MEMORY_SERVER_PROOF`, `PHYGITAL_MEMORY_APP_PID`.
 
+On a server ([Run it on your own server](server.md)): `PHYGITAL_MEMORY_SERVER` (`1` turns server mode on), `PHYGITAL_MEMORY_URL` (the server's address), `PHYGITAL_MEMORY_PASSPHRASE` (what you type to open the page), `PHYGITAL_MEMORY_DATA` (where memories and settings live), `PHYGITAL_MEMORY_SYNC_PORT` (the one port for syncing with your computers) and `PHYGITAL_MEMORY_VERSION` (set by the image, shown on the page). The server image sets all but the address and passphrase.
+
 Test hooks, used only by `core/tests/`: `PHYGITAL_MEMORY_OFFLINE`, `PHYGITAL_MEMORY_SYNCTHING_LOCAL`, `PHYGITAL_MEMORY_SYNCTHING_NO_LAN`, and the Keychain item names `PHYGITAL_MEMORY_SEAL_KEYCHAIN`, `PHYGITAL_MEMORY_CLOUD_KEYCHAIN`, `PHYGITAL_MEMORY_APPROVER_KEYCHAIN`, `PHYGITAL_MEMORY_IDENTITY_KEYCHAIN`, `PHYGITAL_MEMORY_TOUCHID_KEYCHAIN`. Do not set these on your real computer.
 
 ## Files the app keeps

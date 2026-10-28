@@ -75,6 +75,8 @@ curl -fL -o /tmp/pm.deb https://github.com/Phygital-Brain/Phygital-Memory/releas
 sudo dnf install -y https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-linux-$(uname -m).rpm
 ```
 
+**Your own server**, so the AI on your phone reaches your memories when the computer is off: one Docker Compose file, see [Run it on your own server](docs/server.md).
+
 ## How to use
 
 1. **Make a memory.** Open the app and press **New memory**. Give it a name, pick **Open** or **Encrypted**, choose where it lives, and press **Set it up**. The app builds a ready-made set of folders for you (a Phygital Brain), or you can start empty.
@@ -166,6 +168,7 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [Setup on your computer](docs/setup-computer.md) | You want to install the app and make your first memory |
 | [Connect your AI app](docs/connect-your-ai.md) | You want Claude Code, Claude Desktop, Codex, Cursor or another AI app to use your memory |
 | [Claude Desktop extension](docs/claude-desktop-extension.md) | You use Claude Desktop and want to connect it with one file |
+| [Run it on your own server](docs/server.md) | You want your memories reachable from your phone's AI when your computer is off |
 | [Things to ask](docs/examples.md) | You are not sure what to say to your AI |
 | [The AI tools](docs/tools.md) | You want the list of everything an AI app can do |
 | [Settings](docs/settings.md) | You want to change how the app works, or find where something is kept |
@@ -201,6 +204,7 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [`core/packaging/`](core/packaging) | Turns the engine into one program, plus the Touch ID and Keychain helper (Mac only). |
 | [`core/scripts/`](core/scripts) | Small tools, such as `i18n.py` for the screen texts. |
 | [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
+| [`server/`](server) | Phygital Memory Server: the Docker image, Compose and deploy files ([guide](docs/server.md)). |
 | [`brand/`](brand) | Logo, colours, icons and the brand guide. |
 | [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 

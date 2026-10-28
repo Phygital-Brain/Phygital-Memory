@@ -1,0 +1,40 @@
+# Phygital Memory Server with Caddy in front for HTTPS (docs/server.md).
+# 1. Point your domain (like memory.example.com) at this server.
+# 2. Copy .env.example to .env next to this file and fill it in.
+# 3. docker compose up -d
+services:
+  memory:
+    image: ghcr.io/phygital-brain/phygital-memory:latest
+    restart: unless-stopped
+    init: true
+    environment:
+      PHYGITAL_MEMORY_URL: https://${DOMAIN}
+      PHYGITAL_MEMORY_PASSPHRASE: ${PASSPHRASE}
+    volumes:
+      - memory-data:/data
+    ports:
+      - "22000:22000/tcp"   # Link my computer and sharing (Syncthing). Without it, sync goes through relays, slower.
+      - "22000:22000/udp"
+    # Only for a memory on WebDAV or Nextcloud (the server opens it like a drive). Remove these four lines if you
+    # don't use one.
+    devices:
+      - /dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    command: caddy reverse-proxy --from ${DOMAIN} --to memory:8790
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+
+volumes:
+  memory-data:
+  caddy-data:

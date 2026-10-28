@@ -54,6 +54,11 @@ jobs:
             echo "== $t"
             PHYGITAL_MEMORY_STATE="$(mktemp -d)" uv run python "tests/$t.py"
           done
+      - name: Server mode (docs/server.md)
+        if: runner.os == 'Linux'   # the server runs on Linux
+        env:
+          PYTHONPATH: .
+        run: uv run python tests/test_server_mode.py
 
   built:
     name: built engine (${{ matrix.os }})

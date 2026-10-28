@@ -5,16 +5,23 @@ read them silently the way it can read items made by the `security` tool; and th
 own server. Items an older version made with `security` move over the first time they're read. Running from source
 (tests, development) uses `security` as before. On Windows and Linux the system's own store keeps them (Windows
 Credential Manager, the Secret Service keyring), through the keyring library."""
+import os
 import subprocess
 import threading
 import time
 
 from . import touchid
-from .system import MAC
+from .system import MAC as _ON_MAC
+
+SERVER = os.environ.get("PHYGITAL_MEMORY_SERVER") == "1"   # a Phygital Memory server keeps them in its own file
+MAC = _ON_MAC and not SERVER
 
 
 def _store():
-    """Windows and Linux: the system's own secret store."""
+    """Windows and Linux: the system's own secret store. A server: its secrets file (hosted.FileKeyring)."""
+    if SERVER:
+        from .hosted import FileKeyring
+        return FileKeyring()
     import keyring
     return keyring
 

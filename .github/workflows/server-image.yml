@@ -1,0 +1,63 @@
+# Builds the Phygital Memory Server image (server/Dockerfile) from the same tag as the apps, for Intel/AMD and ARM
+# servers, and puts it on the repository's Packages page: ghcr.io/phygital-brain/phygital-memory, tagged with the
+# version and "latest". Servers update by pulling it again (docs/server.md).
+name: server-image
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/phygital-brain/phygital-memory
+
+jobs:
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Build and push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          VERSION="${REF#v}"
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker build -f server/Dockerfile --build-arg VERSION="$VERSION" -t "$IMAGE:$VERSION-$ARCH" .
+          docker push "$IMAGE:$VERSION-$ARCH"
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - name: One tag for both kinds of server
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF#v}"
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          TAGS="$VERSION"
+          [[ "$REF" == v* ]] && TAGS="$TAGS latest"   # a test run by hand from a branch never becomes "latest"
+          for TAG in $TAGS; do
+            docker buildx imagetools create -t "$IMAGE:$TAG" "$IMAGE:$VERSION-amd64" "$IMAGE:$VERSION-arm64"
+          done

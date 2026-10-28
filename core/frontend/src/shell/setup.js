@@ -10,6 +10,8 @@ import { t } from "./i18n.js";
 import { toastOk, toastErr } from "./toast.js";
 import { shortPath } from "./folders.js";
 
+const ON_SERVER = !!document.documentElement.dataset.server;   // a Phygital Memory server's page: memories live on it
+
 // The cards' drawings: 24px grid, one stroke weight, like the app's own icons
 const ART = {
   open: ["M6 11h12v9H6z", "M9 11V7.5a3 3 0 0 1 5.8-1.1"],
@@ -36,8 +38,10 @@ const QUESTIONS = () => [
 
 // A new memory: one kind or the other, never both
 const KINDS = () => ({ key: "kind", one: true, q: t("What kind of memory?"), options: [
-  ["open", t("Open@@kind"), t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
-  ["encrypted", t("Encrypted"), t("Locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.")]] });
+  ["open", t("Open@@kind"), ON_SERVER ? t("A normal folder on this server. Every AI app you connect can read it.")
+    : t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
+  ["encrypted", t("Encrypted"), ON_SERVER ? t("Locked with your password. Only the AI apps you allow get in.")
+    : t("Locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.")]] });
 
 // A backup now, or later from Storage and backup. The text follows the kind picked before
 const BACKUP = (open) => ({ key: "backup", one: true, q: t("Back it up?"), hint: t("You can change this any time in Storage and backup."), options: [
@@ -174,26 +178,29 @@ export function renderSetup(body, ctx) {
     const showWhere = () => {   // the path picked, or for WebDAV what happens (in words, not a path)
       const dav = mem.picked === "webdav";
       where.classList.toggle("sp-where-note", dav);
-      where.textContent = dav ? t("This Mac and your WebDAV server. You pick the server once it's made.") : mem.parent ? shortPath(mem.parent) : "";
+      where.textContent = dav ? (ON_SERVER ? t("This server and your WebDAV server. You pick the WebDAV server once it's made.")
+        : t("This Mac and your WebDAV server. You pick the server once it's made.")) : mem.parent && !ON_SERVER ? shortPath(mem.parent) : "";
       hint.hidden = dav;
     };
-    const home = places?.home ? `${places.home}/Documents` : "";
-    const opts = [["mac", t("This Mac"), home, "laptop"], ...(places?.places || []).map((p) => [p.path, p.name, p.path, "cloud"]),
+    const home = places?.home ? (ON_SERVER ? places.home : `${places.home}/Documents`) : "";   // a server has one memories folder
+    const opts = [["mac", ON_SERVER ? t("This server") : t("This Mac"), home, "laptop"], ...(places?.places || []).map((p) => [p.path, p.name, p.path, "cloud"]),
       ["webdav", t("WebDAV"), home, "cloud"]];   // made on this Mac, then kept in step with the server
+    const other = ON_SERVER ? null : () => el("button", { class: "sp-lang" + (mem.picked === "other" ? " on" : ""), type: "button", onclick: async () => {
+        try { const p = await ctx.pick(); if (p) { mem.parent = p; mem.picked = "other"; showWhere(); draw(); refreshNext(); } }
+        catch (e) { toastErr(e.message); }
+      } }, icon("folder", 13), t("Other folder"));
     const chips = el("div", { class: "sp-langs sp-places", role: "radiogroup", "aria-label": t("Where to keep it") });
     const draw = () => chips.replaceChildren(...opts.map(([k, label, path, ic]) => el("button", {
       class: "sp-lang" + (mem.parent === path && mem.picked === k ? " on" : ""), type: "button", role: "radio", "aria-checked": String(mem.parent === path && mem.picked === k),
       onclick: () => { mem.parent = path; mem.picked = k; showWhere(); draw(); refreshNext(); } }, icon(ic, 13), label)),
-      el("button", { class: "sp-lang" + (mem.picked === "other" ? " on" : ""), type: "button", onclick: async () => {
-        try { const p = await ctx.pick(); if (p) { mem.parent = p; mem.picked = "other"; showWhere(); draw(); refreshNext(); } }
-        catch (e) { toastErr(e.message); }
-      } }, icon("folder", 13), t("Other folder")));
+      ...(other ? [other()] : []));
     draw();
     if (!places) chips.append(el("span", { class: "sp-hint" }, t("Looking for cloud folders")));
     const kids = [el("h2", { class: "sp-q" }, encrypted() ? t("Name it and lock it") : t("Name it and pick its place")),
       field(t("Memory name"), inp("name", { maxlength: 60, "aria-label": t("Memory name") })),
       el("div", { class: "sp-field" }, el("span", { class: "sp-sub" }, t("Stored in")), chips, where), hint];
-    hint.textContent = encrypted() ? t("A cloud folder (iCloud Drive, Dropbox) keeps a locked copy safe in the cloud.")
+    hint.textContent = ON_SERVER ? t("It stays on this server. Link your computer to keep a copy there too.")
+      : encrypted() ? t("A cloud folder (iCloud Drive, Dropbox) keeps a locked copy safe in the cloud.")
       : t("A cloud folder like iCloud Drive or Dropbox puts it on your phone too.");
     showWhere();
     if (encrypted()) kids.push(

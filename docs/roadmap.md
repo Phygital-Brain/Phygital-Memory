@@ -6,6 +6,7 @@ What might come next. Nothing here is promised or has a date. If you want one of
 
 - **Windows and Linux.** Built from the same code as the Mac app, on GitHub, from one tag.
 - **Auto-update.** The app updates itself from the latest GitHub Release. See [updates.md](updates.md).
+- **Your own server.** The same app on a server you own, so the AI on your phone reaches your memories when the computer is off. See [server.md](server.md). Not tried on a real server yet.
 
 ## Wanted
 
@@ -23,7 +24,6 @@ What might come next. Nothing here is promised or has a date. If you want one of
 - **Passkey unlock.** Replace the Mac-only Touch ID helper on every device. It needs a real web address and a signed app first.
 - **A phone app.** Python does not run well on phones, so it would need the core rebuilt in Rust inside the same Tauri app. Encrypted memories are not on phones today.
 - **Signed approvals for risky AI actions ("Ask me first").** Phygital Key receipts, so an AI could be made to ask before certain actions.
-- **Phone access through a tunnel to your computer.** Never a server copy that unlocks your notes.
 
 ## Not planned
 
@@ -35,10 +35,11 @@ What might come next. Nothing here is promised or has a date. If you want one of
 
 - **A phone app.** The engine is Python, which does not run well on phones. An Open memory in a cloud folder still shows up in your phone's files.
 - **Encrypted memories on phones.** They need the app to open, and there is no phone app.
-- **AI apps that run in the cloud.** The browser and phone versions of Claude, ChatGPT and others connect from their own servers, and the door only answers on your computer. Use a desktop AI app, like Claude Desktop, Claude Code, Codex or Cursor.
+- **AI apps that run in the cloud, without a server.** The browser and phone versions of Claude, ChatGPT and others connect from their own servers, and the desktop app's door only answers on your computer. Use a desktop AI app, or [run it on your own server](server.md).
 - **Sign-in from the Claude app.** It refuses sign-in pages that are not on https, and the door is a local address. Connect with a key instead.
 - **Code signing.** The Mac and Windows downloads are not signed yet, so the first open needs one extra step.
 - **Switching a memory between Open and Encrypted.** Old plain copies would stay in your cloud's history, so the app doesn't offer it.
 - **Shutting a removed person out of later changes.** Changing a shared memory's key is not built yet.
 - **The Finder view and Touch ID off the Mac.** Both are Mac only for now.
+- **Dropbox, Google Drive and OneDrive on a server.** Their sync apps run on computers, not servers. A server can use WebDAV or Nextcloud today. iCloud Drive can't run on a Linux server.
 

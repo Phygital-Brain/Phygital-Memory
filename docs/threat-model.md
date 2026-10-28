@@ -37,6 +37,15 @@ For anyone deciding where to use Phygital Memory. It says what the app protects 
 | Problems in Cryptomator's format, Syncthing, rclone, git or your cloud | Report those to them |
 | A computer that is not yours | Do not unlock memories on it |
 
+## On your own server
+
+[Phygital Memory Server](server.md) puts the page and the AI door on the internet, so the protection changes:
+
+- **The passphrase is the lock.** Anyone with it can open the page. Ten wrong tries close the door for 15 minutes. The login is a cookie that only the server's own page can use.
+- **Other sites can't act for you.** Changes are accepted only from the server's own address, and only with the login.
+- **Whoever controls the server can read open memories.** An Encrypted memory is readable on the server from the moment you unlock it until you lock it or the server restarts. Use a server you trust.
+- **Secrets sit in one file on the server's disk**, readable only by the server, not in a keychain. Keep the server's disk private.
+
 ## Not audited yet
 
 Nobody outside the project has audited the code. It is not certified and we do not claim it is secure. The tests in `core/tests/` check the rules in [AGENTS.md](../AGENTS.md), but tests are not an audit. A security review of the whole app is planned. The Windows and Linux builds use new code in some places (the secret store, the pickers, the file manager) and need the same review. Windows is not fully tested yet.

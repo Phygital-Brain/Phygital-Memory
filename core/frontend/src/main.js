@@ -75,7 +75,8 @@ root.append(unlockEl, appEl);
 // ---------- folders ----------
 // Every locked folder keeps its own screen in memory while you look at another one: tabs, open tree folders,
 // settings, Finder state. Switching back is instant and nothing unsaved is lost.
-const ON_MAC = /Mac/.test(navigator.platform || navigator.userAgent);   // the Mac-only menu items and the like
+const ON_SERVER = !!document.documentElement.dataset.server;   // the page of a Phygital Memory server (docs/server.md)
+const ON_MAC = /Mac/.test(navigator.platform || navigator.userAgent) && !ON_SERVER;   // the Mac-only menu items and the like
 let folderList = [];          // [{id, name, path, open, exists, finder}] from the server
 let loadedFolder = null;      // the folder whose screen is in `state` right now (null on an unlock screen)
 const views = new Map();      // folder id -> its screen, while another folder is in front
@@ -761,7 +762,8 @@ function buildApp() {
     treeEl,
     el("div", { class: "sb-foot" },
       statusBar(),
-      el("span", { class: "sb-foot-btns" }, lockBtn = ib("unlock", t("Unlocked. Click to lock this memory"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere))),
+      el("span", { class: "sb-foot-btns" }, lockBtn = ib("unlock", t("Unlocked. Click to lock this memory"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere),
+        ON_SERVER ? ib("logout", t("Sign out"), signOut) : null)),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -907,6 +909,11 @@ function drawFinder() {
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
 }
 // Settings with this folder's options (Show in Finder). Resolves the switch's new state.
+async function signOut() {
+  try { await fetch("/logout", { method: "POST" }); } catch {}
+  location.replace("/login");
+}
+
 async function openSettingsHere() {
   const info = curInfo();
   let touch = null;
@@ -2600,8 +2607,12 @@ async function homeExtras(status, ai, leaving) {
   if (!status.isConnected) return;
   const ago = (sec) => agoText(sec);
   const bits = [curInfo()?.kind === "open" ? el("span", { class: "hs-open" }, t("Open folder")) : el("span", { class: "hs-ok" }, t("Locked on disk")),
-    el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : t("This Mac only"))];
+    el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : ON_SERVER ? t("On this server") : t("This Mac only"))];
   const problems = [];
+  if (ON_SERVER) {   // a newer release on GitHub: the server updates when it is deployed again
+    const s = await api("serverinfo").catch(() => ({}));
+    if (s.latest && s.version && s.latest !== s.version && s.version !== "dev") problems.push([t("Version {0} is out. Deploy your server again to update.", s.latest), []]);
+  }
   for (const [name, st] of [[t("GitHub backup"), store.github && store.githubStatus], ["S3 backup", store.s3 && store.s3Status]]) {
     if (!st) continue;
     if (st.error) problems.push([`${name} stopped: ${st.error}`, [["Storage", openStoragePanel]]]);

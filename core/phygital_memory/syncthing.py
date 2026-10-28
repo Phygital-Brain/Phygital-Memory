@@ -78,7 +78,7 @@ class Syncthing:
         x = cfg.read_text()
         self.gui = f"127.0.0.1:{_free_port()}"
         self.key = secrets.token_urlsafe(24)
-        self.listen = _free_port()
+        self.listen = int(os.environ.get("PHYGITAL_MEMORY_SYNC_PORT") or 0) or _free_port()   # a server opens one fixed port
 
         def put(tag: str, value: str, text: str) -> str:
             return re.sub(rf"<{tag}>[^<]*</{tag}>", f"<{tag}>{value}</{tag}>", text, count=1) if f"<{tag}>" in text \
