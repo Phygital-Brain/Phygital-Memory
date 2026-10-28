@@ -59,18 +59,16 @@ To cite the project, use GitHub's "Cite this repository" button, which reads
 CITATION.cff. The vault code in core/phygital_memory/vault/ and the Finder view
 come from Encryptor MCP, by the same author, under the same license.
 
-Design and feature ideas from Baalda (https://github.com/naveedharri/baalda).
-A few sidebar icon shapes are adapted from Baalda, Copyright 2026 Baalda and the
-Baalda contributors, under the Apache License 2.0; its license and NOTICE are in
-core/packaging/third-party/baalda.txt. "Baalda" is a trademark of the Baalda
-project, named here only to give credit.
+Design and feature ideas, including the style of some sidebar icons, come from
+Baalda (https://github.com/naveedharri/baalda, Apache-2.0). No Baalda code is
+included. "Baalda" is a trademark of the Baalda project, named here only to
+give credit.
 
 
 Third-party software
 --------------------
 
-Apart from the Baalda icon shapes above, no third-party source files are included
-in this repository. The built app
+No third-party source files are included in this repository. The built app
 bundles these programs unchanged, each with its own license (shown in the app
 under Settings › Licences):
 
