@@ -22,7 +22,7 @@ for line in subprocess.run(["uv", "export", "--no-dev", "--no-hashes", "--format
 def texts(dist) -> str:
     files = [f for f in dist.files or [] if re.search(r"(licen[cs]e|copying|notice)", str(f), re.I)
              and not str(f).endswith((".py", ".pyc"))]
-    return "\n\n~~~\n\n".join(Path(dist.locate_file(f)).read_text(errors="replace").strip() for f in files)   # ~~~: between two licence files
+    return "\n\n~~~\n\n".join(Path(dist.locate_file(f)).read_text(encoding="utf-8", errors="replace").strip() for f in files)   # ~~~: between two licence files
 
 
 def licence(dist) -> str:
@@ -33,8 +33,11 @@ def licence(dist) -> str:
 
 
 parts = []
-py = Path(sys.base_prefix) / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "LICENSE.txt"
-parts.append(f"Python {platform.python_version()}, PSF-2.0\n\n{py.read_text(errors='replace').strip()}")
+base = Path(sys.base_prefix)
+py = next((p for p in (base / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "LICENSE.txt",
+                       base / "LICENSE.txt", base / "LICENSE") if p.is_file()), None)   # the Mac and Linux spot, then Windows
+parts.append(f"Python {platform.python_version()}, PSF-2.0\n\n" + (py.read_text(errors="replace").strip() if py else
+             "(the licence text is at https://docs.python.org/3/license.html)"))
 pi = md.distribution("pyinstaller")   # only its bootloader ships: it starts the server
 parts.append(f"PyInstaller bootloader {pi.version}, GPL-2.0 with the bootloader exception (it may ship in any program)\n\n{texts(pi)}")
 missing = []
@@ -47,5 +50,5 @@ for n in sorted(set(names), key=str.lower):
     body = texts(d)
     parts.append(f"{d.metadata['Name']} {d.version}, {licence(d)}\n\n{body or '(no licence file in the package; see its project page)'}")
 
-out.write_text("ENGINE: PYTHON AND ITS LIBRARIES\n================================\n\n" + "\n\n---\n\n".join(parts) + "\n")
+out.write_text("ENGINE: PYTHON AND ITS LIBRARIES\n================================\n\n" + "\n\n---\n\n".join(parts) + "\n", encoding="utf-8")
 print(f"{len(parts)} parts" + (f", not on this system: {', '.join(missing)}" if missing else ""))

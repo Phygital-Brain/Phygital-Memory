@@ -26,6 +26,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-14, windows-latest, ubuntu-22.04]
+    env:
+      PYTHONUTF8: "1"   # Windows' Python otherwise writes the licence files in its old code page
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -67,6 +69,8 @@ jobs:
           echo "$P12" | base64 --decode > "$RUNNER_TEMP/id.p12"
           security import "$RUNNER_TEMP/id.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
           rm "$RUNNER_TEMP/id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KCP" "$KC" > /dev/null   # codesign may use the key
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')   # and can find it
           ID=$(security find-identity "$KC" | awk '/Phygital Memory Local Signing/ {print $2; exit}')
           T=core/packaging/touchid
           swiftc -O -o "$T/bin/Phygital Memory" "$T/main.swift"

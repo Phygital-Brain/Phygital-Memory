@@ -1,5 +1,5 @@
 # Tests on Mac, Windows and Linux at every push: the engine's tests that need no secret store or second app,
-# then a compile check of the app window. (The sharing and server tests run on the Mac for now; see AGENTS.md.
+# then the built engine run and used for real, then a compile check of the app window. (The sharing and server tests run on the Mac for now; see AGENTS.md.
 # test_docx needs pandoc to make its sample files, so it runs on the Mac too.)
 name: tests
 
@@ -47,6 +47,29 @@ jobs:
             echo "== $t"
             PHYGITAL_MEMORY_STATE="$(mktemp -d)" uv run python "tests/$t.py"
           done
+
+  built:
+    name: built engine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-22.04]
+    defaults:
+      run:
+        working-directory: core
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - name: Build the engine into one program
+        run: uv sync --frozen && uv run python packaging/build.py
+      - name: Run it and use it (Open and Encrypted memories, search, AI tasks, the AI door)
+        env:
+          PYTHONUTF8: "1"
+        run: uv run python tests/test_smoke_server.py packaging/dist/phygital-memory-server/phygital-memory-server
 
   window:
     name: app window (${{ matrix.os }})
