@@ -136,7 +136,10 @@ export function openAIPanel(ctx, start = "tasks") {
       body.replaceChildren(...views[k].body);
       tools.replaceChildren(...(views[k].tools || []));
       if (k === "tasks" && tasks.focus) tasks.focus.focus();
+      if (views[k].refresh && k !== first) views[k].refresh();
+      first = null;
     };
+    let first = start;   // the first tab shown already has fresh data
     for (const [k, label] of [["tasks", "Tasks"], ["activity", "Activity"], ["approvals", "Approvals"]]) {
       tabs.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
     }
@@ -150,9 +153,13 @@ export function openAIPanel(ctx, start = "tasks") {
 }
 
 function activityView(ctx, done) {
-  const apps = [...new Set(ctx.rows.map((r) => r.app))];
-  const filter = el("select", { class: "act-filter", "aria-label": "Which app" },
-    el("option", { value: "" }, "All AI apps"), ...apps.map((a) => el("option", { value: a }, a)));
+  const filter = el("select", { class: "act-filter", "aria-label": "Which app" });
+  const apps = () => {   // the app picker, only when more than one app did something
+    const names = [...new Set(ctx.rows.map((r) => r.app))], cur = filter.value;
+    filter.replaceChildren(el("option", { value: "" }, "All AI apps"), ...names.map((a) => el("option", { value: a }, a)));
+    filter.value = names.includes(cur) ? cur : "";
+    filter.classList.toggle("hidden", names.length < 2);
+  };
   const list = el("div", { class: "act-list" });
   const draw = () => {
     const rows = ctx.rows.filter((r) => !filter.value || r.app === filter.value);
@@ -174,8 +181,10 @@ function activityView(ctx, done) {
     }) : [el("div", { class: "act-empty" }, "No AI app has used your notes since they were unlocked.")]));
   };
   filter.addEventListener("change", draw);
-  draw();
-  return { tools: apps.length > 1 ? [filter] : [],
+  apps(); draw();
+  // Fetched again each time the tab opens, so what an AI app did while the panel was open shows up.
+  const refresh = async () => { try { ctx.rows = await ctx.reload(); apps(); draw(); } catch (e) { ctx.fail(e.message); } };
+  return { tools: [filter], refresh,
            body: [el("div", { class: "mf-hint" }, "What AI apps did with your unlocked notes. Kept only until you lock."), list] };
 }
 
@@ -266,7 +275,7 @@ export function openTrash(ctx) {
     draw();
     const card = el("div", { class: "dlg activity", role: "dialog" },
       el("div", { class: "dlg-title" }, "Trash"),
-      el("div", { class: "mf-hint" }, "Restore puts it back where it was. Nothing in here is ever overwritten."),
+      el("div", { class: "mf-hint" }, "Things stay here for 7 days, then they're deleted for good. Restore puts each one back where it was, never over something already there."),
       list, err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));
     return { card };

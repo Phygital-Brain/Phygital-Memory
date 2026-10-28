@@ -521,15 +521,15 @@ def make_folder(ctx: Context, path: Annotated[str, Field(description="The new su
 
 @mcp.tool(annotations=WRITE)
 def trash_note(ctx: Context, path: NotePath, folder: FolderName = "", private: Private = False) -> str:
-    """Put a note, file or subfolder in the app's trash. Nothing is erased: the person can put it back from the
-    Trash in the app."""
+    """Put a note, file or subfolder in the app's trash. The person can put it back from the Trash in the app for
+    7 days; after that it's deleted for good."""
     _need_write()
     app = _seen(ctx)
     f = _pick(folder)
     _private(f, path, private, "trash")
     _guard(f.memory.trash, path)
-    _log(app, f, "put in the trash", "the person can put it back from Trash", path)
-    return f"Put {path} in the trash. The person can put it back from Trash in the app."
+    _log(app, f, "put in the trash", "the person can put it back from Trash for 7 days", path)
+    return f"Put {path} in the trash. The person can put it back from Trash in the app for 7 days."
 
 
 # ---------- the person's own app: the page and its /api ----------
@@ -1751,6 +1751,10 @@ async def api(request: Request) -> Response:
             except WrongPassword:   # the password changed since: forget the old one
                 await asyncio.to_thread(touchid.forget, f.id)
                 return _ok({"error": "The kept password no longer works. Use your password."}, 403)
+        if action == "forgetfolder" and not f.memory.is_open:   # a locked or missing memory comes off the list
+            gate.forget_folder(f.id)                               # without its password: nothing opens, nothing
+            folders.forget(f.id)                                   # is deleted (adding one needs no password either)
+            return _ok({"ok": True})
         if not _has_pass(request, f):
             return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
 

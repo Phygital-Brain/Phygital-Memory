@@ -1766,7 +1766,7 @@ async function renameDialog(n) {
 }
 
 async function trashDialog(n) {
-  const ok = await confirmDialog(`Move "${isMd(n.name) ? label(n.name) : n.name}" to trash?`, "Move to trash", true);
+  const ok = await confirmDialog(`Move "${isMd(n.name) ? label(n.name) : n.name}" to trash?`, "Move to trash", true, "You can restore it from Trash for 7 days.");
   if (!ok) return;
   await doTrash([n.path]);
 }
@@ -1777,7 +1777,7 @@ async function trashMany(paths) {
   const name = (p) => isMd(p) ? label(p) : baseName(p);
   const list = top.slice(0, 5).map(name).join(", ") + (top.length > 5 ? ` and ${top.length - 5} more` : "");
   if (!await confirmDialog(`Move ${top.length === 1 ? `"${name(top[0])}"` : `${top.length} items`} to the trash?`, "Move to trash", true,
-    `${top.length === 1 ? "" : list + ". "}You can restore them from Trash.`)) return;
+    `${top.length === 1 ? "" : list + ". "}You can restore them from Trash for 7 days.`)) return;
   const folders = top.filter((p) => state.files.some((f) => f.path === p && f.kind === "folder"));
   const inside = state.files.filter((f) => f.kind === "file" && folders.some((d) => f.path.startsWith(d + "/"))).length;
   if (folders.length || top.length > 10) {
@@ -2483,6 +2483,7 @@ async function openAI(start, path) {
     approvals,
     activity: {
       rows, open: (p) => openPath(p),
+      reload: async () => (await api("aiactivity")).activity || [],
       undo: async (r) => {
         const j = await api("undoai", { id: r.undo, folder: r.folder });
         await syncFromDisk();
