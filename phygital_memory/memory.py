@@ -114,6 +114,7 @@ class Memory:
             self._fix_clash_copies()
             try:
                 self._empty_old_trash()
+                self._drop_orphan_versions()
             except Exception:
                 pass   # never let trash upkeep stop an unlock
             self._index_all()
@@ -825,6 +826,7 @@ class Memory:
             if any(e.name == name for e in self._tree.list_dir(parent.dir_id)):
                 raise Exists(f"'{new}' already exists.")
             self._writer.move(entry, parent, name)
+            self._move_versions(old_entry_path, new)
             self._reindex()
             self.todo_moved(old_entry_path, new)
             priv = self.ai_private()   # a private folder stays private when it moves or is renamed
@@ -952,6 +954,52 @@ class Memory:
         kept = sorted((e for e in self._tree.list_dir(parent.dir_id) if e.kind == "file"), key=lambda e: e.name)
         for e in kept[:-VERSION_KEEP]:
             self._writer.remove(e)
+
+    def _move_versions(self, old: str, new: str) -> None:
+        """A note (or folder) that moves takes its version history along."""
+        try:
+            hist = self._tree.resolve(f"{VERSIONS}/{old}")
+        except NotFound:
+            return
+        parent, name = self._make_parents(f"{VERSIONS}/{new}")
+        if not any(e.name == name for e in self._tree.list_dir(parent.dir_id)):
+            self._writer.move(hist, parent, name)
+
+    def _drop_orphan_versions(self) -> None:
+        """Version history of notes that are gone for good (not in the folder, not in the trash) is removed, and the
+        empty folders it leaves (checked on unlock)."""
+        try:
+            root = self._tree.resolve(VERSIONS)
+        except NotFound:
+            return
+        in_trash = set(self._json(TRASH_INDEX, {}).values())
+
+        def live(rel: str) -> bool:   # still here, or in the trash (alone or inside a trashed folder)
+            if any(rel == t or rel.startswith(t + "/") for t in in_trash):
+                return True
+            try:
+                self._tree.resolve(rel)
+                return True
+            except NotFound:
+                return False
+
+        def sweep(d, rel: str) -> bool:   # True when d ends up empty
+            kids = self._tree.list_dir(d.dir_id)
+            files = [e for e in kids if e.kind == "file"]
+            if files and rel and not live(rel):
+                for e in files:
+                    self._writer.remove(e)
+                files = []
+            empty = not files
+            for e in kids:
+                if e.kind == "dir":
+                    if sweep(e, f"{rel}/{e.name}" if rel else e.name):
+                        self._writer.remove_tree(e)
+                    else:
+                        empty = False
+            return empty
+
+        sweep(root, "")
 
     def versions(self, rel: str) -> list[dict]:
         rel = _clean_path(rel)
