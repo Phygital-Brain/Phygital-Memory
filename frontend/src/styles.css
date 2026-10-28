@@ -859,3 +859,5 @@ body { font-family: var(--font-body); font-size: 14px; }
 .home-more { align-self: flex-start; margin: 2px 0 0 8px; font: 11.5px var(--font-mono); color: var(--text-3); padding: 2px 0; }
 .home-more:hover { color: var(--text); }
 .hi-done { color: var(--accent); }
+.home-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.home-date { font: 12px var(--font-mono); color: var(--text-3); }

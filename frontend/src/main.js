@@ -2393,7 +2393,8 @@ function renderHome(tab) {
   const pinned = getPref("pins", []).map((p) => state.files.find((f) => f.path === p)).filter(Boolean);
   const status = el("div", { class: "home-status" }), ai = el("div", { class: "home-ai" }), leaving = el("div", { class: "home-leaving" });
   tab.body.replaceChildren(
-    el("h1", { class: "home-title" }, "Home"),
+    el("div", { class: "home-top" }, el("h1", { class: "home-title" }, "Home"),
+      homeClock()),
     status,
     ...(pinned.length ? [el("h2", { class: "home-h" }, "Pinned"), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
     ai,
@@ -2401,6 +2402,20 @@ function renderHome(tab) {
     recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, "No notes yet. Press ⌘N to write one."),
     leaving);
   homeExtras(status, ai, leaving);
+}
+
+// The Mac's date and time beside the title, kept current while Home is on screen.
+let clockTimer = null;
+function homeClock() {
+  const c = el("div", { class: "home-date" });
+  const draw = () => {
+    const d = new Date();
+    c.textContent = `${d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" })} · ${d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+  };
+  draw();
+  clearInterval(clockTimer);
+  clockTimer = setInterval(() => { if (c.isConnected) draw(); else clearInterval(clockTimer); }, 15000);
+  return c;
 }
 
 // Home's live parts: one status line (a problem stands out, all well stays quiet), your AI's open tasks and latest
