@@ -19,7 +19,8 @@ from . import finder_mount
 from .memory import Memory
 from .vault.keys import VaultError
 
-BASE = Path(os.environ.get("PHYGITAL_MEMORY_MOUNTS", "~/Library/Application Support/Phygital Memory/Finder")).expanduser()
+from .system import state_dir
+BASE = Path(os.environ["PHYGITAL_MEMORY_MOUNTS"]).expanduser() if os.environ.get("PHYGITAL_MEMORY_MOUNTS") else state_dir() / "Finder"
 DESKTOP = Path(os.environ.get("PHYGITAL_MEMORY_DESKTOP", "~/Desktop")).expanduser()   # where the shortcut goes
 NAME = "Phygital Memory"
 

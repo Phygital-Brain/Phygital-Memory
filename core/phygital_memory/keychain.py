@@ -3,12 +3,20 @@
 In the built app they're kept by the helper (packaging/touchid), trusted only to itself, so another program can't
 read them silently the way it can read items made by the `security` tool; and the helper only answers this app's
 own server. Items an older version made with `security` move over the first time they're read. Running from source
-(tests, development) uses `security` as before."""
+(tests, development) uses `security` as before. On Windows and Linux the system's own store keeps them (Windows
+Credential Manager, the Secret Service keyring), through the keyring library."""
 import subprocess
 import threading
 import time
 
 from . import touchid
+from .system import MAC
+
+
+def _store():
+    """Windows and Linux: the system's own secret store."""
+    import keyring
+    return keyring
 
 # What was read, kept for this run: macOS may ask the person before the helper gets an item (after an update, say),
 # so the app asks once, waits for the answer, and doesn't ask again every few seconds. A "no" is kept 10 minutes.
@@ -61,6 +69,12 @@ APP_ONLY = " (app only)"   # the helper's own items get their own name, so findi
 def save(service: str, account: str, secret: str) -> None:
     _got.pop((service, account), None)
     _refused.pop((service, account), None)
+    if not MAC:
+        try:
+            _store().set_password(service, account, secret)
+        except Exception as e:
+            raise RuntimeError(f"Couldn't keep it in this computer's secret store: {e}")
+        return
     if touchid.bundled():
         r = _helper("keep", service + APP_ONLY, account, secret=secret.encode())
         if not r or r.returncode != 0:
@@ -92,6 +106,12 @@ def read(service: str, account: str) -> str | None:
 
 
 def _read(service: str, account: str) -> str | None:
+    if not MAC:
+        try:
+            return _store().get_password(service, account)
+        except Exception:   # the store is locked, or there's none (a Linux without a keyring)
+            _refused[(service, account)] = time.time() + 600
+            raise Refused("This computer's secret store didn't answer. Unlock it (or install one, like GNOME Keyring), then try again.")
     if touchid.bundled():
         r = _helper("read", service + APP_ONLY, account, timeout=20)   # never hold the app up for long
         if r and r.returncode == 0 and r.stdout:
@@ -112,6 +132,12 @@ def _read(service: str, account: str) -> str | None:
 
 def delete(service: str, account: str) -> None:
     _got.pop((service, account), None)
+    if not MAC:
+        try:
+            _store().delete_password(service, account)
+        except Exception:
+            pass   # not there
+        return
     if touchid.bundled():
         _helper("drop", service + APP_ONLY, account)
     _security_delete(service, account)

@@ -142,7 +142,8 @@ EXTRA_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"   # an app from th
 
 
 def _env() -> dict:
-    env = {**os.environ, "PATH": os.environ.get("PATH", "") + ":" + EXTRA_PATH, "GIT_TERMINAL_PROMPT": "0"}
+    extra = "" if os.name == "nt" else os.pathsep + EXTRA_PATH   # (Windows apps get the full PATH)
+    env = {**os.environ, "PATH": os.environ.get("PATH", "") + extra, "GIT_TERMINAL_PROMPT": "0"}
     if _own():   # the GitHub key, only for git's own run (git's credential helper below reads it from here)
         env["PM_GITHUB_KEY"] = github_auth.saved_token() or ""
     return env

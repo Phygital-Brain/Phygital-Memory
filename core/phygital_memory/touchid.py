@@ -15,6 +15,8 @@ def bundled() -> Path | None:
 
 
 def _helper() -> Path | None:
+    if sys.platform != "darwin":   # Touch ID is a Mac thing: elsewhere the password is the way in
+        return None
     if getattr(sys, "frozen", False):   # the built app: never a helper named by the environment
         return bundled()
     here = Path(sys.executable).parent

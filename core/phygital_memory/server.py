@@ -39,7 +39,7 @@ from pydantic import Field
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 
-from . import activity, approvals, brain, cloud, gate as gate_mod, github_auth, gitsync, keychain, linking, pka, shares, sharing, touchid
+from . import activity, approvals, brain, cloud, gate as gate_mod, github_auth, gitsync, keychain, linking, pka, shares, sharing, system, touchid
 from .syncthing import Syncthing, proof as st_proof
 from . import finder as finder_links
 from .folders import (SHARED_COPIES, STATE, Folders, cloud_places, download_all, is_vault, memory_id, not_downloaded,
@@ -1770,7 +1770,7 @@ async def api(request: Request) -> Response:
         if action == "githubsignin":   # a code to type on github.com, which opens in their browser
             d = await asyncio.to_thread(github_auth.start)
             github_pending.update(device=d["device"], until=time.time() + d["expires"])
-            await asyncio.to_thread(subprocess.run, ["open", d["url"]], timeout=30)
+            await asyncio.to_thread(system.open_url, d["url"])
             return _ok({"code": d["code"], "url": d["url"], "interval": d["interval"]})
         if action == "githubpoll":   # asked every few seconds while the person approves on github.com
             if not github_pending.get("device") or time.time() > github_pending.get("until", 0):
@@ -1926,7 +1926,8 @@ async def api(request: Request) -> Response:
                         "places": cloud_places(), "home": str(Path.home()), "offline": 0,
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
-            return _ok({"path": str(f.path), "kind": "open" if f.plain else "encrypted", "cloud": cloud_place(f.path), "places": cloud_places(),
+            return _ok({"path": str(f.path), "kind": "open" if f.plain else "encrypted", "noCloudOnly": not system.MAC,
+                        "cloud": cloud_place(f.path), "places": cloud_places(),
                         "webdav": f.info()["webdav"], "webdavStatus": f.mirror.status() if f.mirror else None,
                         "s3": f.info()["s3"], "s3Status": f.s3.status() if f.s3 else None,
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),
@@ -1937,7 +1938,7 @@ async def api(request: Request) -> Response:
             repo = str(body.get("repo", ""))
             if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9._-]+", repo):
                 return _ok({"error": "Bad repo name."}, 400)
-            await asyncio.to_thread(subprocess.run, ["open", f"https://github.com/{repo}/settings"], timeout=30)
+            await asyncio.to_thread(system.open_url, f"https://github.com/{repo}/settings")
             return _ok({"ok": True})
         if action == "togithub":   # keep it in a new private GitHub repo (scrambled files only)
             try:
@@ -2274,18 +2275,16 @@ async def api(request: Request) -> Response:
                 return _ok({"error": "That result is gone. Search again."}, 404)
             return _ok({"path": r["path"], "heading": r["heading"], "text": r["text"]})
         if action == "brainlanguages":   # the languages a memory can be set up in (folder names and rules), and the Mac's name
-            import pwd
-            mac = (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the Mac account's first name
+            mac = system.first_name()   # the computer account's first name
             return _ok({"languages": brain.languages(), "name": mac})
         if action == "brainplan":   # the folders the brain will have, to show while it builds
             return _ok({"folders": brain.plan(body.get("picks") or {}, str(body.get("lang") or "en"))})
         if action == "brainbuild":   # set this memory up from the person's clicks: folders, rules, About pages
-            import pwd
             picks, lang = body.get("picks") or {}, str(body.get("lang") or "en")
             if lang not in {c for c, _ in brain.languages()}:
                 return _ok({"error": "That language isn't ready yet."}, 400)
             name = re.sub(r"[\x00-\x1f{}\[\]<>`|#]", "", str(body.get("name") or "")).strip()[:60] \
-                or (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the name they confirmed, or the Mac's
+                or system.first_name()   # the name they confirmed, or the computer account's
             res = await asyncio.to_thread(brain.build, m, picks, lang, name, str(body.get("tz") or "")[:60])
             ask = brain.finish_ask(picks, res["language"], f.info()["name"], name, str(f.path) if f.plain else "")
             item = await asyncio.to_thread(m.todo_add, res["me"], ask)
@@ -2406,7 +2405,7 @@ async def api(request: Request) -> Response:
             if do == "revealvault" and f.cloud_at:
                 return _ok({"error": "This memory is in the cloud, not on this Mac."}, 400)
             if do == "revealvault":   # the encrypted folder itself (scrambled files only), in Finder
-                await asyncio.to_thread(subprocess.run, ["open", "-R", str(f.open_copy or f.path)], timeout=30)
+                await asyncio.to_thread(system.reveal, f.open_copy or f.path)
                 return _ok({"ok": True})
             if do in ("reveal", "openfile"):   # select one note or file in the open Finder view, or open it in its app
                 where = f.finder.where()
@@ -2419,8 +2418,7 @@ async def api(request: Request) -> Response:
                 if do == "openfile" and (target.is_dir() or target.suffix.lower() not in OPENABLE):
                     # never hand an app, script or shortcut to "open": a synced-in file could run code that way
                     return _ok({"error": "This kind of file can't be opened from here. Use Show in Finder."}, 400)
-                await asyncio.to_thread(subprocess.run, ["open", "-R", str(target)] if do == "reveal" else ["open", str(target)],
-                                        timeout=30)
+                await asyncio.to_thread(system.reveal if do == "reveal" else system.open_path, target)
                 return _ok({"shown": True, "where": where})
             if do == "hide":
                 await asyncio.to_thread(f.finder.hide)
@@ -2472,7 +2470,7 @@ def _claude_desktop_ext() -> str:
         z.write(ext / "index.js", "server/index.js")
         z.write(ext / "icon.png", "icon.png")
     if not os.environ.get("PHYGITAL_MEMORY_OFFLINE"):   # tests: no Finder window
-        subprocess.run(["open", "-R", str(out)], check=False)
+        system.reveal(out)
     return str(out)
 
 

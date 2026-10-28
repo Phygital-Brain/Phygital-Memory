@@ -50,7 +50,7 @@ export function openStorage(ctx) {
       s.webdav ? null : btn(t("Mac + WebDAV"), () => run(() => s.cloudOnly
         ? ctx.pick(t("Choose a place on this Mac for the copy")).then((w) => w && ctx.toMac(w, "this Mac", true))
         : ctx.toWebdav(), s.cloudOnly ? "moved" : "changed")),
-      s.cloudOnly ? null : btn(t("WebDAV only"), () => run(ctx.toCloudOnly, "tocloud")));
+      s.cloudOnly || s.noCloudOnly ? null : btn(t("WebDAV only"), () => run(ctx.toCloudOnly, "tocloud")));   // (Mac only for now)
 
     const gs = s.githubStatus;
     const github = s.github

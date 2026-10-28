@@ -24,7 +24,8 @@ from mcp.server.auth.provider import (AccessToken, AuthorizationCode, Authorizat
                                       RefreshToken, RegistrationError, TokenError, construct_redirect_uri)
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
-STATE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser()
+from .system import state_dir
+STATE = state_dir()
 FILE = STATE / "ai-apps.json"
 READ, WRITE = "notes:read", "notes:write"
 ACCESS_DAYS, REFRESH_DAYS = 30, 365

@@ -17,12 +17,12 @@ import time
 import zipfile
 from pathlib import Path
 
-from . import activity, cloud
+from . import activity, cloud, system
 from .finder import Finder
 from .gitsync import GitSync, rename_repo, repo_name
 from .memory import Memory
 
-STATE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser()
+STATE = system.state_dir()
 REGISTRY = STATE / "folders.json"
 
 
@@ -62,7 +62,7 @@ class PlainFinder:
 
     def show(self, open_window: bool = True) -> str:
         if open_window:
-            subprocess.run(["open", str(self.memory.folder)], timeout=30)
+            system.open_path(self.memory.folder)
         return str(self.memory.folder)
 
     def renamed(self, name: str) -> None:
@@ -376,6 +376,7 @@ class Folders:
     def from_cloud(self, conn: dict, path: str, plain: bool = False) -> dict:
         """Add a memory that's already in the cloud. Nothing is downloaded: it opens from there when unlocked (an
         Open one, plain: when opened)."""
+        cloud_only_here()
         conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
         if not cloud.has_password(conn):
             raise ValueError(f"Connect to {cloud.label(conn)} first.")
@@ -391,6 +392,7 @@ class Folders:
             return f.info()
 
     def create_in_cloud(self, conn: dict, parent: str, name: str, password: str) -> dict:
+        cloud_only_here()
         name = name.strip()
         if not name or re.search(r'[/\\:*?"<>|]', name) or name.startswith("."):
             raise ValueError("Pick a simple name for the memory.")
@@ -414,6 +416,7 @@ class Folders:
     def to_cloud(self, fid: str, conn: dict, parent: str) -> dict:
         """Move a memory from this Mac into the cloud: it locks, its encrypted files go up and are checked, then the
         Mac's copy goes to the Trash (so it can come back) and the memory opens from the cloud from now on."""
+        cloud_only_here()
         f = self.get(fid)
         if f.cloud_at:
             raise ValueError("This memory is already in the cloud.")
@@ -449,7 +452,7 @@ class Folders:
     def _now_cloud_only(self, f: Folder, conn: dict, path: str) -> dict:
         """The cloud copy is complete: the Mac's copy goes to the Trash (it can come back), and the memory opens
         from the cloud from now on."""
-        trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
+        trash = system.trash_dir()
         shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
         shutil.rmtree(MIRRORS / f.id, ignore_errors=True)
         with self._lock:
@@ -709,7 +712,7 @@ class Folders:
         if f.sync:
             f.sync.stop()
             f.sync = None
-        trash = Path(os.environ.get("PHYGITAL_MEMORY_TRASH", "~/.Trash")).expanduser()
+        trash = system.trash_dir()
         stamp = time.strftime("%Y-%m-%d %H.%M.%S")
         if f.gitdir.exists():
             shutil.move(str(f.gitdir), str(trash / f"{f.name} .git (GitHub backup, {stamp})"))
@@ -841,6 +844,13 @@ CLOUD_STORAGE_NAMES = {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "D
                        "SynologyDrive": "Synology Drive", "Nextcloud": "Nextcloud", "Filen": "Filen", "Egnyte": "Egnyte"}
 
 
+def cloud_only_here() -> None:
+    """WebDAV only shows the server as a hidden drive, which needs macOS for now (Windows needs WinFsp, Linux FUSE)."""
+    if not system.MAC:
+        raise ValueError("WebDAV only works on a Mac for now. Keep a copy on this computer that stays in step with "
+                         "WebDAV instead.")
+
+
 def open_ok(p: Path) -> None:
     """An Open memory can be any folder, but not the whole Mac or a whole home folder: the app would read it all."""
     p = Path(p).resolve()
@@ -932,38 +942,10 @@ def move_folder_on_disk(src: Path, parent: Path) -> Path:
     if want != got:
         shutil.rmtree(dest, ignore_errors=True)
         raise ValueError("The copy didn't arrive complete. Nothing was moved.")
-    os.rename(src, Path.home() / ".Trash" / f"{src.name} (moved {time.strftime('%Y-%m-%d %H.%M')})")
+    system.trash_dir().mkdir(parents=True, exist_ok=True)
+    os.rename(src, system.trash_dir() / f"{src.name} (moved {time.strftime('%Y-%m-%d %H.%M')})")
     return dest
 
 
-def _osascript(lines: list[str], *args: str) -> subprocess.CompletedProcess:
-    """Run AppleScript with names passed as arguments (item 1 of argv...), never written into the script itself, so
-    a folder or note name can't break out of its quotes."""
-    script = ["on run argv", *lines, "end run"]
-    return subprocess.run(["osascript", *sum((["-e", line] for line in script), []), *args], capture_output=True,
-                          text=True, timeout=600)
-
-
-def pick_files(prompt: str) -> list[str]:
-    """The Mac's own file picker, several files at once (the person chooses; nothing is read from the page)."""
-    out = _osascript(["set picked to choose file with prompt (item 1 of argv) with multiple selections allowed",
-                      'set out to ""', "repeat with f in picked", "set out to out & POSIX path of f & linefeed",
-                      "end repeat", "return out"], prompt)
-    return [p for p in out.stdout.splitlines() if p] if out.returncode == 0 else []
-
-
-def pick_save(prompt: str, name: str) -> str | None:
-    """The Mac's own "save as" box: where to put an exported file. It asks itself before replacing one."""
-    out = _osascript(["return POSIX path of (choose file name with prompt (item 1 of argv) default name (item 2 of argv))"],
-                     prompt, name)
-    return out.stdout.strip() or None if out.returncode == 0 else None
-
-
-def pick_folder(prompt: str, start: str | None = None) -> str | None:
-    """The Mac's own folder picker (the person chooses; nothing is read from the page). start: where it opens."""
-    if start and Path(start).is_dir():
-        out = _osascript(["return POSIX path of (choose folder with prompt (item 1 of argv) default location (POSIX file (item 2 of argv)))"],
-                         prompt, start)
-    else:
-        out = _osascript(["return POSIX path of (choose folder with prompt (item 1 of argv))"], prompt)
-    return out.stdout.strip() or None if out.returncode == 0 else None
+# The system's own pickers (system.py): kept here by name, since the server and tests reach them through folders.
+pick_files, pick_save, pick_folder = system.pick_files, system.pick_save, system.pick_folder

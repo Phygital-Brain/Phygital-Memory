@@ -38,7 +38,8 @@ from . import keychain
 from .vault import keys as vkeys
 
 SHARE = ".phygital-share"
-ME_FILE = Path(os.environ.get("PHYGITAL_MEMORY_STATE", "~/Library/Application Support/Phygital Memory")).expanduser() / "me.json"
+from .system import state_dir
+ME_FILE = state_dir() / "me.json"
 IDENTITY = os.environ.get("PHYGITAL_MEMORY_IDENTITY_KEYCHAIN", "Phygital Memory identity")
 INVITE_DAYS = 7
 ROLES = ("edit", "view")

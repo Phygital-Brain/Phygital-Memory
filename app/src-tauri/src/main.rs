@@ -21,13 +21,15 @@ static SERVER_ENDED: AtomicBool = AtomicBool::new(false);   // the server stoppe
 
 fn folder() -> PathBuf {
     std::env::var("PHYGITAL_MEMORY_FOLDER").map(PathBuf::from).unwrap_or_else(|_| {
-        PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Phygital Memory")
+        // the home folder: HOME on Mac and Linux, USERPROFILE on Windows
+        let home = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).unwrap_or_default();
+        PathBuf::from(home).join("Phygital Memory")
     })
 }
 
 fn random_token() -> String {
     let mut buf = [0u8; 24];
-    std::fs::File::open("/dev/urandom").and_then(|mut f| f.read_exact(&mut buf)).expect("no randomness");
+    getrandom::fill(&mut buf).expect("no randomness");   // the system's own source, on every system
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -35,7 +37,8 @@ fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     let token = app.state::<ShellToken>().0.clone();
     // The server is a folder in Resources (starts about twice as fast as one packed file, which unpacks itself
     // on every start). rclone, the cloud helper, sits in the same folder.
-    let exe = app.path().resource_dir().map_err(|e| e.to_string())?.join("server/phygital-memory-server");
+    let name = if cfg!(windows) { "server/phygital-memory-server.exe" } else { "server/phygital-memory-server" };
+    let exe = app.path().resource_dir().map_err(|e| e.to_string())?.join(name);
     let cmd = app.shell().command(exe)
         .env("PHYGITAL_MEMORY_FOLDER", folder()).env("PHYGITAL_MEMORY_PORT", "8790")
         .env("PHYGITAL_MEMORY_SHELL_TOKEN", token)
@@ -241,10 +244,12 @@ fn handle_close(app: tauri::AppHandle, quitting: bool) {
 
 // The closing question's small window, made hidden at start so it can show the moment the main window closes.
 fn ask_window(app: &tauri::AppHandle) {
-    let _ = WebviewWindowBuilder::new(app, "closeask", WebviewUrl::External("http://127.0.0.1:8790/closeask".parse().unwrap()))
+    let b = WebviewWindowBuilder::new(app, "closeask", WebviewUrl::External("http://127.0.0.1:8790/closeask".parse().unwrap()))
         .title("Phygital Memory").inner_size(440.0, 230.0).resizable(false).minimizable(false).maximizable(false)
-        .closable(false).always_on_top(true).visible(false).center()
-        .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
+        .closable(false).always_on_top(true).visible(false).center();
+    #[cfg(target_os = "macos")]
+    let b = b.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+    let _ = b
         .on_navigation(|url| own_page(url))
         .initialization_script(&page_secret(app))
         .build();
@@ -267,11 +272,14 @@ fn starting_page(url: &tauri::Url) -> bool {
 }
 
 fn main_window(app: &tauri::AppHandle) -> Result<(), String> {
-    let win = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("starting.html".into()))
-        .title("Phygital Memory").inner_size(1200.0, 800.0).min_inner_size(720.0, 480.0).center()
-        // No title bar: the page fills the window and the close/minimise buttons float over the sidebar (as Baalda)
-        .title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
-        .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0))
+    let b = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("starting.html".into()))
+        .title("Phygital Memory").inner_size(1200.0, 800.0).min_inner_size(720.0, 480.0).center();
+    // Mac: no title bar, the page fills the window and the close/minimise buttons float over the sidebar (as Baalda).
+    // Windows and Linux keep their own title bar.
+    #[cfg(target_os = "macos")]
+    let b = b.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true)
+        .traffic_light_position(tauri::LogicalPosition::new(16.0, 22.0));
+    let win = b
         .on_navigation(|url| own_page(url) || starting_page(url))
         .disable_drag_drop_handler()   // files dragged in from Finder reach the page (it adds them, encrypted)
         .initialization_script(&page_secret(app))
