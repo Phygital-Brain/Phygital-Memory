@@ -2426,12 +2426,16 @@ async function homeExtras(status, ai, leaving) {
       el("button", { class: "btn small", type: "button", onclick: fn }, btn))));
 
   const open = (todo.todo || []).filter((t) => !t.done);
-  const work = (act.activity || []).slice(0, 3);
-  if (open.length || work.length) {
+  const finished = (todo.todo || []).filter((t) => t.done).sort((a, b) => (b.done_t || 0) - (a.done_t || 0)).slice(0, 3);   // kept in the memory, so they're here after a restart
+  const work = (act.activity || []).slice(0, 3);   // only since this unlock
+  if (open.length || finished.length || work.length) {
     ai.replaceChildren(el("h2", { class: "home-h" }, "Your AI"),
       el("div", { class: "home-list" },
         ...open.slice(0, 3).map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("sparkle", 15),
           el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.ask || "Read it"), el("span", { class: "hi-time hi-wait" }, "waiting"))),
+        ...finished.map((t) => el("button", { class: "home-item", onclick: () => openPath(t.path) }, icon("check", 15),
+          el("span", { class: "hi-name" }, label(t.path)), el("span", { class: "hi-dir" }, t.result ? `${t.by ? t.by + ": " : ""}${t.result}` : t.ask || "Read it"),
+          el("span", { class: "hi-time hi-done" }, "done"))),
         ...work.map((r) => {
           const row = el("div", { class: "home-item hi-work" }, icon("pulse", 15),
             el("span", { class: "hi-name" }, `${r.app} ${r.what}`), r.path ? el("span", { class: "hi-dir" }, r.path) : null,
