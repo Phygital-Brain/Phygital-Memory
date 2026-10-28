@@ -683,9 +683,24 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 @keyframes pk-screen { 0% { opacity: 0; } 5% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes pk-screen-cover { 0%, 86% { opacity: 1; } 100% { opacity: 0; } }
 .pk-seal.pk-cover { animation-name: pk-screen-cover; }   /* on unlock: solid from the very first moment */
+/* Updating: the same screen, held until the app restarts, with the download as one hairline under the name */
+.pk-seal.pk-update { animation: none; cursor: default; transition: opacity 400ms var(--ease); }
+.pk-update.pk-leave { opacity: 0; }
+.pk-update .pk-card { animation: pk-card-in 600ms var(--ease) both; }
+.pk-progress { display: grid; justify-items: center; gap: 9px; margin-top: 12px; }
+.pk-status { display: flex; gap: 8px; font: 400 12px/1.4 var(--font-body); color: var(--text-3); }
+.pk-pct { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2); min-width: 4ch; }
+.pk-pct:empty { display: none; }
+.pk-bar { width: 168px; height: 2px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.pk-bar > span { display: block; height: 100%; background: var(--accent); transform-origin: left; transform: scaleX(0);
+  transition: transform 400ms var(--ease); }
+.pk-bar.pk-done > span { animation: pk-breathe 1.4s ease-in-out infinite; }   /* downloaded: it's being put in place */
+@keyframes pk-card-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes pk-breathe { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) {
-  .pk-card { animation: none; }
+  .pk-card, .pk-update .pk-card, .pk-bar.pk-done > span { animation: none; }
   .pk-seal { animation: pk-fade .9s linear both; }
+  .pk-seal.pk-update { animation: none; }
   @keyframes pk-fade { 0% { opacity: 0; } 15%, 80% { opacity: 1; } 100% { opacity: 0; } }
 }
 

@@ -1513,35 +1513,88 @@ async function setUpApprover(chip) {
 const KNOT = "M12 42 H19 C24 42 25 36 25 30 C25 24 29.5 20.5 34.25 20 C39 19.5 44 22 45 28 C45.5 33 42.5 36.5 38.875 37.875 C35.25 39.25 31 38.5 29 35 C27.5 32 28.25 29 30.25 27.125 C32.25 25.25 35.5 24.5 39 26 C45 29 46 36 46 42 H52";
 const LOCK = "M12 42 H19 C27 42 36 42 44 42 C44 38 44 34 44 30 C42 30 40 30 38 30 C38 22 35.5 18 32 18 C28.5 18 26 22 26 30 C24 30 22 30 20 30 C20 34 20 37 20 39 C20 40 20 41 20 42 H52";
 const BRAIN = "M12 42 H19 C14 40 13 34 17 31 C13 26 17 19 24 20 C26 16 31 17 32 21 C29 24 34 28 31 33 C34 28 30 24 33 21 C34 16 41 16 42 20 C48 19 51 26 47 31 C51 35 49 42 44 42 H52";
-function sealAnimation(cover = false) {
+function knotArt(loop = false) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 64 64");
   svg.setAttribute("class", "pk-knot");
   const ease = ".2 0 0 1;0 0 1 1;";   // bend, then hold
+  const again = loop ? ' repeatCount="indefinite"' : ' fill="freeze"';   // the update screen keeps bending until it's done
   svg.innerHTML = '<circle cx="32" cy="32" r="30" fill="#C8F031"/>'
     + `<path d="${KNOT}" fill="none" stroke="#0B0D12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
-    + `<animate attributeName="d" begin="indefinite" dur="3.1s" fill="freeze" calcMode="spline" keyTimes="0;.12;.3;.42;.6;.72;.9;1"`
+    + `<animate attributeName="d" begin="indefinite" dur="3.1s"${again} calcMode="spline" keyTimes="0;.12;.3;.42;.6;.72;.9;1"`
     + ` keySplines="0 0 1 1;${ease.repeat(3).slice(0, -1)}" values="${[KNOT, KNOT, LOCK, LOCK, BRAIN, BRAIN, KNOT, KNOT].join(";")}"/></path>`
-    + '<circle cx="32" cy="36" r="2.4" fill="#0B0D12" opacity="0"><animate attributeName="opacity" begin="indefinite" dur="3.1s" fill="freeze"'
+    + `<circle cx="32" cy="36" r="2.4" fill="#0B0D12" opacity="0"><animate attributeName="opacity" begin="indefinite" dur="3.1s"${again}`
     + ' keyTimes="0;.27;.3;.42;.45;1" values="0;0;1;1;0;0"/></circle>'   // the keyhole, while it's a lock
     + '<circle cx="12" cy="42" r="3.2" fill="#4D5BFF"/><circle cx="52" cy="42" r="3.2" fill="#4D5BFF"/>';
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) svg.querySelectorAll("animate").forEach((x) => x.beginElement());
+  return svg;
+}
+
+// The app's name, scrambled characters settling into it left to right after `wait` ms.
+function settleName(text, wait) {
   const words = "Phygital Memory";
-  const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
-  const box = el("div", { class: "pk-seal" + (cover ? " pk-cover" : ""), "aria-hidden": "true", onclick: () => box.remove() }, el("div", { class: "pk-card" }, svg, text));
-  document.body.append(box);
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!still) svg.querySelectorAll("animate").forEach((x) => x.beginElement());   // starts now, not at page load
   const glyphs = "0123456789abcdef#%&*+=<>";
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const start = performance.now();
   const tick = (now) => {
-    const k = still ? 1 : Math.min(1, (now - start - 1000) / 900);   // letters settle left to right, once wired
+    const k = still ? 1 : Math.min(1, (now - start - wait) / 900);
     text.textContent = [...words].map((c, i) => c === " " || i / words.length < k ? c
       : glyphs[(Math.random() * glyphs.length) | 0]).join("");
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+}
+
+function sealAnimation(cover = false) {
+  const svg = knotArt();
+  const text = el("div", { class: "pk-text" }, "Phygital Memory".replace(/\S/g, "·"));
+  const box = el("div", { class: "pk-seal" + (cover ? " pk-cover" : ""), "aria-hidden": "true", onclick: () => box.remove() }, el("div", { class: "pk-card" }, svg, text));
+  document.body.append(box);
+  settleName(text, 1000);   // once wired
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   setTimeout(() => box.remove(), still ? 900 : 3800);
+}
+
+// A newer version is out: it installs by itself when the app opens. The splash stays up with the Knot bending on a
+// loop and a thin line filling as it downloads, then the memories lock, it's put in place and the app restarts. The
+// app window does the work (check_update in main.rs) and tells the engine how far it got; this screen reads that.
+// If it fails, the screen goes and the app opens as it is; it tries again next time.
+function updateScreen(v) {
+  if (document.querySelector(".pk-update")) return;
+  document.querySelectorAll(".pk-seal").forEach((x) => x.remove());   // the opening splash hands over to this one
+  const name = el("div", { class: "pk-text" }, "Phygital Memory".replace(/\S/g, "·"));
+  const what = el("span", {}, t("Updating to version {0}", v));
+  const pct = el("span", { class: "pk-pct" }, "");
+  const fill = el("span", {});
+  const bar = el("div", { class: "pk-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": "100", "aria-label": t("Updating to version {0}", v) }, fill);
+  const box = el("div", { class: "pk-seal pk-cover pk-update", role: "status" },
+    el("div", { class: "pk-card" }, knotArt(true), name, el("div", { class: "pk-progress" }, el("div", { class: "pk-status" }, what, pct), bar)));
+  document.body.append(box);
+  settleName(name, 300);
+  const show = (p) => {
+    fill.style.transform = `scaleX(${p / 100})`;
+    bar.setAttribute("aria-valuenow", String(p));
+    pct.textContent = p ? `${p}%` : "";
+  };
+  show(0);
+  const poll = setInterval(async () => {
+    let u;
+    try { u = await api("update"); } catch { return; }   // the engine is busy for a moment: ask again
+    if (u.state === "failed") {
+      clearInterval(poll);
+      box.classList.add("pk-leave");
+      setTimeout(() => box.remove(), 400);
+      toastErr(t("The update didn't finish. It tries again the next time you open the app."));
+      return;
+    }
+    show(Math.max(0, Math.min(100, Math.round(u.pct || 0))));
+    if (u.state === "restarting") {
+      what.textContent = t("Restarting");
+      pct.textContent = "";
+      bar.classList.add("pk-done");
+    }
+  }, 400);
 }
 
 
@@ -3016,21 +3069,8 @@ async function sendMenu() {
 }
 window.phygitalMenu = (id) => { const fn = menuFns[id]; if (fn) fn(); };
 // The Mac app downloaded an update from GitHub and put it in place: it starts the next time the app opens.
-// A newer version is out (the app window checks the latest GitHub Release when the app opens): ask now. Later asks
-// again the next time it opens. Update now downloads it, locks every memory, puts it in place and restarts.
-let updateAsked = false;
-window.phygitalUpdate = async (v) => {
-  if (!v || updateAsked) return;
-  updateAsked = true;
-  const go = await choiceDialog(t("Phygital Memory {0} is here", v),
-    t("Update now? The app restarts, and your open memories lock first."), [["now", t("Update now"), "primary"]], t("Later"));
-  if (go !== "now") return;
-  window.phygitalSaveAll && window.phygitalSaveAll();
-  toastOk(t("Updating Phygital Memory. It restarts by itself."));
-  api("updatenow").catch((e) => toastErr(e.message));
-};
-api("update").then((r) => window.phygitalUpdate(r.v)).catch(() => {});
-window.phygitalUpdateFailed = () => toastErr(t("The update didn't finish. It asks again the next time you open the app."));
+window.phygitalUpdating = (v) => { if (v) updateScreen(v); };   // the app window found one (see check_update)
+api("update").then((r) => r.v && r.state !== "failed" && updateScreen(r.v)).catch(() => {});   // found before this page loaded
 onSettings(() => sendMenu());
 
 // ---------- keyboard ----------

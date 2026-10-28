@@ -127,7 +127,6 @@ fn watch_menu(app: tauri::AppHandle) {
             std::thread::sleep(Duration::from_millis(600));
             let Some(reply) = shell_with(&app, "menu", &format!("{{\"v\":{have}}}")) else { continue };
             let Ok(v) = serde_json::from_str::<serde_json::Value>(&reply) else { continue };
-            if v["update"].as_bool() == Some(true) { install_update(app.clone()); }
             let Some(spec) = v.get("spec").cloned() else { continue };
             have = v["v"].as_i64().unwrap_or(have);
             let h = app.clone();
@@ -192,43 +191,66 @@ fn submenu(app: &tauri::AppHandle, title: &str, v: &serde_json::Value) -> tauri:
 }
 
 // Updates come from the latest GitHub Release, signed with the app's own update key (its public half is in
-// tauri.conf.json, so nothing else can pass for an update). When the app opens, a newer version shows a popup on the
-// page (window.phygitalUpdate); Update now comes back with the menu (see watch_menu) and runs install_update.
-// Builds made while working on the app (debug) never update.
-static UPDATE: Mutex<Option<tauri_plugin_updater::Update>> = Mutex::new(None);
+// tauri.conf.json, so nothing else can pass for an update). An update only goes in while the app is opening or
+// closing, never while it's in use:
+// - Found while the app opens (within OPENING): the opening screen stays up as the update screen (updateScreen in
+//   main.js, which follows the download through the engine); then every memory locks, it goes in place, the app
+//   restarts.
+// - Found later (a slow check, or the look every few hours while the app stays open): it downloads quietly and goes
+//   in place when the app quits (see quit).
+// If anything fails, nothing changes and it tries again later. Builds made while working on the app (debug) never update.
+const OPENING: Duration = Duration::from_secs(4);
+const LOOK_EVERY: Duration = Duration::from_secs(6 * 3600);
+static READY: Mutex<Option<(tauri_plugin_updater::Update, Vec<u8>)>> = Mutex::new(None);   // downloaded, for quit
 
 fn check_update(app: tauri::AppHandle) {
     if cfg!(debug_assertions) { return; }
-    tauri::async_runtime::spawn(async move {
-        use tauri_plugin_updater::UpdaterExt;
-        let Ok(updater) = app.updater() else { return };
-        let Ok(Some(update)) = updater.check().await else { return };
-        let v: String = update.version.chars().filter(|c| c.is_ascii_alphanumeric() || ".-+".contains(*c)).collect();
-        *UPDATE.lock().unwrap() = Some(update);
-        let _ = shell_with(&app, "update", &format!("{{\"v\":\"{v}\"}}"));   // for a page that loads after this
-        if let Some(w) = app.get_webview_window("main") {
-            let _ = w.eval(&format!("window.phygitalUpdate && window.phygitalUpdate('{v}')"));
+    let opened = std::time::Instant::now();
+    std::thread::spawn(move || loop {
+        if READY.lock().unwrap().is_none() {
+            tauri::async_runtime::block_on(update_once(&app, opened.elapsed() < OPENING));
         }
+        std::thread::sleep(LOOK_EVERY);
     });
 }
 
-// Download first (the memories stay open meanwhile), then lock everything, put the new version in place, restart.
-fn install_update(app: tauri::AppHandle) {
-    let Some(update) = UPDATE.lock().unwrap().take() else { return };
-    tauri::async_runtime::spawn(async move {
-        let failed = |app: &tauri::AppHandle| if let Some(w) = app.get_webview_window("main") {
-            let _ = w.eval("window.phygitalUpdateFailed && window.phygitalUpdateFailed()");
-        };
-        let Ok(bytes) = update.download(|_, _| {}, || {}).await else { return failed(&app) };
-        let _ = shell(&app, "lockall");
-        if update.install(bytes).is_err() { return failed(&app); }
-        MAY_EXIT.store(true, Ordering::SeqCst);
-        app.restart();
-    });
+async fn update_once(app: &tauri::AppHandle, opening: bool) {
+    use tauri_plugin_updater::UpdaterExt;
+    let Ok(updater) = app.updater() else { return };
+    let Ok(Some(update)) = updater.check().await else { return };
+    let v: String = update.version.chars().filter(|c| c.is_ascii_alphanumeric() || ".-+".contains(*c)).collect();
+    let tell = |pct: u64, state: &str| if opening {
+        let _ = shell_with(app, "update", &format!("{{\"v\":\"{v}\",\"pct\":{pct},\"state\":\"{state}\"}}"));
+    };
+    if opening {
+        tell(0, "");
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.eval(&format!("window.phygitalUpdating && window.phygitalUpdating('{v}')"));
+        }
+    }
+    let (mut got, mut said) = (0u64, 0u64);
+    let bytes = update.download(|chunk, total| {
+        got += chunk as u64;
+        let pct = total.filter(|t| *t > 0).map(|t| (got * 100 / t).min(99)).unwrap_or(0);
+        if pct != said { said = pct; tell(pct, ""); }
+    }, || {}).await;
+    let Ok(bytes) = bytes else { return tell(0, "failed") };
+    if !opening {
+        *READY.lock().unwrap() = Some((update, bytes));
+        return;
+    }
+    tell(100, "restarting");
+    let _ = shell(app, "lockall");
+    if update.install(bytes).is_err() { return tell(0, "failed"); }
+    MAY_EXIT.store(true, Ordering::SeqCst);
+    app.restart();
 }
 
 fn quit(app: &tauri::AppHandle) {
     let _ = shell(app, "lockall");   // lock every folder and close every Finder view before we go
+    if let Some((update, bytes)) = READY.lock().unwrap().take() {
+        let _ = update.install(bytes);   // downloaded while the app was open: in place for the next time it opens
+    }
     MAY_EXIT.store(true, Ordering::SeqCst);
     app.exit(0);
 }
