@@ -200,7 +200,7 @@ function approvalsView(rows) {
       el("span", { class: "seal", title: r.sealed ? "Sealed: unchanged since it was written" : "Changed or removed after it was written" },
         r.sealed ? icon("check", 14, 2) : "!")))
     : [el("div", { class: "act-empty" }, "Nothing yet.")]));
-  return { tools: [], body: [list] };
+  return { tools: [], body: [el("div", { class: "mf-hint" }, "Your last 20 yeses. Each one is sealed, so a later change shows."), list] };
 }
 
 function tasksView(ctx, done) {

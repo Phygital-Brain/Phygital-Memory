@@ -2083,7 +2083,7 @@ async def api(request: Request) -> Response:
             approvals.add("Saved a backup file", f.name, "click")
             return _ok({"size": size, "name": Path(dest).name})
         if action == "approvals":   # the sealed list of yeses, for Activity
-            return _ok({"approvals": approvals.listing()})
+            return _ok({"approvals": approvals.listing(20)})   # the last 20; every older one is still checked
         if action == "claudecodeadd":   # one button: add the door, with its key, to Claude Code
             return _ok(await asyncio.to_thread(_claude_code_add, str(body.get("key", ""))))
         if action == "forgetfolder":
