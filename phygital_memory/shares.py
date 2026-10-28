@@ -13,7 +13,9 @@ people let in, so the rest of the memory is out of their reach, not just hidden 
 - What was last copied (each file's hash) is kept in STATE/shares/ID.sync, encrypted with the share's key, so a
   change made while the owner's memory was locked is still seen as a change, not a clash.
 - If the shared folder or file is moved or renamed in the app, the share follows it. If it's gone (trashed), the
-  copying stops and nothing is deleted on the other side."""
+  copying stops and nothing is deleted on the other side.
+- A share of an Open memory carries a plain OPEN_MARK file. It travels the same locked way; on the other person's
+  Mac the app keeps a normal readable folder in step with it (mirror), so they and their AI use plain files too."""
 from __future__ import annotations
 
 import hashlib
@@ -35,6 +37,7 @@ from .memory import Memory
 from .vault.manage import create_vault
 
 HOME = STATE / "shares"
+OPEN_MARK = "open-memory"   # in a share's folder: it comes from an Open memory (no secret in it)
 LIST = HOME / "shares.json"
 _lock = threading.RLock()
 _open: dict[str, Memory] = {}      # shares opened on the owner's side, while their memory is open
@@ -95,7 +98,7 @@ def find_all(vault_id: str, rel: str) -> list[dict]:
     return [s for s in of_memory(vault_id) if s["path"] == rel]
 
 
-def create(vault_id: str, rel: str, kind: str, role: str = "edit", fresh: bool = False) -> dict:
+def create(vault_id: str, rel: str, kind: str, role: str = "edit", fresh: bool = False, plain: bool = False) -> dict:
     """A share for one folder or file of a memory (or the whole memory: rel "", kind "memory"), for one kind of
     access. Edit and view never share a copy: the view copy only ever goes out from the owner's Mac, so nothing a
     viewer does comes back. fresh: always a new one, with a new key (after someone is removed)."""
@@ -109,6 +112,8 @@ def create(vault_id: str, rel: str, kind: str, role: str = "edit", fresh: bool =
             sharing.start(path_of(sid), bytes(key.raw))
         finally:
             key.wipe()
+        if plain:
+            (path_of(sid) / OPEN_MARK).write_text("This share comes from an Open memory: it arrives as a normal folder.\n")
         d = _all()
         d[sid] = {"memory": vault_id, "path": rel, "kind": kind, "role": role, "made": time.time(),
                   "name": rel.rsplit("/", 1)[-1] if rel else (_memory_name(vault_id) or "Shared memory")}
@@ -172,6 +177,7 @@ def _read_base(sid: str, raw: bytes) -> dict:
 
 def _write_base(sid: str, raw: bytes, base: dict) -> None:
     nonce = os.urandom(12)
+    HOME.mkdir(parents=True, exist_ok=True)   # the other person's Mac may have no shares of its own yet
     p = HOME / f"{sid}.sync"
     tmp = HOME / f".{sid}-{secrets.token_hex(4)}.tmp"
     tmp.write_bytes(nonce + AESGCM(_base_key(raw)).encrypt(nonce, json.dumps(base).encode(), b"sync"))
@@ -225,6 +231,24 @@ def sync(sid: str, a: Memory) -> int:
     bsig = b.file_sigs("")
     if kind == "file":
         bsig = {r: v for r, v in bsig.items() if r == s["name"]}
+
+    def log(what, r):   # the owner's own change: into the history, as theirs
+        sharing.log_change(path_of(sid), raw, what, r)
+    return _step(sid, raw, a, b, asig, bsig, to_a, two_way, log)
+
+
+def mirror(name: str, a: Memory, b: Memory, raw: bytes, two_way: bool) -> int:
+    """The other person's side of an Open memory's share: a (the share, opened with their own key) and b (a normal
+    folder) kept in step. two_way: they may edit; otherwise the share's side always wins. name: where what was last
+    copied is kept (STATE/shares/NAME.sync)."""
+    if not a.is_open or not b.is_open:
+        return 0
+    return _step(name, raw, a, b, a.file_sigs(""), b.file_sigs(""), lambda r: r, two_way, None)
+
+
+def _step(sid, raw, a, b, asig, bsig, to_a, two_way, log) -> int:
+    """One pass between a and b: what changed on one side is copied to the other. a wins a clash (its version stays,
+    b's goes next to it); without two_way, a always wins. log(what, path): a's own changes, for the history."""
     base = _read_base(sid, raw)
     seen = _seen.setdefault(sid, {})
 
@@ -248,9 +272,9 @@ def sync(sid: str, a: Memory) -> int:
                 b.trash(r)
             else:
                 _copy(a, to_a(r), b, r, asig[r][1])
-            if was != ah:   # the owner's own change: into the history, as theirs
+            if was != ah and log:
                 try:
-                    sharing.log_change(path_of(sid), raw, "deleted" if ah is None else "added" if was is None else "edited", r)
+                    log("deleted" if ah is None else "added" if was is None else "edited", r)
                 except Exception:
                     pass
             bh = ah

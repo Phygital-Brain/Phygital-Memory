@@ -30,6 +30,25 @@ def is_vault(path: Path) -> bool:
     return (path / "masterkey.cryptomator").is_file() and (path / "vault.cryptomator").is_file()
 
 
+def memory_id(f) -> str:
+    """The ID shares are filed under: an Encrypted memory's vault ID, or an Open memory's own one (kept in its hidden
+    .phygital folder, made the first time)."""
+    if not f.plain:
+        from .sharing import _vault_id
+        return _vault_id(f.path)
+    p = f.path / ".phygital" / "id"
+    try:
+        return p.read_text().strip()
+    except OSError:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("open-" + secrets.token_hex(8))
+        return p.read_text().strip()
+
+
+# where shared Open memories become normal folders (tests point it at a throwaway folder)
+SHARED_COPIES = Path(os.environ.get("PHYGITAL_MEMORY_SHARED_COPIES", "~/Documents/Shared with me")).expanduser()
+
+
 class PlainFinder:
     """An Open memory is a normal folder already: "Show in Finder" opens it, nothing is mounted."""
     def __init__(self, memory: Memory):
@@ -128,6 +147,9 @@ class Folder:
         self.ai_hidden = False   # "AI can't see this": no AI app reaches it, whatever its key says
         self.joined = False      # a memory someone shared with this person: it opens with their own key
         self.syncthing = None    # "pm-VAULTID" when it syncs straight between people's Macs (the app's own Syncthing)
+        # An Open memory shared with this person: the share itself stays the locked copy at path (opened with their
+        # own key), and the app keeps a normal folder at open_copy in step with it (shares.mirror)
+        self.open_copy, self.copy = None, None
         self.gitdir = GITDIRS / fid
         self.memory.lost_store = self.gitdir / "phygital-lost-folders.json"
         inside = self.path / ".git"
@@ -187,8 +209,10 @@ class Folder:
 
     def info(self) -> dict:
         place = cloud.where(self.cloud_at, self.cloud_at["path"]) if self.cloud_at else str(self.path)
+        if self.open_copy:
+            place = str(self.open_copy)
         return {"id": self.id, "name": self.name, "path": place, "open": self.memory.is_open,
-                "kind": "open" if self.plain else "encrypted",
+                "kind": "open" if self.plain or self.open_copy else "encrypted",
                 "exists": True if self.cloud_at else self.path.is_dir() if self.plain else is_vault(self.path),
                 "finder": bool(self.finder.where()),
                 "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None,
@@ -209,8 +233,17 @@ class Folder:
             if self.s3_at and not self.s3:
                 self.start_s3()     # and to S3 / R2
 
+    def set_open_copy(self, path: Path) -> None:
+        """A shared Open memory: its normal folder, opened alongside the share."""
+        self.open_copy = Path(path)
+        self.copy = Memory(self.open_copy, plain=True)
+        self.copy.tasks_file = TASKS / f"{self.id}-copy.bin"
+        self.finder = PlainFinder(self.copy)
+
     def lock(self) -> None:
         activity.forget(self.id)   # the AI's activity lines for this folder go with the lock
+        if self.copy:
+            self.copy.lock()
         self.finder.hide()          # close the Finder view first, and wait for it (locking would also close it, later)
         self.memory.lock()
         self.passes.clear()
@@ -247,6 +280,8 @@ class Folders:
                 self.items[e["id"]].ai_hidden = bool(e.get("aiHidden"))
                 self.items[e["id"]].joined = bool(e.get("joined"))
                 self.items[e["id"]].syncthing = e.get("syncthing")
+                if e.get("openCopy"):
+                    self.items[e["id"]].set_open_copy(Path(e["openCopy"]))
         for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
                 cloud.unmount(point)
@@ -261,7 +296,8 @@ class Folders:
                              **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"mirror": f.mirror_at} if f.mirror_at else {}),
                              **({"s3": f.s3_at} if f.s3_at else {}), **({"open": True} if f.plain else {}),
                              **({"aiHidden": True} if f.ai_hidden else {}), **({"joined": True} if f.joined else {}),
-                             **({"syncthing": f.syncthing} if f.syncthing else {})}
+                             **({"syncthing": f.syncthing} if f.syncthing else {}),
+                             **({"openCopy": str(f.open_copy)} if f.open_copy else {})}
                             for f in self.items.values()]}
         tmp = REGISTRY.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1))

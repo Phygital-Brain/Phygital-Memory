@@ -34,7 +34,10 @@ export function openShare(ctx) {
         el("button", { class: "seg-b" + (pick === k ? " on" : ""), type: "button", onclick: () => { pick = k; drawRole(); } }, t)));
       drawRole();
       body.replaceChildren(...[
-        el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, ctx.part
+        ctx.plain ? el("div", { class: "st-e2e st-plain" }, icon("folder", 14), el("span", {}, ctx.part
+          ? t("Only this goes to them. It travels locked, then shows on their Mac as a normal folder their AI can read. The rest of your memory stays with you.")
+          : t("It travels locked, then shows on their Mac as a normal folder their AI can read.")))
+        : el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, ctx.part
           ? t("Only this goes to them, in its own locked copy with its own key. The rest of your memory stays with you.")
           : t("Everyone opens it with their own key. Your password is never shared."))),
         ...(s.requests || []).map((r) => el("div", { class: "share-req" },

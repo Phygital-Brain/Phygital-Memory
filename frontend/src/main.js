@@ -340,7 +340,7 @@ async function openShareHere(path = null) {
   const at = path ? { path } : {};
   const what = path ? (path.includes("/") ? path.slice(path.lastIndexOf("/") + 1) : path) : info.name;
   openShare({
-    name: what, part: !!path, load: () => api("shareinfo", at), invite: (role) => api("shareinvite", { role, ...at }),
+    name: what, part: !!path, plain: info.kind === "open", load: () => api("shareinfo", at), invite: (role) => api("shareinvite", { role, ...at }),
     answer: (id, allow, share) => shareApi("shareanswer", { id, allow, ...at, ...(share ? { share } : {}) }), role: (id, role) => shareApi("sharerole", { id, role, ...at }),
     remove: async (id) => { if (await confirmDialog(t("Remove them from \"{0}\"?", what), t("Remove"), true, t("They get nothing new from now on, and their app deletes its copy when it next connects. Anything they already copied out stays with them."))) await shareApi("shareremove", { id, ...at }); },
     openPart: (p) => openShareHere(p),
@@ -512,7 +512,7 @@ async function unlockCurrent(password, touchid = false) {
   const j = await api(password === TOUCH ? "touchidunlock" : "unlock", { password, folder: fid, touchid });
   setPass(j.pass, fid);
   touchTried.add(fid);   // locked by hand later: don't ask by itself again
-  if (curInfo()?.kind !== "open") sealAnimation(true);   // up first, so the notes appear behind it (a new memory opens here too)
+  if (curInfo()?.kind !== "open" || curInfo()?.joined) sealAnimation(true);   // up first, so the notes appear behind it (a new memory opens here too)
   await enterApp();
 }
 const TOUCH = {};             // unlockCurrent(TOUCH): open with Touch ID instead of a password
@@ -539,7 +539,7 @@ function drawUnlock() {
             el("span", { class: "ul-state" + (open ? " open" : "") }, f.kind === "open" ? t("Open") : open ? t("Unlocked") : t("Locked")));
         }));
     }
-    if (info.kind === "open") {   // a plain folder: no password, it just opens
+    if (info.kind === "open" && !info.joined) {   // a plain folder: no password, it just opens
       const open = el("button", { class: "btn primary", type: "submit" }, t("Open"));
       kids.push(el("div", { class: "unlock-sub" }, t("An Open memory: a normal folder, no password.")), open, err);
       const tryOpen = async (e) => {
@@ -631,7 +631,7 @@ function drawUnlock() {
 
 function showUnlock() {
   const info = curInfo();
-  if (info?.kind === "open" && info.exists && !creating && !unlockEl._plainFailed) {   // nothing to unlock: open it straight away
+  if (info?.kind === "open" && !info.joined && info.exists && !creating && !unlockEl._plainFailed) {   // nothing to unlock: open it straight away
     unlockCurrent("").catch((e) => { unlockEl._plainFailed = true; showUnlock(); unlockEl._plainFailed = false; toastErr(e.message); });
     return;
   }
@@ -664,7 +664,7 @@ async function openSwitcher() {
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite, fromMac: joinOtherMac,
     createNew: createNewFolder, manage: openManage, lockThis: curInfo()?.kind === "open" ? null : () => lockFolder(), lockAll,
-    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: curInfo()?.kind === "open" ? null : () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 

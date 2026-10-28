@@ -42,8 +42,8 @@ from starlette.responses import HTMLResponse, JSONResponse, Response
 from . import activity, approvals, brain, cloud, gate as gate_mod, github_auth, gitsync, keychain, linking, pka, shares, sharing, touchid
 from .syncthing import Syncthing, proof as st_proof
 from . import finder as finder_links
-from .folders import (STATE, Folders, cloud_places, download_all, is_vault, not_downloaded, pick_files, pick_folder,
-                      pick_save, write_guides)
+from .folders import (SHARED_COPIES, STATE, Folders, cloud_places, download_all, is_vault, memory_id, not_downloaded,
+                      pick_files, pick_folder, pick_save, write_guides)
 from .memory import Locked, Memory, _clean_path
 from .vault import keys as keys_mod, manage
 from .vault.keys import WrongPassword
@@ -244,7 +244,8 @@ def status(ctx: Context) -> str:
         s = f.memory.status()
         priv = ", ".join(f.memory.ai_private()) if s["open"] else ""
         lines.append(f'Memory "{f.name}" (folder="{f.name}"): ' + (f"unlocked, {s['notes']} notes" if s["open"] else "locked")
-                     + (f". Open memory: a plain folder at {f.path}, which you may also read directly" if f.plain else "")
+                     + (f". Open memory: a plain folder at {f.open_copy or f.path}, which you may also read directly"
+                        if f.plain or f.open_copy else "")
                      + (f". Private, ask first: {priv}" if priv else ""))
     may = "read and edit" if _app()["write"] else "only read"
     return ("\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE}). "
@@ -993,6 +994,10 @@ def _st_drop_removed() -> None:
             folders._save()
         if (STATE / "Shared with me") in x.path.parents:   # only copies the app made itself
             shutil.rmtree(x.path, ignore_errors=True)
+        if x.open_copy and SHARED_COPIES in x.open_copy.parents:
+            shutil.rmtree(x.open_copy, ignore_errors=True)
+        _mirror_keys.pop(x.id, None)
+        (shares.HOME / f"mirror-{x.id}.sync").unlink(missing_ok=True)
         approvals.add("Removed by the owner: copy deleted", x.name, "owner")
 
 
@@ -1344,12 +1349,17 @@ def _shares_loop() -> None:
     while True:
         time.sleep(3)
         try:
-            if not shares._all():
-                continue
+            mine = bool(shares._all())
             for f in list(folders.items.values()):
-                if f.joined or not is_vault(f.path):
+                if f.joined and f.copy:   # a shared Open memory: its normal folder follows the share
+                    try:
+                        _mirror(f)
+                    except Exception:
+                        pass
                     continue
-                vid = ids.get(str(f.path)) or ids.setdefault(str(f.path), sharing._vault_id(f.path))
+                if not mine or f.joined or not (f.plain or is_vault(f.path)):
+                    continue
+                vid = ids.get(str(f.path)) or ids.setdefault(str(f.path), memory_id(f))
                 if not f.memory.is_open:
                     shares.close_for(vid)
                     continue
@@ -1360,6 +1370,41 @@ def _shares_loop() -> None:
                         pass
         except Exception:
             pass
+
+
+_mirror_keys: dict[str, bytes] = {}   # a shared Open memory's own key, kept while it's open (asked once, not every pass)
+
+
+def _mirror(f) -> None:
+    """A shared Open memory: the share (opened with this person's own key) and its normal folder kept in step. View
+    only: the share's side always wins, so nothing changed here goes back to the owner."""
+    if not f.memory.is_open:
+        _mirror_keys.pop(f.id, None)
+        if f.copy.is_open:
+            f.copy.lock()
+        return
+    if f.syncthing and _st_busy(f.syncthing):
+        return   # half arrived: missing files would look deleted
+    raw = _mirror_keys.get(f.id) or _mirror_keys.setdefault(f.id, sharing.my_key(f.path))
+    if not f.copy.is_open:
+        f.open_copy.mkdir(parents=True, exist_ok=True)
+        f.copy.unlock("")
+    shares.mirror("mirror-" + f.id, f.memory, f.copy, raw, not getattr(f.memory, "read_only", False))
+
+
+def _open_copy_for(f) -> None:
+    """The first time a shared Open memory opens here: a normal folder for it in Documents › Shared with me."""
+    if f.open_copy or not (f.path / shares.OPEN_MARK).exists():
+        return
+    name = re.sub(r'[/\\:*?"<>|]', "-", f.name).strip(". ") or "Shared memory"
+    target, n = SHARED_COPIES / name, 1
+    while target.exists():
+        n += 1
+        target = SHARED_COPIES / f"{name} {n}"
+    target.mkdir(parents=True)
+    f.set_open_copy(target)
+    with folders._lock:
+        folders._save()
 
 
 def _st_busy(fid: str) -> bool:
@@ -1831,7 +1876,13 @@ async def api(request: Request) -> Response:
                 return _ok({"waiting": True, "files": True, "safety": await asyncio.to_thread(sharing.my_safety_code, f.path)})
             if await asyncio.to_thread(touchid.available) and not await asyncio.to_thread(touchid.ask, "unlock"):
                 return _ok({"error": "Touch ID didn't confirm."}, 403)
-            return _unlock_shared(f, raw)
+            r = _unlock_shared(f, raw)
+            if r.status_code == 200:
+                await asyncio.to_thread(_open_copy_for, f)
+                if f.copy:
+                    _mirror_keys[f.id] = raw
+                    await asyncio.to_thread(_mirror, f)   # the normal folder is ready before the notes show
+            return r
         if action == "touchidinfo":   # the unlock screen: can this memory open with Touch ID?
             can = await asyncio.to_thread(touchid.available)
             return _ok({"available": can, "on": can and await asyncio.to_thread(touchid.has, f.id)})
@@ -1906,6 +1957,8 @@ async def api(request: Request) -> Response:
                                                           str(body.get("parent", "")))})
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
+        if action == "movefolder" and f.open_copy:
+            return _ok({"error": "A memory shared with you stays where the app keeps it: Documents › Shared with me."}, 400)
         if action == "movefolder":   # move it (locked) to another place; the page then asks for the password again
             info = await asyncio.to_thread(folders.relocate, f.id, body["parent"])
             moved = folders.get(f.id)
@@ -1965,16 +2018,12 @@ async def api(request: Request) -> Response:
             return _ok({"on": True})
         # ---- working together (the owner's side; the memory is open, so its key is at hand) ----
         if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop",
-                      "sharepeople", "shareadd", "sharehistory", "shareforget") and f.plain:
-            return _ok({"error": "Sharing works with Encrypted memories. Share an Open memory's folder the way you share any folder.",
-                        "plain": True}, 400)
-        if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop",
                       "sharepeople", "shareadd", "sharehistory", "shareforget"):
             try:   # the personal key comes from the Keychain, which macOS may hold up: never on the app's main loop
                 await asyncio.to_thread(sharing.my_id)
             except keychain.Refused as e:
                 return _ok({"error": str(e), "keychain": True}, 409)
-            vid = sharing._vault_id(f.path)
+            vid = memory_id(f)
             shares.MEMORY_NAMES[vid] = f.name
             # Old style: a memory shared with you, or a whole memory in a cloud folder everyone opens. Otherwise
             # everything goes through shares (one per item and per kind of access), straight from Mac to Mac.
@@ -2076,7 +2125,7 @@ async def api(request: Request) -> Response:
                 if legacy:
                     await asyncio.to_thread(sharing.add_member, f.path, m.key_raw, person, role)
                     return _ok({"members": sharing.members(f.path, m.key_raw)})
-                x = await asyncio.to_thread(shares.create, vid, rel, kind, role)   # only once approved
+                x = await asyncio.to_thread(shares.create, vid, rel, kind, role, False, f.plain)   # only once approved
                 await asyncio.to_thread(_put_in, x, person, role)
                 approvals.add(f"Shared with {person['name']} ({role})", f.name + (f" › {rel}" if rel else ""), "Phygital Key")
                 return _ok({"share": x["id"]})
@@ -2087,7 +2136,7 @@ async def api(request: Request) -> Response:
                     link = sharing.invite(f.path, m.key_raw, role, f.name)
                     approvals.add(f"Invite made ({role})", f.name, "click")
                     return _ok({"link": link + "&w=" + quote(_place(f)), "place": _place(f)})
-                x = await asyncio.to_thread(shares.create, vid, rel, kind, role)
+                x = await asyncio.to_thread(shares.create, vid, rel, kind, role, False, f.plain)
                 pth, raw = place(x)
                 link = sharing.invite(pth, raw, role, x["name"])
                 code = sharing.parse_link(link)["code"]
@@ -2306,7 +2355,7 @@ async def api(request: Request) -> Response:
             return _ok({"path": m.make_folder(body["path"])})
         if action == "move":
             new = m.move(body["from"], body["to"])
-            shares.moved(sharing._vault_id(f.path), _clean_path(body["from"], md=False), new)   # a shared part follows
+            shares.moved(memory_id(f), _clean_path(body["from"], md=False), new)   # a shared part follows
             return _ok({"path": new})
         if action == "trash":
             m.trash(body["path"])
@@ -2349,7 +2398,7 @@ async def api(request: Request) -> Response:
             if do == "revealvault" and f.cloud_at:
                 return _ok({"error": "This memory is in the cloud, not on this Mac."}, 400)
             if do == "revealvault":   # the encrypted folder itself (scrambled files only), in Finder
-                await asyncio.to_thread(subprocess.run, ["open", "-R", str(f.path)], timeout=30)
+                await asyncio.to_thread(subprocess.run, ["open", "-R", str(f.open_copy or f.path)], timeout=30)
                 return _ok({"ok": True})
             if do in ("reveal", "openfile"):   # select one note or file in the open Finder view, or open it in its app
                 where = f.finder.where()
