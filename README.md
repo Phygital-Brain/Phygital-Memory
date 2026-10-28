@@ -33,16 +33,16 @@ Phygital Memory is a notes app for your computer. You write notes, and your AI a
 
 It's built around four promises:
 
-- 🔓 **Open source.** Every line of code is here to read, check and change.
-- 🙈 **Private.** No account, no tracking, no server of ours. Your notes stay on your computer unless you choose a cloud or a backup.
-- 🔐 **Encrypted when you want it.** Lock a memory with a password. Without it (or your recovery key), the files are unreadable.
-- 🗂️ **You own your data.** Notes are normal files. Stop using the app and they're still yours, readable by anything.
+- **Open source.** Every line of code is here to read, check and change.
+- **Private.** No account, no tracking, no server of ours. Your notes stay on your computer unless you choose a cloud or a backup.
+- **Encrypted when you want it.** Lock a memory with a password. Without it (or your recovery key), the files are unreadable.
+- **You own your data.** Notes are normal files. Stop using the app and they're still yours, readable by anything.
 
 ## Two kinds of memory
 
 When you make a memory, you pick one:
 
-| | 📂 Open | 🔒 Encrypted |
+| | Open | Encrypted |
 |---|---|---|
 | What it is | A normal folder of Markdown notes | A locked vault, opened with your password |
 | Who can read it | Any app, any AI, your phone through a cloud folder | Only this app, and only the AI apps you let in |
@@ -58,6 +58,39 @@ You can have both, side by side.
 
 More on how it keeps you safe in [Safety](docs/safety.md).
 
+## Words you'll see
+
+| Word | What it means here |
+|---|---|
+| **Memory** | One folder of notes the app looks after. You can have several. |
+| **Open memory** | A plain folder of readable notes. No password. Any AI app or program that can open the folder can read it. |
+| **Encrypted memory** | A locked folder (a Cryptomator format 8 vault). You open it with your password, or Touch ID on a Mac. |
+| **Recovery key** | 44 words that let you set a new password for an Encrypted memory. Keep them offline. |
+| **AI app** | Claude Code, Claude Desktop, Codex, Cursor or any app that can use tools through MCP. |
+| **MCP** | Model Context Protocol: the standard way AI apps plug into tools like this one. |
+| **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. |
+| **Allow edits** | The switch that lets one AI app change notes. Off means read only. |
+| **Private for AI** | A folder or note the AI opens only when you ask in the chat. The tools follow this rule. The folder itself stays readable. |
+| **AI tasks** | A hidden note in each memory where you leave work for your AI. It is never shared. |
+| **Phygital Brain** | An optional set of folders, rules and first notes for working with an AI. The app can build it for you. |
+
+## What it can do
+
+- **Write and find.** An editor, search across your memories, a note graph, and **Version history** for every note.
+- **Undo.** A trash that keeps things for 7 days, and **Undo** for every change an AI made.
+- **Let AI apps in, one by one.** 17 tools for search, read, write, move, trash and AI tasks. See [docs/tools.md](docs/tools.md).
+- **AI tasks.** Press **Give AI a task** on a note, then ask your AI *"Do my Phygital Memory tasks."*
+- **Back up.** To a private GitHub repo, a WebDAV server, Amazon S3 or Cloudflare R2, or one backup file. Encrypted memories are backed up as encrypted files.
+- **Share from computer to computer.** A whole memory, one folder or one file, with **Can edit** or **Can view**, through Syncthing. No account and no cloud. You link your own second computer the same way.
+- **Use cloud folders.** Put a memory in iCloud Drive, Dropbox, Google Drive or Nextcloud. For an Encrypted memory the cloud sees only encrypted files.
+- **Make it a Phygital Brain.** One setup page builds folders, rules and first notes, and leaves one AI task for your AI to finish the rest.
+
+Ideas for what to ask are in [docs/examples.md](docs/examples.md).
+
+## Languages
+
+The app's screens come in 41 languages. It follows your computer's language, or you pick one in **Settings › General › Language**. The translations were made with AI and checked by a script. A native speaker's eye always helps: see [docs/languages.md](docs/languages.md) and [core/languages/TRANSLATING.md](core/languages/TRANSLATING.md). The AI tools and these docs stay in English, and your AI app answers you in your own language.
+
 ## Get started
 
 1. **Download** the app for your computer from [Releases](https://github.com/Phygital-Brain/Phygital-Memory/releases).
@@ -68,36 +101,102 @@ Then ask your AI: *"What's in my Phygital Memory?"*
 
 The full guide, with the first-open steps for each system, is [Get started](docs/setup-computer.md).
 
-## What else it does
+## All the guides
 
-- 🔎 Search, a note graph, and version history for every note
-- 🗑️ A trash that keeps things for 7 days
-- 🤝 Share a memory, a folder or one file with another computer. No account, no cloud.
-- ☁️ Keep a memory in iCloud Drive, Dropbox, Google Drive or Nextcloud
-- 💾 Back up to a private GitHub repo, WebDAV, Amazon S3 or Cloudflare R2
-- 🧠 Turn a memory into a Phygital Brain: ready-made folders and rules for working with AI
-- 🌍 41 languages
-- 🔄 Updates itself
-
-## Learn more
-
-| | |
+| Guide | Read it when |
 |---|---|
-| [Get started](docs/setup-computer.md) | Install, first memory, connect your AI |
-| [Questions](docs/faq.md) | Quick answers |
-| [Safety](docs/safety.md) and [Privacy](docs/privacy.md) | What the app protects, and what leaves your computer |
-| [How it works](docs/how-it-works.md) | What happens inside, in plain words |
-| [If something goes wrong](docs/troubleshooting.md) | Fixes for common problems |
-| [All guides](docs/README.md) | Everything else |
+| [Guides index](docs/README.md) | You want every guide on one page |
+| [Setup on your computer](docs/setup-computer.md) | You want to install the app and make your first memory |
+| [Connect your AI app](docs/connect-your-ai.md) | You want Claude Code, Claude Desktop, Codex, Cursor or another AI app to use your memory |
+| [Claude Desktop extension](docs/claude-desktop-extension.md) | You use Claude Desktop and want to connect it with one file |
+| [Things to ask](docs/examples.md) | You are not sure what to say to your AI |
+| [The AI tools](docs/tools.md) | You want the list of everything an AI app can do |
+| [Settings](docs/settings.md) | You want to change how the app works, or find where something is kept |
+| [Safety](docs/safety.md) | Before you let an AI read or change your notes |
+| [Privacy](docs/privacy.md) | You want to know what leaves your computer and who can see what |
+| [Threat model](docs/threat-model.md) | You want to know what the app protects against, and what it cannot |
+| [How it works](docs/how-it-works.md) | You want to know what happens inside, in plain words |
+| [Updates](docs/updates.md) | You want to know how the app gets updated |
+| [Languages](docs/languages.md) | You want the app in another language |
+| [Translating](core/languages/TRANSLATING.md) | You want to add a language or fix a translation |
+| [Questions people ask](docs/faq.md) | You have a quick question |
+| [If something goes wrong](docs/troubleshooting.md) | Something does not work |
+| [Roadmap](docs/roadmap.md) | You want to know what might come next |
+| [SECURITY.md](SECURITY.md) | You found a security problem |
+| [CHANGELOG.md](CHANGELOG.md) | You want to know what changed in each version |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | You want to report a bug or send a change |
+| [CONTRIBUTORS.md](CONTRIBUTORS.md) | You want to see who helped, or be added |
+| [GOVERNANCE.md](GOVERNANCE.md) | You want to know how decisions are made |
+| [SUPPORT.md](SUPPORT.md) | You need help and don't know where to ask |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | You want to know how people behave here |
+| [TRADEMARKS.md](TRADEMARKS.md) | You want to use the name or the logo |
+| [AGENTS.md](AGENTS.md) | You (or your AI coding agent) want to change the code |
 
-## Help and contributing
+## This repository
 
-Found a bug, have an idea or a question? [Open an issue](https://github.com/Phygital-Brain/Phygital-Memory/issues/new/choose). For a security problem, use a [private report](https://github.com/Phygital-Brain/Phygital-Memory/security/advisories/new).
+| Folder or file | What it is |
+|---|---|
+| [`core/phygital_memory/`](core/phygital_memory) | The engine (Python): memories, encryption, search, sharing, backups, the AI door. |
+| [`core/phygital_memory/vault/`](core/phygital_memory/vault) | How a memory is stored: `plain.py` for Open memories, the rest for Encrypted ones. |
+| [`core/frontend/`](core/frontend) | The app's screens (JavaScript). They build into `core/phygital_memory/web/`. |
+| [`core/languages/`](core/languages) | Every screen text in 41 languages. `en.json` is the source. |
+| [`core/tests/`](core/tests) | Every test, the sample notes they use, and `run.sh` to run one. |
+| [`core/packaging/`](core/packaging) | Turns the engine into one program, plus the Touch ID and Keychain helper (Mac only). |
+| [`core/scripts/`](core/scripts) | Small tools, such as `i18n.py` for the screen texts. |
+| [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
+| [`brand/`](brand) | Logo, colours, icons and the brand guide. |
+| [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 
-Want to help? Fixes, docs and translations are all welcome. A native speaker checking one of the 41 languages helps a lot. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+To build the Mac app yourself you need `uv`, `npm`, Rust with `cargo tauri`, `syncthing` and `rclone`. Then run:
 
-## Credits and license
+```bash
+bash rebuild.sh --install
+```
 
-Made by [Phygital-Brain](https://github.com/Phygital-Brain) and the [contributors](CONTRIBUTORS.md). Encrypted memories use the [Cryptomator](https://cryptomator.org) vault format, so Cryptomator can open them too. Not made by or affiliated with Cryptomator. Sharing uses [Syncthing](https://syncthing.net), and cloud storage uses [rclone](https://rclone.org). Design ideas come from [Baalda](https://github.com/naveedharri/baalda). No Baalda code is included. More in [NOTICE](NOTICE).
+You should see a `.dmg` in `release/`, and the app replaced in Applications and reopened. The first build takes longer, because it fetches the build tools. The Windows and Linux apps are built on GitHub. To run one test:
 
-Free and open source under the [AGPL-3.0](LICENSE). A commercial license is available: [open an issue](https://github.com/Phygital-Brain/Phygital-Memory/issues) to ask.
+```bash
+sh core/tests/run.sh test_open.py
+```
+
+You should see PASS or FAIL for each check. More for developers in [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Help and feedback
+
+| You want to | Go to |
+|---|---|
+| Fix a problem yourself | [If something goes wrong](docs/troubleshooting.md) |
+| Report a bug | [Something doesn't work](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=bug_report.yml) |
+| Suggest an idea or a feature | [Idea or feature](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=feature_request.yml) |
+| Ask a question | [Question](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=question.yml) |
+| Ask for a commercial license | [Open an issue](https://github.com/Phygital-Brain/Phygital-Memory/issues) |
+| Report a security problem, privately | [Private report](https://github.com/Phygital-Brain/Phygital-Memory/security/advisories/new) ([SECURITY.md](SECURITY.md)) |
+
+Issues are public, so leave out passwords, keys and private notes.
+
+## Contributors
+
+Everyone who helps is listed in [CONTRIBUTORS.md](CONTRIBUTORS.md). Fixes, docs and translations are all welcome, and a native speaker checking one of the 41 languages helps a lot. Add yourself when you send a pull request.
+
+## Credits
+
+Phygital Memory is made by [Phygital-Brain](https://github.com/Phygital-Brain) and the Phygital Memory contributors. The vault code and the Finder view come from Encryptor MCP, by the same author, under the same license.
+
+It builds on the work of others:
+
+- **Cryptomator.** Encrypted memories use the Cryptomator vault format (version 8), so Cryptomator can open them. The app contains no Cryptomator code. Not made by or affiliated with Cryptomator or Skymatic. "Cryptomator" is a name and trademark of its owners.
+- **Syncthing** (MPL-2.0) for sharing between computers, and **rclone** (MIT) for WebDAV and S3 or R2. The built app bundles both unchanged.
+- **Tauri** for the app window, and the libraries listed in [`core/uv.lock`](core/uv.lock) (Python), [`core/frontend/package-lock.json`](core/frontend/package-lock.json) (JavaScript) and [`app/src-tauri/Cargo.lock`](app/src-tauri/Cargo.lock) (Rust), each under its own license. The app lists the bundled programs under **Settings › Licences**.
+- **Baalda.** Design and feature ideas, including the style of some sidebar icons, come from [Baalda](https://github.com/naveedharri/baalda) (Apache-2.0). No Baalda code is included.
+
+You're welcome to use, fork, change and build on it under the GNU Affero General Public License, version 3 only (AGPL-3.0-only), and the notices in [NOTICE](NOTICE). In short:
+
+- Keep [LICENSE](LICENSE), [NOTICE](NOTICE) and the copyright lines.
+- If you share a changed version, or run one that other people use over a network, offer them its source code under the same license.
+- Mark your version as changed.
+
+GitHub's "Cite this repository" button uses [CITATION.cff](CITATION.cff).
+
+## License
+
+[GNU Affero General Public License, version 3 only](LICENSE) (AGPL-3.0-only), with the notices in [NOTICE](NOTICE). A commercial license is also available for use without the AGPL's terms: [open an issue](https://github.com/Phygital-Brain/Phygital-Memory/issues) to ask. Copyright (C) 2026 Phygital-Brain and Phygital Memory contributors.
