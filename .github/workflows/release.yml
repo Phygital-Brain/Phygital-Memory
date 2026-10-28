@@ -30,6 +30,7 @@ jobs:
             args: --target universal-apple-darwin   # one Mac download for Apple and Intel chips
           - os: windows-latest
           - os: ubuntu-22.04
+          - os: ubuntu-22.04-arm   # Linux on ARM computers
     env:
       PYTHONUTF8: "1"   # Windows' Python otherwise writes the licence files in its old code page
     steps:
