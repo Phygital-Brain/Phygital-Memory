@@ -1,0 +1,4 @@
+# Checked by hand, not secrets: menu shortcuts (key: "CmdOrCtrl+...") and a made-up key in an S3 test
+f1af159326ae0512c9611f9a434397441d963395:frontend/src/main.js:generic-api-key:2963
+f1af159326ae0512c9611f9a434397441d963395:frontend/src/main.js:generic-api-key:2965
+67f1ddeb5d7f0043a736b8f2de8d14071abbdde5:test_s3_backup.py:generic-api-key:49
