@@ -70,8 +70,7 @@ export function switcherItems(ctx) {
       ...(ctx.ai ? [actionRow("pulse", t("AI tasks and activity"), ctx.ai)] : []),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown && cur.kind !== "open" ? "Close the Finder view" : t("Show in Finder"), ctx.finder.toggle)] : []),
       ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),
-      ...(ctx.lockThis ? [actionRow("lock", t("Lock memory"), ctx.lockThis, anyOpen ? { label: t("Lock all"), fn: ctx.lockAll } : null)]
-        : anyOpen ? [actionRow("lock", t("Lock all"), ctx.lockAll)] : []));
+      ...(ctx.lockThis ? [actionRow("lock", t("Lock memory"), ctx.lockThis, anyOpen ? { label: t("Lock all"), fn: ctx.lockAll } : null)] : []));
   }
   return items;
 }

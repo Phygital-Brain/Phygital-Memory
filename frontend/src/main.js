@@ -503,7 +503,7 @@ async function lockFolder(id) {
 async function lockAll() {
   if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
   for (const f of folderList) if (hasPass(f.id) && f.kind !== "open") { try { const r = await api("lock", { folder: f.id }); if (r.warning) toastErr(r.warning); } catch {} lockedLocally(f.id); }
-  showUnlock();
+  if (curInfo()?.kind !== "open") showUnlock();   // an Open memory on screen stays open
 }
 
 // ---------- unlock ----------
@@ -512,7 +512,7 @@ async function unlockCurrent(password, touchid = false) {
   const j = await api(password === TOUCH ? "touchidunlock" : "unlock", { password, folder: fid, touchid });
   setPass(j.pass, fid);
   touchTried.add(fid);   // locked by hand later: don't ask by itself again
-  sealAnimation(true);   // up first, so the notes appear behind it (a new memory opens here too)
+  if (curInfo()?.kind !== "open") sealAnimation(true);   // up first, so the notes appear behind it (a new memory opens here too)
   await enterApp();
 }
 const TOUCH = {};             // unlockCurrent(TOUCH): open with Touch ID instead of a password
@@ -549,8 +549,7 @@ function drawUnlock() {
         try { await unlockCurrent(""); } catch (x) { err.textContent = x.message; }
         open.disabled = false;
       };
-      unlockEl._submit = tryOpen;
-      if (info.exists) setTimeout(tryOpen, 0);   // opens by itself
+      unlockEl._submit = tryOpen;   // shown only when opening by itself failed (showUnlock)
       unlockEl._focus = () => open.focus();
     } else if (info.joined) {   // shared with this person: it opens with their own key, no password
       const open = el("button", { class: "btn primary", type: "submit" }, t("Open"));
@@ -631,6 +630,11 @@ function drawUnlock() {
 }
 
 function showUnlock() {
+  const info = curInfo();
+  if (info?.kind === "open" && info.exists && !creating && !unlockEl._plainFailed) {   // nothing to unlock: open it straight away
+    unlockCurrent("").catch((e) => { unlockEl._plainFailed = true; showUnlock(); unlockEl._plainFailed = false; toastErr(e.message); });
+    return;
+  }
   appEl.classList.add("hidden");
   drawUnlock();
   unlockEl.classList.remove("hidden");
