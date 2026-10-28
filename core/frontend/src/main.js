@@ -2,7 +2,7 @@ import { t, agoText, useLanguage, currentLanguage, LANGUAGES } from "./shell/i18
 import { renderSetup } from "./shell/setup.js";
 import { openAddFiles } from "./shell/addfiles.js";
 import { openShare, joinDialog } from "./shell/share.js";
-import { linkMacDialog, joinMacDialog } from "./shell/link.js";
+import { linkDialog } from "./shell/link.js";
 import { api, uploadStream, setPass, setFolder, currentFolder, forgetPass, hasPass, onLocked, forgetFiles, fileURL, uploadFile, readFileText, readFileForEdit, writeFileText, decodeStrict } from "./api.js";
 import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
 import { docxEditor } from "./shell/docxedit.js";
@@ -361,25 +361,31 @@ async function openShareHere(path = null) {
 }
 
 // An invite: find the shared files on this side, then ask the owner to let you in.
-// Linking your other Mac: this Mac shows the link (Settings), the other one pastes it (Add memory › From my other Mac).
-async function linkOtherMac() {
-  const r = await linkMacDialog({
+// Linking your own computers or your server: one window (shell/link.js), opened from Settings and from Add memory.
+async function linkOtherMac(tab) {
+  const r = await linkDialog({
+    onServer: ON_SERVER, address: location.origin,
     start: () => api("linkstart"), status: () => api("linkstatus"), cancel: () => api("linkcancel").catch(() => {}),
     answer: (memories, seen) => shareApi("linkanswer", { memories, seen }),
-  });
-  if (r) toastOk(t("\"{0}\" is linked.", r.name) + (r.memories ? " Your memories go to it while both Macs are on." : ""));
+    join: (link) => shareApi("linkjoin", { link }), wait: () => api("linkwait"),
+    serverStart: (url, passphrase) => api("serverlinkstart", { url, passphrase }), serverWait: () => api("serverlinkwait"),
+    serverCancel: () => api("serverlinkcancel").catch(() => {}),
+  }, typeof tab === "string" ? tab : undefined);
+  if (!r) return;
+  if (r.from) return joined(r);
+  toastOk(t("\"{0}\" is linked.", r.name) + (r.memories ? " " + t("Your memories go to it while both are on.") : ""));
 }
 
-async function joinOtherMac() {
-  const r = await joinMacDialog({ join: (link) => shareApi("linkjoin", { link }), wait: () => api("linkwait") });
-  if (!r) { api("linkcancel").catch(() => {}); return; }
+const joinOtherMac = () => linkOtherMac("paste");
+
+function joined(r) {
   toastOk(t("Linked to \"{0}\".", r.from) + (r.memories.length ? ` ${r.memories.join(", ")} will show up once the files are here. Open with the same password.` : ""));
   const before = new Set(folderList.map((f) => f.id));
-  const t = setInterval(async () => {   // the first memory to arrive opens at its unlock page
+  const timer = setInterval(async () => {   // the first memory to arrive opens at its unlock page
     const f = (await refreshFolders()).find((x) => !before.has(x.id) && !x.joined);
-    if (f) { clearInterval(t); await switchTo(f.id); }
+    if (f) { clearInterval(timer); await switchTo(f.id); }
   }, 5000);
-  setTimeout(() => clearInterval(t), 10 * 60000);
+  setTimeout(() => clearInterval(timer), 10 * 60000);
 }
 
 async function joinFromInvite() {

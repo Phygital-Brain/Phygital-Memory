@@ -220,6 +220,30 @@ def latest() -> str:
     return _latest["v"]
 
 
+def sync_address() -> str:
+    """Where computers reach this server's Syncthing directly: PHYGITAL_MEMORY_SYNC_ADDRESS, or the server's own name
+    and sync port. Discovery and relays stay on as well."""
+    given = os.environ.get("PHYGITAL_MEMORY_SYNC_ADDRESS", "").strip()
+    if given:
+        return given
+    port = os.environ.get("PHYGITAL_MEMORY_SYNC_PORT", "22000")
+    host = urlparse(URL).hostname or ""
+    return f"tcp://{host}:{port}" if host and host not in ("localhost", "127.0.0.1") else ""
+
+
+def approver_password() -> str:
+    """On a server, being signed in is the approval: sharing and linking are signed with a key the server makes for
+    itself (Phygital Key, password kind), whose password lives in the secrets file. Made the first time it's needed."""
+    from . import pka
+    store = FileKeyring()
+    pw = store.get_password("Phygital Memory server", "approver")
+    if not pw or not pka.card():
+        pw = secrets.token_urlsafe(32)
+        pka.set_up_password(pw)
+        store.set_password("Phygital Memory server", "approver", pw)
+    return pw
+
+
 # ---------- the secrets file, used instead of the Keychain (keyring backend) ----------
 
 def _secrets_file() -> Path:

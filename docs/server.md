@@ -61,6 +61,7 @@ On Render and Railway there is no WebDAV drive (they don't allow it), and syncin
 | `PHYGITAL_MEMORY_PASSPHRASE` | Optional. Sets the passphrase as a setting instead of on the first visit. 12 characters or more |
 | `PHYGITAL_MEMORY_DATA` | Where memories and settings live. `/data` in the image: keep it on a disk that survives restarts |
 | `PHYGITAL_MEMORY_SYNC_PORT` | The port for syncing with your computers. `22000` in the image |
+| `PHYGITAL_MEMORY_SYNC_ADDRESS` | Optional. Where computers reach that port, like `tcp://memory.example.com:22000`. By default your address's name and the sync port |
 
 The passphrase chosen on the first visit is never written down: the server keeps only a fingerprint of it. To choose a new one, delete `state/passphrase.json` on the `/data` disk and restart: the first visit comes back, with a new setup code. If you set `PHYGITAL_MEMORY_PASSPHRASE`, keep it in your host's secret settings or in `.env`, never in a file you share.
 
@@ -77,7 +78,7 @@ More in [Connect your AI app](connect-your-ai.md).
 
 There are two ways, and you can use both:
 
-- **Link my computer.** In the desktop app, open **Link my computer** and make a link. On the server's page, paste it and press Link. The memories you pick then sync straight between your computer and the server, still encrypted. The server is always on, so your computer catches up whenever the app is open.
+- **Link your computer.** In the desktop app, open Settings, Sharing and AI, **Link a computer**, and choose **To my server**. Type the server's address and passphrase and press Connect. The app signs in, links the two and checks the safety words for you. Pick the memories and press **Link**. They then sync straight between your computer and the server, still encrypted. The server is always on, so your computer catches up whenever the app is open.
 - **The same storage.** The desktop app and the server both open the same WebDAV or Nextcloud folder. On the server this needs the four WebDAV lines in `compose.yaml`.
 
 If the same note changes in both places at once, both copies are kept, and **Version history** lets you go back.

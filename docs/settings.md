@@ -37,7 +37,7 @@ For when you want to change how the app looks or behaves, or find where somethin
 | Setting | Default | What it does |
 |---|---|---|
 | Your name | Your account's name | What others see when you share a memory with them or join one |
-| Link a Mac (**Link a computer** off the Mac) | none | Makes your other computer become you too, with no cloud and no account. The memories you pick sync between your computers, through Syncthing. Both must be online with the app open at the same time |
+| Link a computer | none | Makes your other computer, or your own server, become you too, with no cloud and no account. One window with three ways in: **To my server** (type its address and passphrase, the app does the rest), **Send to a computer** (shows a link) and **Receive from a computer** (paste that link). The memories you pick sync between them, through Syncthing. Both must be online at the same time |
 | Approvals | Set up the first time you share | How you sign sharing changes: Touch ID with the security chip (Mac only), or an approval password |
 
 ## AI apps
@@ -78,7 +78,7 @@ For when you want to change how the app looks or behaves, or find where somethin
 
 Set by the window for the program, never by you: `PHYGITAL_MEMORY_SHELL_TOKEN`, `PHYGITAL_MEMORY_SERVER_PROOF`, `PHYGITAL_MEMORY_APP_PID`.
 
-On a server ([Run it on your own server](server.md)): `PHYGITAL_MEMORY_SERVER` (`1` turns server mode on), `PHYGITAL_MEMORY_URL` (the server's address), `PHYGITAL_MEMORY_PASSPHRASE` (optional: the passphrase as a setting, instead of choosing it on the first visit), `PHYGITAL_MEMORY_DATA` (where memories and settings live), `PHYGITAL_MEMORY_SYNC_PORT` (the one port for syncing with your computers) and `PHYGITAL_MEMORY_VERSION` (set by the image, shown on the page). The server image sets all but the address.
+On a server ([Run it on your own server](server.md)): `PHYGITAL_MEMORY_SERVER` (`1` turns server mode on), `PHYGITAL_MEMORY_URL` (the server's address), `PHYGITAL_MEMORY_PASSPHRASE` (optional: the passphrase as a setting, instead of choosing it on the first visit), `PHYGITAL_MEMORY_DATA` (where memories and settings live), `PHYGITAL_MEMORY_SYNC_PORT` (the one port for syncing with your computers), `PHYGITAL_MEMORY_SYNC_ADDRESS` (where computers reach that port, when it isn't your address's name and the sync port) and `PHYGITAL_MEMORY_VERSION` (set by the image, shown on the page). The server image sets all but the address.
 
 Test hooks, used only by `core/tests/`: `PHYGITAL_MEMORY_OFFLINE`, `PHYGITAL_MEMORY_SYNCTHING_LOCAL`, `PHYGITAL_MEMORY_SYNCTHING_NO_LAN`, and the Keychain item names `PHYGITAL_MEMORY_SEAL_KEYCHAIN`, `PHYGITAL_MEMORY_CLOUD_KEYCHAIN`, `PHYGITAL_MEMORY_APPROVER_KEYCHAIN`, `PHYGITAL_MEMORY_IDENTITY_KEYCHAIN`, `PHYGITAL_MEMORY_TOUCHID_KEYCHAIN`. Do not set these on your real computer.
 

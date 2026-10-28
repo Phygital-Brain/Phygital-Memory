@@ -1076,3 +1076,31 @@ body { font-family: var(--font-body); font-size: 14px; }
 .sh-hrow { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 12.5px; color: var(--text-2); }
 .sh-hrow time { flex: none; font: 11.5px var(--font-mono); color: var(--text-3); font-variant-numeric: tabular-nums; }
 @media (max-width: 520px) { .sh-row { flex-wrap: wrap; } .sh-btns { margin-left: 38px; } }
+
+/* Link a computer: one window, three ways in (shell/link.js) */
+.dlg.lk { width: min(460px, calc(100vw - 32px)); gap: 14px; }
+.lk-intro { margin: -6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+.lk-seg { align-self: flex-start; }
+.lk-body { display: flex; flex-direction: column; gap: 8px; min-height: 150px; }
+.lk-body .dlg-input { width: 100%; box-sizing: border-box; }
+.lk-sub { font-size: 12.5px; font-weight: 500; color: var(--text-2); margin-top: 2px; }
+.lk-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.lk-row { display: flex; align-items: center; gap: 10px; }
+.lk-row code { flex: 1; min-width: 0; overflow-wrap: anywhere; font: 12px/1.4 var(--font-mono); color: var(--text); }
+.lk-steps { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 8px; counter-reset: lk; }
+.lk-step { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.45; color: var(--text-faint); counter-increment: lk; }
+.lk-step.now { color: var(--text); }
+.lk-step.done { color: var(--text-2); }
+.lk-dot { flex: none; width: 20px; height: 20px; margin-top: -1px; border-radius: 50%; display: grid; place-items: center;
+  font: 600 11px/1 var(--font-mono); border: 1px solid var(--border); color: var(--text-faint); }
+.lk-dot::before { content: counter(lk); }
+.lk-step.now .lk-dot { border-color: var(--accent); color: var(--accent); }
+.lk-step.done .lk-dot { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.lk-step.done .lk-dot::before { content: none; }
+.lk-tip { padding: 10px 12px; border-radius: var(--r-s); background: var(--accent-soft); color: var(--text-2); font-size: 12.5px; line-height: 1.5; display: flex; flex-direction: column; gap: 8px; }
+.lk-tip p { margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .lk-step.now .lk-dot { animation: lk-pulse 1.6s var(--ease) infinite; } }
+@keyframes lk-pulse { 50% { box-shadow: 0 0 0 4px var(--accent-soft); } }
+.lk-way { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-s); background: var(--bg-subtle); font-size: 12.5px; color: var(--text-3); }
+.lk-way b { color: var(--text); font-weight: 600; }
+.lk-way svg { color: var(--accent); flex: none; }

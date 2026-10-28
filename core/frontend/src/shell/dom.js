@@ -47,6 +47,7 @@ const ICONS = {
   share: ["M12 15V4", "M8 8l4-4 4 4", "M6 12v7h12v-7"],
   sync: ["M4 12a8 8 0 0 1 14-5.3L20 9", "M20 4v5h-5", "M20 12a8 8 0 0 1-14 5.3L4 15", "M4 20v-5h5"],   // both computers trading changes
   people: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M2.5 20a6.5 6.5 0 0 1 13 0", "M16 4.3a3.5 3.5 0 0 1 0 6.4", "M18 14.2a6.5 6.5 0 0 1 3.5 5.8"],
+  arrow: ["M5 12h14", "M13 6l6 6-6 6"],   // which way something goes
   logout: ["M15 4h4v16h-4", "M10 8l-4 4 4 4", "M6 12h10"],   // signing out of a server
   link: ["M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1", "M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"],
   select: ["M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z", "M8.5 12.5l2.5 2.5 4.5-5"],

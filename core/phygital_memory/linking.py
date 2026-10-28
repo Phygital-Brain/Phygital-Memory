@@ -86,7 +86,8 @@ def start(device: str, address: str) -> str:
     code = secrets.token_urlsafe(18)
     _open.clear()
     _open.update(code=code, expires=time.time() + LIFE)
-    return f"{SCHEME}d={device}&a={address}&c={code}&k={_key_tag(sharing.my_public())}"
+    from urllib.parse import quote
+    return f"{SCHEME}d={device}&a={quote(address, safe='')}&c={code}&k={_key_tag(sharing.my_public())}"
 
 
 def offered() -> str | None:

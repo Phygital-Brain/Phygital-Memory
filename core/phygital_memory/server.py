@@ -934,7 +934,8 @@ async def _approved(body: dict, request: dict, words: str, out: dict | None = No
     """None once the person signed this exact request with their own key (Phygital Key format); otherwise what the
     page must do next: set up a key, ask for the approval password, or say it wasn't approved. out gets the signed yes."""
     try:
-        approval = await asyncio.to_thread(pka.approve, request, words, body.get("approverPassword"))
+        pw = await asyncio.to_thread(hosted.approver_password) if hosted.ON else body.get("approverPassword")
+        approval = await asyncio.to_thread(pka.approve, request, words, pw)
         if out is not None:
             out["approval"] = approval
         return None
@@ -1337,7 +1338,8 @@ async def _link_wait_step(body: dict):
     if shares._all() or _st_invites() or any(x.joined for x in folders.items.values()):   # started sharing meanwhile
         return _ok({"error": "This Mac started sharing with its own key while waiting. Link it before sharing anything on it."}, 400)
     await asyncio.to_thread(linking.take_identity, a)
-    parent = Path(body.get("parent") or Path.home())
+    parent = Path(body.get("parent") or (hosted.MEMORIES if hosted.ON else Path.home()))   # a server keeps memories in one folder
+    parent.mkdir(parents=True, exist_ok=True)
     have = {sharing._vault_id(x.path) for x in folders.items.values() if is_vault(x.path)}
     todo = []
     for m in a["memories"]:
@@ -1782,6 +1784,83 @@ OPENABLE = {".docx", ".doc", ".rtf", ".odt", ".pages", ".xlsx", ".xls", ".ods", 
             ".m4a", ".wav", ".mp4", ".mov", ".m4v", ".epub"}
 
 
+async def _cancel_link() -> None:
+    """Nothing of an unfinished link stays behind, on either computer."""
+    code, w = linking.offered(), linking.waiting()
+    linking.cancel()
+    if code and st.running():
+        fid = linking.folder_id(code)
+        try:
+            devs = [d["deviceID"] for d in (await asyncio.to_thread(st.rest, "GET", f"/rest/config/folders/{fid}"))["devices"]]
+        except Exception:
+            devs = []
+        await asyncio.to_thread(st.remove_folder, fid)
+        shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
+        for d in devs:
+            if d != await asyncio.to_thread(st.device_id) and d not in linking.macs():
+                await asyncio.to_thread(st.remove_device, d)
+    if w and st.running():
+        fid = linking.folder_id(linking._wait["code"])
+        await asyncio.to_thread(st.remove_folder, fid)
+        shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
+        await asyncio.to_thread(st.set_name, linking.computer_name())
+        if w["owner"] not in linking.macs():
+            await asyncio.to_thread(st.remove_device, w["owner"])
+    linking.done_waiting()
+
+
+SERVER_LINK: dict = {}   # linking your own server: its address, this engine's login cookie there, the safety words
+
+
+def _server_base(url: str) -> str:
+    url = url.strip().rstrip("/")
+    if url.endswith("/mcp"):
+        url = url[:-4]
+    if "://" not in url:   # https, except a server on this same computer (trying it out)
+        url = ("http://" if re.match(r"(localhost|127\.0\.0\.1)(:|$)", url) else "https://") + url
+    u = urlparse(url)
+    if u.scheme not in ("https", "http") or not u.netloc or u.path not in ("", "/") or \
+            (u.scheme == "http" and u.hostname not in ("localhost", "127.0.0.1")):
+        raise ValueError("Type the server's address, like memory.example.com")
+    return f"{u.scheme}://{u.netloc}"
+
+
+def _server_post(base: str, path: str, body: dict, cookie: str = ""):
+    import urllib.error
+    import urllib.request
+    req = urllib.request.Request(base + path, json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", "Origin": base,
+                                          **({"Cookie": cookie} if cookie else {})})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.loads(r.read() or b"{}"), r.headers.get("Set-Cookie", "")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}"), ""
+        except ValueError:
+            return e.code, {}, ""
+    except (OSError, ValueError) as e:
+        raise ValueError(f"Couldn't reach {base}. Check the address, and that the server is on.") from e
+
+
+def _server_login(base: str, passphrase: str) -> str:
+    code, j, set_cookie = _server_post(base, "/login", {"passphrase": passphrase})
+    if code != 200:
+        raise ValueError(j.get("error") or "The server didn't let this computer in.")
+    cookie = set_cookie.split(";", 1)[0]
+    if not cookie.startswith(hosted.COOKIE + "="):
+        raise ValueError("That address isn't a Phygital Memory server.")
+    return cookie
+
+
+def _server_call(base: str, cookie: str, action: str, body: dict):
+    try:
+        code, j, _ = _server_post(base, f"/api/{action}", body, cookie)
+    except ValueError as e:
+        return 0, {"error": str(e)}
+    return code, j
+
+
 @mcp.custom_route("/api/{action}", methods=["POST"])
 async def api(request: Request) -> Response:
     if not _local(request) or request.headers.get("content-type", "").split(";")[0] != "application/json" \
@@ -1856,27 +1935,7 @@ async def api(request: Request) -> Response:
             _st_watch()
             return _ok({"link": link, "minutes": linking.LIFE // 60})
         if action == "linkcancel":   # nothing of an unfinished link stays behind, on either Mac
-            code, w = linking.offered(), linking.waiting()
-            linking.cancel()
-            if code and st.running():
-                fid = linking.folder_id(code)
-                try:
-                    devs = [d["deviceID"] for d in (await asyncio.to_thread(st.rest, "GET", f"/rest/config/folders/{fid}"))["devices"]]
-                except Exception:
-                    devs = []
-                await asyncio.to_thread(st.remove_folder, fid)
-                shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
-                for d in devs:
-                    if d != await asyncio.to_thread(st.device_id) and d not in linking.macs():
-                        await asyncio.to_thread(st.remove_device, d)
-            if w and st.running():
-                fid = linking.folder_id(linking._wait["code"])
-                await asyncio.to_thread(st.remove_folder, fid)
-                shutil.rmtree(linking.LINKS / fid, ignore_errors=True)
-                await asyncio.to_thread(st.set_name, linking.computer_name())
-                if w["owner"] not in linking.macs():
-                    await asyncio.to_thread(st.remove_device, w["owner"])
-            linking.done_waiting()
+            await _cancel_link()
             return _ok({"ok": True})
         if action == "linkstatus":   # polled while the link window is open
             if not linking.offered():
@@ -1904,7 +1963,7 @@ async def api(request: Request) -> Response:
             mems = [{"vault": sharing._vault_id(x.path), "name": x.name} for x in picked]
             out: dict = {}
             if (need := await _approved(body, linking.approval_request(r, mems),
-                                        f"link {_plain(r['name'])} as your own Mac (safety words: {r['words']})", out)):
+                                        f"link {_plain(r['name'])} as your own computer (safety words: {r['words']})", out)):
                 return need
             if not (code := linking.offered()):
                 return _ok({"error": "This link ran out. Start again."}, 400)
@@ -1917,6 +1976,45 @@ async def api(request: Request) -> Response:
             _json_add(LINK_DONE, [{"folder": fid, "device": r["device"], "since": time.time()}])
             approvals.add("Linked your Mac", r["name"], "your approval key")
             return _ok({"ok": True, "name": r["name"], "memories": len(mems)})
+        # ---- linking your own server (docs/server.md): this computer drives both sides ----
+        if action == "serverlinkstart":   # sign in to the server, make a link here and have the server join it
+            if hosted.ON:
+                return _ok({"error": "Link a server from the desktop app."}, 400)
+            try:
+                base = _server_base(str(body.get("url", "")))
+                cookie = await asyncio.to_thread(_server_login, base, str(body.get("passphrase", "")))
+            except ValueError as e:
+                return _ok({"error": str(e)}, 400)
+            await asyncio.to_thread(st.start)
+            link = linking.start(await asyncio.to_thread(st.device_id), st.address())
+            _st_watch()
+            code, j = await asyncio.to_thread(_server_call, base, cookie, "linkjoin", {"link": link})
+            if code != 200 or not j.get("words"):
+                await _cancel_link()
+                return _ok({"error": "The server couldn't join: " + str(j.get("error") or code)}, 400)
+            if (dev := str(j.get("device", ""))) and re.fullmatch(r"[A-Z0-9]{7}(-[A-Z0-9]{7}){7}", dev):
+                # Signed in over HTTPS with the passphrase, so this is the server's own Syncthing: let it in to the
+                # link's folder and dial it straight away, instead of waiting for it to find this computer.
+                fid = linking.folder_id(linking.offered())
+                addr = str(j.get("sync") or "")
+                await asyncio.to_thread(st.add_device, dev, "Linking",
+                                        f"{addr}, dynamic" if re.fullmatch(r"tcp://[\w.\-\[\]:]+:\d+", addr) else "dynamic")
+                await asyncio.to_thread(st.add_folder, fid, linking.LINKS / fid, "Link", [dev])
+            SERVER_LINK.update(base=base, cookie=cookie, words=j["words"])
+            return _ok({"words": j["words"], "server": base})
+        if action == "serverlinkwait":   # after Link here: the server takes the answer in
+            if not SERVER_LINK.get("base"):
+                return _ok({"state": "none"})
+            code, j = await asyncio.to_thread(_server_call, SERVER_LINK["base"], SERVER_LINK["cookie"], "linkwait", {})
+            if j.get("state") in ("done", "none"):
+                SERVER_LINK.clear()
+            return _ok(j if code == 200 else {"error": j.get("error") or "The server didn't answer."}, 200 if code == 200 else 400)
+        if action == "serverlinkcancel":
+            if SERVER_LINK.get("base"):
+                await asyncio.to_thread(_server_call, SERVER_LINK["base"], SERVER_LINK["cookie"], "linkcancel", {})
+                SERVER_LINK.clear()
+            await _cancel_link()
+            return _ok({"ok": True})
         if action == "linkjoin":   # the other Mac: paste the link, then wait for the first Mac's yes
             try:
                 lk = linking.parse(str(body.get("link", "")))
@@ -1924,6 +2022,8 @@ async def api(request: Request) -> Response:
                 return _ok({"error": str(e)}, 400)
             if shares._all() or any(x.joined for x in folders.items.values()):
                 return _ok({"error": "This Mac already shares with its own key. Link it before sharing anything on it."}, 400)
+            if hosted.ON:   # a server signs with its own key (see hosted.approver_password)
+                await asyncio.to_thread(hosted.approver_password)
             if not pka.card():   # its own approval key first: the first Mac's yes names it
                 return _ok({"error": "Choose how this Mac approves sharing first.", "needApprover": True,
                             "chip": await asyncio.to_thread(pka.chip_available)}, 400)
@@ -1939,7 +2039,8 @@ async def api(request: Request) -> Response:
             tmp.write_text(json.dumps(r))
             os.replace(tmp, linking.LINKS / fid / "request.json")
             _st_watch()
-            return _ok({"words": linking.waiting()["words"]})
+            # A computer that signed in here to link (Your server) learns where to reach this server directly
+            return _ok({"words": linking.waiting()["words"], **({"device": me, "sync": hosted.sync_address()} if hosted.ON else {})})
         if action == "linkwait":   # polled by the other Mac until the answer is here
             async with _link_wait:
                 return await _link_wait_step(body)
@@ -2935,6 +3036,8 @@ def main() -> None:
         sys.stderr = open(log, "a", buffering=1, encoding="utf-8", errors="replace")
         faulthandler.enable(sys.stderr)
     if hosted.ON:
+        from . import syncthing as st_mod
+        st_mod.ADDRESS = st_mod.ADDRESS or hosted.sync_address()   # computers dial the server's public sync port first
         if bad := hosted.problems():
             sys.exit("Phygital Memory server can't start:\n- " + "\n- ".join(bad))
         print(f"Phygital Memory server {VERSION}: open {PAGE}  ·  AI apps connect to {PAGE}mcp", file=sys.stderr)

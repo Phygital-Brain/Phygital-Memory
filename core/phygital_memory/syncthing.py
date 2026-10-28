@@ -29,7 +29,8 @@ from .folders import STATE
 
 HOME = Path(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_HOME", STATE / "syncthing"))
 OFFLINE = bool(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_LOCAL"))   # tests: no discovery, relays or NAT, 127.0.0.1 only
-NO_LAN = bool(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_NO_LAN"))   # tests: found only through internet discovery
+NO_LAN = bool(os.environ.get("PHYGITAL_MEMORY_SYNCTHING_NO_LAN"))
+ADDRESS = os.environ.get("PHYGITAL_MEMORY_SYNC_ADDRESS", "").strip()   # a server's own public sync address, first   # tests: found only through internet discovery
 IGNORE = ".DS_Store\n._*\n.encryptor-*\n.git\n.github\n.gitignore\n.gitattributes\n"
 
 
@@ -45,6 +46,13 @@ def binary() -> str:
         if p and Path(p).is_file():
             return p
     raise SyncthingError("Syncthing is missing from this copy of the app.")
+
+
+def _addresses(given: str | None) -> list[str]:
+    """A link's or invite's addresses ("tcp://host:22000, relay://..., dynamic"), only the kinds Syncthing dials."""
+    ok = [a.strip() for a in (given or "").split(",")
+          if re.fullmatch(r"dynamic|(tcp|quic|relay)://[^\s,]{3,300}", a.strip())]
+    return list(dict.fromkeys(ok + ["dynamic"]))[:12]
 
 
 def _free_port() -> int:
@@ -86,8 +94,11 @@ class Syncthing:
         x = re.sub(r"(<gui[^>]*>.*?<address>)[^<]*(</address>)", rf"\g<1>{self.gui}\g<2>", x, count=1, flags=re.S)
         x = re.sub(r"(<gui[^>]*>.*?<apikey>)[^<]*(</apikey>)", rf"\g<1>{self.key}\g<2>", x, count=1, flags=re.S)
         x = re.sub(r"<listenAddress>[^<]*</listenAddress>\s*", "", x)
-        listen = f"<listenAddress>tcp://{'127.0.0.1' if OFFLINE else '0.0.0.0'}:{self.listen}</listenAddress>"
-        x = x.replace("<options>", "<options>\n        " + listen, 1)
+        if OFFLINE:
+            listen = [f"tcp://127.0.0.1:{self.listen}"]
+        else:   # direct (tcp, quic), and a relay for when neither computer can reach the other directly (home routers)
+            listen = [f"tcp://0.0.0.0:{self.listen}", f"quic://0.0.0.0:{self.listen}", "dynamic+https://relays.syncthing.net/endpoint"]
+        x = x.replace("<options>", "<options>" + "".join(f"\n        <listenAddress>{a}</listenAddress>" for a in listen), 1)
         for tag, value in (("urAccepted", "-1"), ("urSeen", "3"), ("crashReportingEnabled", "false"),
                            ("autoUpgradeIntervalH", "0"), ("startBrowser", "false"),
                            ("globalAnnounceEnabled", "false" if OFFLINE else "true"),
@@ -146,8 +157,26 @@ class Syncthing:
         return self.rest("GET", "/rest/system/status")["myID"]
 
     def address(self) -> str:
-        """Where others reach this computer directly (tests: 127.0.0.1); otherwise found through discovery."""
-        return f"tcp://127.0.0.1:{self.listen}" if OFFLINE else "dynamic"
+        """Where others reach this computer, for a link or an invite: its addresses on the local network and its relay
+        (so the other side dials at once, without waiting for discovery to find it), then discovery as well.
+        Tests: 127.0.0.1 only."""
+        if OFFLINE:
+            return f"tcp://127.0.0.1:{self.listen}"
+        svc, end = {}, time.time() + 20
+        while True:   # the relay is joined a few seconds after Syncthing starts
+            try:
+                svc = self.rest("GET", "/rest/system/status").get("connectionServiceStatus") or {}
+            except Exception:
+                svc = {}
+            if any(a.startswith("relay://") for v in svc.values() for a in (v.get("lanAddresses") or [])) or time.time() > end:
+                break
+            time.sleep(1)
+        out = [ADDRESS] if ADDRESS else []
+        for v in svc.values():
+            for a in v.get("lanAddresses") or []:
+                if a.startswith("relay://") or (a.startswith(("tcp://", "quic://")) and not re.search(r"//(0\.0\.0\.0|\[::\]|\[fe80|127\.)", a)):
+                    out.append(a)
+        return ", ".join(dict.fromkeys(out + ["dynamic"]))
 
     def set_name(self, name: str) -> None:
         me = self.device_id()
@@ -160,7 +189,8 @@ class Syncthing:
     def add_device(self, device_id: str, name: str, address: str = "dynamic") -> None:
         self.start()
         self.rest("PUT", f"/rest/config/devices/{device_id}", {
-            "deviceID": device_id, "name": name[:60], "addresses": [address if address else "dynamic"],
+            "deviceID": device_id, "name": name[:60],
+            "addresses": _addresses(address),
             "compression": "metadata", "introducer": False, "autoAcceptFolders": False, "paused": False})
 
     def remove_device(self, device_id: str) -> None:

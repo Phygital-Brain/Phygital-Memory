@@ -51,8 +51,8 @@ def main():
         r = api(A, "linkanswer", {"memories": [fa], "seen": s.get("seen"), "approverPassword": APPROVER_PW})
         check(r.get("ok") and r.get("memories") == 1, "Link, signed, goes through", r)
         signed = [json.loads(x) for x in (tmp / "max" / "approvals-signed.jsonl").read_text().splitlines()]
-        check(any("as your own Mac" in x["what"] and j.get("words", "?") in x["what"] for x in signed),
-              "the signed yes names the Mac and its safety words")
+        check(any("as your own computer" in x["what"] and j.get("words", "?") in x["what"] for x in signed),
+              "the signed yes names the computer and its safety words")
         check(api(A, "linkstatus").get("state") == "expired", "the link works only once")
 
         w = {}
