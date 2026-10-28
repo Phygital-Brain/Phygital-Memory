@@ -41,7 +41,10 @@ try:
         note = m.read(M.TASKS_NOTE)
         check("## To do" in note and "- [ ] [[Projects/Plan]] tidy this note" in note, f"{kind}: giving a task writes a To do line", note)
         if kind == "open":
-            check((root / "AI tasks.md").is_file(), "open: it's a normal file anyone can open")
+            check((root / ".ai-tasks" / "AI tasks.md").is_file(), "open: it's a normal file in a hidden folder")
+            m.trash(".ai-tasks")
+            item = m.todo_add("Projects/Plan.md", "tidy this note")
+            check((root / ".ai-tasks" / "AI tasks.md").is_file(), "open: deleted, the next task makes it again")
 
         m.todo_set(item["id"], True, "Claude Code", "split it in two")
         note = m.read(M.TASKS_NOTE)
@@ -93,7 +96,7 @@ try:
     mb.tasks_file = tmp / "b.bin"
     mb.unlock("")
     shares.mirror("t", m, mb, b"k" * 32, True)
-    check((b / "Old.md").exists() and not (b / "AI tasks.md").exists(), "a share copies the notes, never the AI tasks note")
+    check((b / "Old.md").exists() and not (b / ".ai-tasks").exists(), "a share copies the notes, never the AI tasks note")
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

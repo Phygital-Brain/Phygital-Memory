@@ -194,14 +194,14 @@ function activityView(ctx, done) {
               } }, "Undo") : null),
           r.detail ? el("div", { class: "act-detail" }, r.detail) : null,
           el("div", { class: "act-folder" }, r.folderName)));
-    }) : [el("div", { class: "act-empty" }, t("No AI app has used your notes since they were unlocked."))]));
+    }) : [el("div", { class: "act-empty" }, t("No AI app has used your notes since they were opened."))]));
   };
   filter.addEventListener("change", draw);
   apps(); draw();
   // Fetched again each time the tab opens, so what an AI app did while the panel was open shows up.
   const refresh = async () => { try { ctx.rows = await ctx.reload(); apps(); draw(); } catch (e) { ctx.fail(e.message); } };
   return { tools: [filter], refresh,
-           body: [el("div", { class: "mf-hint" }, t("What AI apps did with your unlocked notes. Kept only until you lock.")), list] };
+           body: [el("div", { class: "mf-hint" }, t("What AI apps did with your notes since they were opened. Kept until they close.")), list] };
 }
 
 // Your yeses (unlocks, AI apps let in, what each may reach), each sealed: a line changed later shows as broken.
@@ -235,7 +235,7 @@ function tasksView(ctx, done) {
       box.addEventListener("change", () => act(() => ctx.set(i.id, box.checked)));
       return el("div", { class: "todo-row" + (i.done ? " done" : "") }, box,
         el("div", { class: "act-main" },
-          el("button", { class: "act-path", type: "button", title: i.path || "AI tasks.md", onclick: () => { done(null); ctx.open(i.path || "AI tasks.md"); } }, ctx.label(i.path || "AI tasks.md")),
+          el("button", { class: "act-path", type: "button", title: i.path || ".ai-tasks/AI tasks.md", onclick: () => { done(null); ctx.open(i.path || ".ai-tasks/AI tasks.md"); } }, ctx.label(i.path || ".ai-tasks/AI tasks.md")),
           el("div", { class: "act-detail" }, i.ask || t("No request: just read it.")),
           i.done ? el("div", { class: "todo-result" }, `${i.by && i.by !== "you" ? i.by : t("Ticked off by you")}${i.result ? ": " + i.result : ""}`)
                  : el("div", { class: "act-folder" }, t("Given {0}", ago(Math.max(0, Date.now() / 1000 - i.t))))),
@@ -365,7 +365,7 @@ export function pickRepo(repos) {
       : [el("div", { class: "act-empty" }, t("No Phygital Memory repos found on this GitHub account."))]));
     const card = el("div", { class: "dlg activity", role: "dialog" },
       el("div", { class: "dlg-title" }, t("Open from GitHub")),
-      el("div", { class: "mf-hint" }, t("Your private Phygital Memory repos. Pick one, then unlock it with its password.")),
+      el("div", { class: "mf-hint" }, t("Your private Phygital Memory repos. Pick one. An Encrypted one asks for its password.")),
       list,
       el("div", { class: "dlg-actions" },
         el("button", { class: "btn", type: "button", onclick: () => done("") }, t("Another repo")),

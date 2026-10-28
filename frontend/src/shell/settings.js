@@ -86,7 +86,7 @@ export function openSettings(folderOpts, me) {
     row(t("Font size"), null, el("div", { class: "set-range" }, size, sizeVal), t("Text size in the editor.")),
     row(t("Show properties"), t("Fields under a note's title."), sw(props), t("The info block at the top of a note, like tags and dates.")),
     row(t("Language"), t("The app's words. Note and folder names stay as you wrote them."),
-      languagePicker(() => toast(t("Language changed. Lock and unlock to see it everywhere.")))),
+      languagePicker(() => toast(t("Language changed. Reopen the app to see it everywhere.")))),
     section(t("Finder"))];
   if (f && f.plain) general.push(row(t("Show in Finder"), t("This memory is a normal folder."), btn(t("Show"), f.toggleFinder)));
   else if (f && f.finderAvailable) general.push(row(t("Show in Finder"), t("Your notes as a normal folder."), toggle(t("Show in Finder"), f.finderShown, f.toggleFinder),
@@ -128,7 +128,7 @@ export function openSettings(folderOpts, me) {
   if (f) {
     sharing.push(section(t("AI")));
     if (f.aiApps) sharing.push(row(t("AI apps"), t("Which AI apps can use your notes."), btn(t("Manage"), f.aiApps),
-      t("Each app gets its own key and only reaches unlocked memories.")));
+      t("Each app gets its own key and only reaches memories that are open in the app.")));
     sharing.push(row(t("Hide from AI"), f.plain ? t("No AI app reaches it through this app. An AI that can open files can still read the folder.") : t("No AI app can reach this memory."), toggle(t("Hide from AI"), f.aiHidden, f.setAiHidden),
       t("Turns off AI access to this memory, whatever each app is allowed.")));
   }

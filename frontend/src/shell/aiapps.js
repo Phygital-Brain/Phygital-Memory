@@ -71,7 +71,7 @@ export function aiAppsView(ctx) {
       title.textContent = t("AI apps"); err.textContent = "";
       try { data = await ctx.load(); } catch (e) { err.textContent = e.message; return; }
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, t("Each AI app has its own key and only reaches unlocked memories. Remove an app to cut it off.")),
+        el("div", { class: "mf-hint" }, t("Each AI app has its own key and only reaches memories that are open in the app. Remove an app to cut it off.")),
         el("div", { class: "act-list" }, ...(data.apps.length ? data.apps.map((a) =>
           el("div", { class: "todo-row repo-row ai-row" },
             el("span", { class: "trash-ic" }, icon("sparkle", 16)),
@@ -160,7 +160,7 @@ export function allowDialog(name, folders, who = "") {
       el("div", { class: "dlg-title" }, t("An app that calls itself “{0}” wants to use your notes", name)),
       el("div", { class: "ai-who" }, el("span", { class: "set-hint" }, t("The answer goes to: ")), el("b", {}, who || "a program this Mac can't name")),
       el("div", { class: "st-warn" }, el("span", {}, t("Allow it only if you just started connecting that app, and the line above names it."))),
-      el("div", { class: "mf-hint" }, t("It only reaches unlocked memories. Change or remove it in Settings › AI apps.")),
+      el("div", { class: "mf-hint" }, t("It only reaches memories that are open in the app. Change or remove it in Settings › AI apps.")),
       access.node,
       el("div", { class: "dlg-actions" }, deny, allow));
     return { card };

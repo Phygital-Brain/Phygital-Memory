@@ -482,7 +482,7 @@ let creating = false;   // a new memory is opened by its setup page, not by the 
 async function renameFolder(id) {
   const info = (id && folderList.find((f) => f.id === id)) || curInfo();
   if (!info) return;
-  const v = await askText("Rename folder", info.name, t("Rename"), (x) => (x.trim() ? "" : t("Name can't be empty.")));
+  const v = await askText("Rename memory", info.name, t("Rename"), (x) => (x.trim() ? "" : t("Name can't be empty.")));
   if (v == null) return;
   try {
     const j = await api("renamefolder", { folder: info.id, name: v.trim() });
@@ -665,7 +665,7 @@ function drawSwitcher() {
   if (!sbName) return;
   const info = curInfo();
   sbName.textContent = info ? info.name : "Phygital Memory";
-  sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : t("No folder yet");
+  sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : t("No memory yet");
   sbPath.title = info ? info.path : "";
   sbTile.replaceChildren(knot(28));
   lockBtn?.classList.toggle("hidden", info?.kind === "open");
@@ -714,7 +714,7 @@ function buildApp() {
   sbPath = el("div", { class: "sb-folder" }, "");
   sbTile = el("div", { class: "sb-tile" });
   sbBadge = el("span", { class: "fo-badge hidden", title: t("Another folder is open in Finder") }, t("Finder"));
-  const sbHead = el("button", { class: "sb-head sb-switch", title: t("Switch folder (⇧⌘O)"), "aria-haspopup": "menu", onclick: openSwitcher },
+  const sbHead = el("button", { class: "sb-head sb-switch", title: t("Switch memory (⇧⌘O)"), "aria-haspopup": "menu", onclick: openSwitcher },
     sbTile,
     el("div", { class: "sb-titles" }, sbName, sbPath),
     sbBadge, el("span", { class: "sb-chev" }, icon("updown", 14)));
@@ -757,7 +757,7 @@ function buildApp() {
     treeEl,
     el("div", { class: "sb-foot" },
       statusBar(),
-      el("span", { class: "sb-foot-btns" }, lockBtn = ib("unlock", t("Unlocked. Click to lock this folder"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere))),
+      el("span", { class: "sb-foot-btns" }, lockBtn = ib("unlock", t("Unlocked. Click to lock this memory"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -2963,7 +2963,7 @@ window.phygitalOpenFolder = async (id) => {
 };
 
 const LAST_MEMORY = "phygital-memory-last";
-const TASKS_NOTE = "AI tasks.md";   // the AI's tasks, one note at the top of the memory (memory.py)   // the memory last open on screen (an id, nothing private)
+const TASKS_NOTE = ".ai-tasks/AI tasks.md";   // the AI's tasks, one note in a hidden folder of the memory (memory.py)   // the memory last open on screen (an id, nothing private)
 
 (async function start() {
   await useLanguage(settings().lang);   // the app's words, before anything draws

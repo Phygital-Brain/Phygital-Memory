@@ -1164,7 +1164,7 @@ class Memory:
             return prefs
 
     # ---------- AI tasks: notes the person gave to their AI, each with what to do ----------
-    # One note at the top of the memory, "AI tasks": To do, then Done. It's a normal note, so the person sees and
+    # One note in the memory's hidden .ai-tasks folder, "AI tasks": To do, then Done. It's a normal note, so the person sees and
     # ticks tasks anywhere (phone, another computer, any app) and an AI reading the folder finds it. Each line keeps
     # its id and times in a small comment; a line typed by hand becomes a task too. Done ones leave after 7 days.
     # Shares never carry it (shares.py), so nobody the memory is shared with can add a task the AI would follow.
@@ -1332,7 +1332,7 @@ TRASH_INDEX = ".phygital/trash.json"
 TRASH_DAYS = 7
 TODO_KEEP = 100
 TODO_DONE_DAYS = 7   # finished tasks leave the AI tasks note after this
-TASKS_NOTE = "AI tasks.md"   # the AI's tasks, at the top of the memory
+TASKS_NOTE = ".ai-tasks/AI tasks.md"   # the AI's tasks, in a hidden folder of the memory (made again if deleted)
 TODO_ASK_MAX = 2000
 HIDDEN = (TRASH, VERSIONS, ".phygital")
 VERSION_EVERY = 5 * 60

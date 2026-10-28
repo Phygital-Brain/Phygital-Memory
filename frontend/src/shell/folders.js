@@ -97,9 +97,9 @@ export function manageFolders(list, actions) {
           open && f.kind !== "open" ? btn(t("Lock"), actions.lock) : null,
           btn(t("Remove"), actions.forget, "danger"))));
     }
-    if (!list.length) body.append(el("div", { class: "mf-empty" }, t("No folders yet.")));
+    if (!list.length) body.append(el("div", { class: "mf-empty" }, t("No memories yet.")));
     const card = el("div", { class: "dlg mf", role: "dialog" },
-      el("div", { class: "dlg-title" }, t("Folders")),
+      el("div", { class: "dlg-title" }, t("Memories")),
       el("div", { class: "mf-hint" }, t("Open memories are normal folders. Encrypted ones each have their own password. Remove only takes a memory off this list. Nothing is deleted.")),
       body,
       el("div", { class: "dlg-actions" },
