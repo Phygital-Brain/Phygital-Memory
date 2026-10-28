@@ -1829,7 +1829,7 @@ async def api(request: Request) -> Response:
                 return _ok({"error": f"Connect to {cloud.label(conn)} again.", "reconnect": True}, 400)
             return _ok({"conn": conn, "memories": await asyncio.to_thread(cloud.find_memories, conn)})
         if action == "fromcloud":   # add a memory that's in the cloud (nothing is downloaded)
-            return _ok({"folder": folders.from_cloud(body.get("conn") or {}, str(body.get("path", "")))})
+            return _ok({"folder": folders.from_cloud(body.get("conn") or {}, str(body.get("path", "")), body.get("kind") == "open")})
         if action == "createincloud":
             return _ok({"folder": await asyncio.to_thread(folders.create_in_cloud, body.get("conn") or {},
                                                           str(body.get("parent", "")), str(body.get("name", "")),
@@ -1903,9 +1903,9 @@ async def api(request: Request) -> Response:
             return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
 
         m = f.memory
-        if f.plain and action in ("towebdav", "tos3", "tocloud", "recoverykey", "touchid"):
-            return _ok({"error": "That's for Encrypted memories. An Open memory is a normal folder: keep it in iCloud Drive, "
-                        "Dropbox or another cloud folder to have it everywhere.", "plain": True}, 400)
+        if f.plain and action in ("recoverykey", "touchid"):
+            return _ok({"error": "That's for Encrypted memories. An Open memory has no password or recovery key.",
+                        "plain": True}, 400)
         if action == "lock":
             await asyncio.to_thread(f.lock)   # a cloud memory waits here until its saves reached the cloud
             if f.drive and f.drive.left:
@@ -1913,7 +1913,8 @@ async def api(request: Request) -> Response:
                             f"reach {cloud.label(f.cloud_at)} yet. They're kept on this Mac and go up the next time you unlock."})
             return _ok({"open": False})
         if action == "storage" and f.cloud_at:   # cloud only: nothing on this Mac to look at
-            return _ok({"path": f.info()["path"], "cloud": None, "cloudOnly": cloud.label(f.cloud_at), "webdav": None,
+            return _ok({"path": f.info()["path"], "kind": "open" if f.plain else "encrypted", "cloud": None,
+                        "cloudOnly": cloud.label(f.cloud_at), "webdav": None,
                         "s3": f.info()["s3"], "s3Status": f.s3.status() if f.s3 else None,
                         "places": cloud_places(), "home": str(Path.home()), "offline": 0,
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
@@ -1957,7 +1958,7 @@ async def api(request: Request) -> Response:
                                                           str(body.get("parent", "")))})
         if action == "download":   # fetch the files a cloud app left only in the cloud
             return _ok({"asked": await asyncio.to_thread(download_all, f.path)})
-        if action == "movefolder" and f.open_copy:
+        if action in ("movefolder", "towebdav", "tocloud") and f.open_copy:
             return _ok({"error": "A memory shared with you stays where the app keeps it: Documents › Shared with me."}, 400)
         if action == "movefolder":   # move it (locked) to another place; the page then asks for the password again
             info = await asyncio.to_thread(folders.relocate, f.id, body["parent"])

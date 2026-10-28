@@ -10,7 +10,7 @@ const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit"
 
 // Where a memory is stored: this Mac only, or this Mac + cloud (a synced folder, Mac + WebDAV, WebDAV only), and a
 // GitHub backup that works with any of them. An Open memory (ctx.plain) gets this Mac, synced folders, GitHub and a
-// backup file, all as readable files; WebDAV and S3 are for Encrypted ones.
+// backup file, all as readable files.
 // ctx: {name, storage, pick(prompt, start), move(parent, label), toMac(parent, label, keepSync), toWebdav(), toCloudOnly(),
 //       stopWebdav(), toGithub(), stopGithub(repo), reveal(), download()}. Each action resolves true when done.
 export function openStorage(ctx) {
@@ -60,6 +60,17 @@ export function openStorage(ctx) {
           el("div", {}, btn(t("Stop backup"), () => run(() => ctx.stopGithub(s.github), "changed"), "st-stop")))
       : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), t("Turn on backup")));
 
+    // Amazon S3 or Cloudflare R2: for people who run their own storage. Shown when on; otherwise a small link under GitHub
+    const s3opt = option("cloud", t("Amazon S3 or Cloudflare R2"), plain
+        ? t("A copy of your notes, as normal files, in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size.")
+        : t("An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size."),
+      !!s.s3, s.s3
+        ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
+            el("div", {}, btn(t("Stop backup"), () => run(ctx.stopS3, "changed"), "st-stop")))
+        : el("div", {}, btn(t("Turn on backup"), () => run(ctx.toS3, "changed"))));
+    const s3link = el("button", { class: "link-btn st-s3-link", type: "button", onclick: () => s3link.replaceWith(s3opt) },
+      t("Use Amazon S3 or Cloudflare R2 instead"));
+
     const card = el("div", { class: "dlg storage", role: "dialog" },
       el("div", { class: "dlg-title" }, t("Storage and backup: {0}", ctx.name)),
       el("div", { class: "st-where" }, icon(s.cloudOnly || s.cloud || s.webdav ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
@@ -81,17 +92,14 @@ export function openStorage(ctx) {
           : t("Your cloud only gets encrypted files. Only you can read them, with your password."),
         !macOnly,
         sub(t("Synced folder"), t("A folder your cloud app keeps in sync, like iCloud Drive or Dropbox."), folderSynced, chips),
-        plain ? null : sub(t("WebDAV"), t("A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server."),
+        sub(t("WebDAV"), plain ? t("A server such as Nextcloud, as normal files you can open there too. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server.")
+          : t("A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server."),
           !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns))] },
       { title: t("Backup"), rows: [
       option(plain ? "cloud" : "lock", t("Private GitHub"), plain ? t("A private GitHub repo keeps a copy and every past version. The notes are readable there, so AI apps connected to GitHub (on your phone too) can read them. It updates a few seconds after each change. GitHub takes files up to 95 MB each.")
         : t("A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB."),
         !!s.github, el("div", { class: "st-gh-note" }, t("Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup.")), github),
-      plain ? null : option("cloud", t("Amazon S3 or Cloudflare R2"), t("An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size."),
-        !!s.s3, s.s3
-          ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
-              el("div", {}, btn(t("Stop backup"), () => run(ctx.stopS3, "changed"), "st-stop")))
-          : el("div", {}, btn(t("Turn on backup"), () => run(ctx.toS3, "changed")))),
+      s.s3 ? s3opt : s3link,
       option("file", t("Backup file"), plain ? t("One .zip of your notes, to keep on a USB stick, a drive or anywhere. Unzip it and add the folder: Add memory › From this Mac.")
         : t("One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Add memory › From a backup file."),
         false, el("div", {}, btn(t("Save backup file"), () => run(ctx.saveBackup, null))))] }]),
@@ -392,8 +400,8 @@ export function openCloud(ctx) {
       if (!ctx.clouds.length) { login(); return; }   // nothing connected yet: straight to the form
       title.textContent = top; err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, keep ? t("Pick the server. Only encrypted files go up. The copy on this Mac stays.")
-          : ctx.move ? t("Pick the server. Only encrypted files go up. Once all have arrived, the copy on this Mac goes to the Trash.")
+        el("div", { class: "mf-hint" }, keep ? (ctx.plain ? t("Pick the server. Your notes go up as normal files. The copy on this Mac stays.") : t("Pick the server. Only encrypted files go up. The copy on this Mac stays."))
+          : ctx.move ? (ctx.plain ? t("Pick the server. Your notes go up as normal files. Once all have arrived, the copy on this Mac goes to the Trash.") : t("Pick the server. Only encrypted files go up. Once all have arrived, the copy on this Mac goes to the Trash."))
           : t("Open a memory that's on a WebDAV server. Nothing is kept on this Mac. The server only gets encrypted files.")),
         el("div", { class: "act-list" },
           ...ctx.clouds.map((c) => row("cloud", c.where, t("Connected as {0}", c.user), () => look(c))),
@@ -448,9 +456,9 @@ export function openCloud(ctx) {
     const list = (conn, memories) => {
       title.textContent = t("Memories in your cloud"); err.textContent = ""; submit = null;
       body.replaceChildren(
-        el("div", { class: "mf-hint" }, t("Pick one, then unlock it with its password. It opens from the server, nothing is downloaded.")),
+        el("div", { class: "mf-hint" }, t("Pick one. An Encrypted one asks for its password. It opens from the server, nothing is downloaded.")),
         el("div", { class: "act-list" }, ...(memories.length
-          ? memories.map((m) => row("lock", m.name, m.path, () => done({ conn, path: m.path })))
+          ? memories.map((m) => row(m.kind === "open" ? "folder" : "lock", m.name, m.path, () => done({ conn, path: m.path, kind: m.kind })))
           : [el("div", { class: "act-empty" }, t("No memories found in this cloud yet."))])));
       actions.replaceChildren(btn(t("Back"), pick), btn(t("New memory here"), () => create(conn, memories), "primary"));
     };
@@ -460,7 +468,7 @@ export function openCloud(ctx) {
       const parent = el("input", { class: "dlg-input", spellcheck: "false", placeholder: t("Folder on the server (empty: the top)"), "aria-label": t("Folder on the server") });
       submit = () => done({ conn, move: { parent: parent.value.trim().replace(/^\/+|\/+$/g, "") } });
       body.replaceChildren(parent,
-        el("div", { class: "st-gh-note" }, keep ? "A big memory can take a while to upload." : t("It locks first. A big memory can take a while to upload. Your password stays the same.")));
+        el("div", { class: "st-gh-note" }, keep || ctx.plain ? t("A big memory can take a while to upload.") : t("It locks first. A big memory can take a while to upload. Your password stays the same.")));
       actions.replaceChildren(btn(t("Back"), pick), btn(keep ? "Sync" : "Move", submit, "primary"));
       parent.focus();
     };

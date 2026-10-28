@@ -1,4 +1,5 @@
 """Cloud only: a memory that lives in the person's cloud (Nextcloud, or any WebDAV server, for now), not on this Mac.
+(An Open memory works the same way, with its readable files: nothing is encrypted for it.)
 
 rclone (MIT) talks to the cloud. While the memory is unlocked it shows the cloud folder to the app as a hidden drive
 (macOS's own NFS, so nothing to install; "nobrowse" keeps it out of Finder and off the Desktop). The app then reads
@@ -218,17 +219,24 @@ def connect(conn: dict, password: str) -> None:
 
 
 def find_memories(conn: dict, depth: int = 4, base: str = "") -> list[dict]:
-    """The memories in this cloud: folders holding a masterkey.cryptomator and a vault.cryptomator, a few levels
-    down at most. [{path, name}], by name. base: look only inside it (an S3 / R2 bucket)."""
-    out = _run(conn, "lsf", "-R", "--files-only", "--max-depth", str(depth),
-               "--include", "masterkey.cryptomator", "--include", "vault.cryptomator", _remote(base), timeout=180)
+    """The memories in this cloud: folders holding a masterkey.cryptomator and a vault.cryptomator (Encrypted), or a
+    .phygital/id (Open), a few levels down at most. [{path, name, kind}], by name. base: look only inside it (an S3 /
+    R2 bucket)."""
+    out = _run(conn, "lsf", "-R", "--files-only", "--max-depth", str(depth + 1), "--include", "masterkey.cryptomator",
+               "--include", "vault.cryptomator", "--include", ".phygital/id", _remote(base), timeout=180)
     seen: dict[str, set] = {}
     for line in out.splitlines():
         parent, _, name = line.rpartition("/")
+        if parent.endswith(".phygital") and name == "id":   # an Open memory's own ID, in its hidden folder
+            parent, name = parent[:-len(".phygital")].rstrip("/"), ".phygital/id"
+        elif parent.count("/") >= depth:
+            continue
         parent = f"{base.strip('/')}/{parent}".strip("/") if base else parent
         seen.setdefault(parent, set()).add(name)
-    return sorted(({"path": p, "name": p.rsplit("/", 1)[-1] or label(conn)} for p, names in seen.items()
-                   if names == {"masterkey.cryptomator", "vault.cryptomator"}), key=lambda m: m["name"].lower())
+    return sorted(({"path": p, "name": p.rsplit("/", 1)[-1] or label(conn),
+                    "kind": "encrypted" if {"masterkey.cryptomator", "vault.cryptomator"} <= names else "open"}
+                   for p, names in seen.items() if p and (names >= {"masterkey.cryptomator", "vault.cryptomator"}
+                                                          or ".phygital/id" in names)), key=lambda m: m["name"].lower())
 
 
 def free_space(conn: dict) -> int | None:
@@ -476,7 +484,7 @@ class Mirror:
 
 
 class S3Backup(Mirror):
-    """An encrypted copy of a memory in an S3 or R2 bucket, kept up to date a few seconds after each change. One way
+    """A copy of a memory in an S3 or R2 bucket (an Encrypted one's encrypted files, an Open one's readable files), kept up to date a few seconds after each change. One way
     only (a backup): the copy is at BUCKET/NAME/current, and every file it replaces or removes is kept under
     BUCKET/NAME/history/DATE, so older versions can be brought back. Any file size works."""
 

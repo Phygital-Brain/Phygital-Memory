@@ -257,7 +257,7 @@ async function openFromS3() {
     const j = await api("froms3", v);
     if (j.cancelled) return;
     await refreshFolders();
-    toastOk(t("\"{0}\" is back. Unlock it with its password.", j.folder.name));
+    toastOk(j.folder.kind === "open" ? t("\"{0}\" is back.", j.folder.name) : t("\"{0}\" is back. Unlock it with its password.", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -314,9 +314,9 @@ async function openFromCloud(quiet = false) {
       toastOk(t("Created \"{0}\" in your cloud.", j.folder.name));
       return;
     }
-    const j = await api("fromcloud", { conn: v.conn, path: v.path });
+    const j = await api("fromcloud", { conn: v.conn, path: v.path, kind: v.kind });
     await refreshFolders();
-    if (!quiet) toastOk(t("Added \"{0}\". Unlock it with its password.", j.folder.name));
+    if (!quiet) toastOk(j.folder.kind === "open" ? t("Added \"{0}\".", j.folder.name) : t("Added \"{0}\". Unlock it with its password.", j.folder.name));
     await switchTo(j.folder.id);
     return j.folder.id;
   } catch (e) { toastErr(e.message); }
@@ -1029,12 +1029,13 @@ function drawAI() {
 async function moveToCloud(info) {
   let clouds = [];
   try { clouds = (await api("clouds")).clouds || []; } catch {}
-  const v = await openCloud({ clouds, move: { name: info.name }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
+  const plain = info.kind === "open";
+  const v = await openCloud({ clouds, plain, move: { name: info.name }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
   if (!v) return false;
   if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-  toast(t("Locking \"{0}\" and uploading its encrypted files", info.name));
+  toast(plain ? t("Uploading \"{0}\"", info.name) : t("Locking \"{0}\" and uploading its encrypted files", info.name));
   await api("tocloud", { folder: info.id, conn: v.conn, parent: v.move.parent });
-  toastOk(t("\"{0}\" now lives in your cloud. Unlock it again to keep working.", info.name));
+  toastOk(plain ? t("\"{0}\" now lives in your cloud.", info.name) : t("\"{0}\" now lives in your cloud. Unlock it again to keep working.", info.name));
   return true;
 }
 
@@ -1061,17 +1062,17 @@ async function openStoragePanel() {
                             : `Move "${info.name}" from ${info.cloudOnly} to ${label}? The copy in ${info.cloudOnly} stays until you delete it.`;
       if (!await confirmDialog(text, keepSync ? "Put a copy here" : "Move", false)) return false;
       await saveAll();
-      toast("Downloading the encrypted files");
+      toast(plain ? t("Downloading your notes") : t("Downloading the encrypted files"));
       await api("tomac", { parent, keepSync });
-      toastOk(t("Done. Unlock \"{0}\" to keep working.", info.name));
+      toastOk(plain ? t("Done.") : t("Done. Unlock \"{0}\" to keep working.", info.name));
       return true;
     },
     toWebdav: async () => {
       let clouds = [];
       try { clouds = (await api("clouds")).clouds || []; } catch {}
-      const v = await openCloud({ clouds, move: { name: info.name, keepMac: true }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
+      const v = await openCloud({ clouds, plain, move: { name: info.name, keepMac: true }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
       if (!v) return false;
-      toast("Uploading the encrypted files");
+      toast(plain ? t("Uploading your notes") : t("Uploading the encrypted files"));
       await api("towebdav", { conn: v.conn, parent: v.move.parent });
       toastOk(t("\"{0}\" now stays in sync with WebDAV.", info.name));
       return true;
@@ -1081,7 +1082,7 @@ async function openStoragePanel() {
         if (!await confirmDialog(t("Keep \"{0}\" on WebDAV only? The copy on this Mac goes to the Trash after a last sync.", info.name), t("WebDAV only"), false)) return false;
         await saveAll();
         await api("tocloud", { conn: {}, parent: "" });
-        toastOk(t("\"{0}\" now opens from WebDAV. Unlock it to keep working.", info.name));
+        toastOk(plain ? t("\"{0}\" now opens from WebDAV.", info.name) : t("\"{0}\" now opens from WebDAV. Unlock it to keep working.", info.name));
         return true;
       }
       return "tocloud";
@@ -1119,7 +1120,7 @@ async function openStoragePanel() {
     toS3: async () => {
       const v = await openS3({ test: (f) => api("s3test", f), connect: (f) => api("s3connect", f) });
       if (!v) return false;
-      toast("Uploading the encrypted files");
+      toast(plain ? t("Uploading your notes") : t("Uploading the encrypted files"));
       await api("tos3", { conn: v.conn, bucket: v.bucket });
       toastOk(t("Backed up. It updates a few seconds after each change."));
       return true;

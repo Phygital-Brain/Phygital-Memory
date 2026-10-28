@@ -124,8 +124,8 @@ CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (
 class Folder:
     def __init__(self, fid: str, name: str, path: Path, github: str | None = None, cloud_at: dict | None = None,
                  mirror_at: dict | None = None, s3_at: dict | None = None, plain: bool = False):
-        # plain: an Open memory (a folder of readable files, no password); the cloud and sharing parts are for
-        # Encrypted ones, so an Open memory never gets them
+        # plain: an Open memory (a folder of readable files, no password); its cloud copies and backups hold readable
+        # files
         # cloud_at: {kind, url, user, path} for a memory that lives only in the cloud; its files appear at
         # path (a hidden drive) only while it's unlocked
         self.cloud_at = cloud_at
@@ -135,8 +135,6 @@ class Folder:
             self.drive = cloud.Drive({k: cloud_at[k] for k in ("kind", "url", "user")}, cloud_at["path"], path,
                                      CLOUDS / f"{fid}.cache")
         self.plain = plain
-        if plain:   # an Open memory moves and backs up as a plain folder: synced cloud folders and GitHub
-            cloud_at = mirror_at = s3_at = None
         self.id, self.name, self.path = fid, name, Path(path)
         self.memory = Memory(self.path, plain=plain)
         self.memory.tasks_file = TASKS / f"{fid}.bin"   # AI tasks stay on this Mac (see Memory.todo)
@@ -225,7 +223,7 @@ class Folder:
         """Before unlocking: a cloud memory's files must be reachable (this is when the app talks to the cloud)."""
         if self.drive:
             self.drive.start()
-            if not is_vault(self.path):
+            if not (self.path.is_dir() if self.plain else is_vault(self.path)):
                 self.drive.stop()
                 raise ValueError(f"This memory isn't in {cloud.label(self.cloud_at)} any more, at {self.cloud_at['path']}.")
             if self.github and not self.sync and (self.gitdir / "HEAD").exists():
@@ -375,8 +373,9 @@ class Folders:
                 out[cloud.make_key(c)] = {**c, "name": cloud.label(c), "where": cloud.where(c, "").rstrip(" /")}
         return list(out.values())
 
-    def from_cloud(self, conn: dict, path: str) -> dict:
-        """Add a memory that's already in the cloud. Nothing is downloaded: it opens from there when unlocked."""
+    def from_cloud(self, conn: dict, path: str, plain: bool = False) -> dict:
+        """Add a memory that's already in the cloud. Nothing is downloaded: it opens from there when unlocked (an
+        Open one, plain: when opened)."""
         conn = {k: str(conn.get(k, "")) for k in ("kind", "url", "user")}
         if not cloud.has_password(conn):
             raise ValueError(f"Connect to {cloud.label(conn)} first.")
@@ -385,7 +384,8 @@ class Folders:
             for f in self.items.values():
                 if f.cloud_at and cloud.make_key(f.cloud_at) == cloud.make_key(conn) and f.cloud_at["path"] == path:
                     return f.info()
-            f = Folder(secrets.token_hex(4), path.rsplit("/", 1)[-1] or cloud.label(conn), Path(), None, {**conn, "path": path})
+            f = Folder(secrets.token_hex(4), path.rsplit("/", 1)[-1] or cloud.label(conn), Path(), None, {**conn, "path": path},
+                       plain=plain)
             self.items[f.id] = f
             self._save()
             return f.info()
@@ -453,7 +453,7 @@ class Folders:
         shutil.move(str(f.path), str(trash / f"{f.path.name} (moved to {cloud.label(conn)} {time.strftime('%Y-%m-%d %H.%M')})"))
         shutil.rmtree(MIRRORS / f.id, ignore_errors=True)
         with self._lock:
-            moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path}, None, f.s3_at)
+            moved = Folder(f.id, f.name, Path(), f.github, {**conn, "path": path}, None, f.s3_at, f.plain)
             moved.ai_hidden = f.ai_hidden
             moved.joined = f.joined
             moved.syncthing = f.syncthing
@@ -479,13 +479,13 @@ class Folders:
         dest.mkdir(parents=True)
         try:
             cloud.download({k: f.cloud_at[k] for k in ("kind", "url", "user")}, f.cloud_at["path"], dest)
-            if not is_vault(dest):
+            if not f.plain and not is_vault(dest):
                 raise ValueError("What came down isn't a whole memory, so nothing was moved.")
         except Exception:
             shutil.rmtree(dest, ignore_errors=True)   # only the half-copied folder this move just made
             raise
         with self._lock:
-            moved = Folder(f.id, f.name, dest, f.github, None, f.cloud_at if keep_sync else None, f.s3_at)
+            moved = Folder(f.id, f.name, dest, f.github, None, f.cloud_at if keep_sync else None, f.s3_at, f.plain)
             moved.ai_hidden = f.ai_hidden
             moved.joined = f.joined
             moved.syncthing = f.syncthing
@@ -586,16 +586,17 @@ class Folders:
         dest.mkdir(parents=True)
         try:
             cloud.download(conn, path, dest)
-            if not is_vault(dest):
+            plain = not is_vault(dest) and (dest / ".phygital" / "id").is_file()   # an Open memory's backup
+            if not plain and not is_vault(dest):
                 raise ValueError("What came down isn't a whole memory.")
-            same = self._same(dest)
+            same = None if plain else self._same(dest)
             if same:
                 raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
         except Exception:
             shutil.rmtree(dest, ignore_errors=True)
             raise
         with self._lock:
-            return self._add(dest, name).info()
+            return self._add(dest, name, plain=plain).info()
 
     # ---------- a backup file (zip) ----------
 

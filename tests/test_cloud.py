@@ -72,7 +72,7 @@ try:
         check(True, "a second memory with the same name is refused")
 
     found = cloud.find_memories(conn)
-    check(found == [{"path": "Notes/Work", "name": "Work"}], "the app finds the memories in the cloud", found)
+    check(found == [{"path": "Notes/Work", "name": "Work", "kind": "encrypted"}], "the app finds the memories in the cloud", found)
 
     f.ready()
     f.memory.unlock("memory-pass-1")
