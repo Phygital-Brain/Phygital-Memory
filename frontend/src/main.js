@@ -1434,29 +1434,34 @@ async function setUpApprover(chip) {
   } catch (e) { toastErr(e.message); return false; }
 }
 
-// The splash screen: wires run in from both sides, the lock between closes, a ring draws round it and scrambled
-// characters settle into the app's name, on one colour over the whole screen, then it all fades out (about three
-// seconds; a click skips it). Shown when the app opens and when a memory is unlocked, solid from the first moment so
-// the notes appear behind it. A plain fade with motion turned down.
+// The splash screen: the Knot's wire bends into a lock, then a brain, then back into the Knot (one wire, the two
+// sparks stay put), while scrambled characters settle into the app's name, on one colour over the whole screen, then
+// it all fades out (under four seconds; a click skips it). Shown when the app opens and when a memory is unlocked,
+// solid from the first moment so the notes appear behind it. A plain fade with motion turned down.
+const KNOT = "M12 42 H19 C24 42 25 36 25 30 C25 24 29.5 20.5 34.25 20 C39 19.5 44 22 45 28 C45.5 33 42.5 36.5 38.875 37.875 C35.25 39.25 31 38.5 29 35 C27.5 32 28.25 29 30.25 27.125 C32.25 25.25 35.5 24.5 39 26 C45 29 46 36 46 42 H52";
+const LOCK = "M12 42 H19 C27 42 36 42 44 42 C44 38 44 34 44 30 C42 30 40 30 38 30 C38 22 35.5 18 32 18 C28.5 18 26 22 26 30 C24 30 22 30 20 30 C20 34 20 37 20 39 C20 40 20 41 20 42 H52";
+const BRAIN = "M12 42 H19 C14 40 13 34 17 31 C13 26 17 19 24 20 C26 16 31 17 32 21 C29 24 34 28 31 33 C34 28 30 24 33 21 C34 16 41 16 42 20 C48 19 51 26 47 31 C51 35 49 42 44 42 H52";
 function sealAnimation(cover = false) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 176 64");
-  svg.setAttribute("class", "pk-lock");
-  svg.innerHTML = '<path class="pk-wire" d="M14 32h20l8-9h12l6 9"/>'          // you, wired in from the left
-    + '<path class="pk-wire pk-wire-r" d="M162 32h-20l-8 9h-12l-6-9"/>'        // them, from the right
-    + '<circle class="pk-node" cx="12" cy="32" r="4"/><circle class="pk-node pk-node-r" cx="164" cy="32" r="4"/>'
-    + '<g transform="translate(56 0)"><circle class="pk-ring" cx="32" cy="32" r="29"/>'
-    + '<path class="pk-shackle" d="M24 29v-6a8 8 0 0 1 16 0v6"/>'
-    + '<rect class="pk-body" x="19" y="29" width="26" height="19" rx="4"/>'
-    + '<circle class="pk-dot" cx="32" cy="38.5" r="2.4"/></g>';
+  svg.setAttribute("viewBox", "0 0 64 64");
+  svg.setAttribute("class", "pk-knot");
+  const ease = ".2 0 0 1;0 0 1 1;";   // bend, then hold
+  svg.innerHTML = '<circle cx="32" cy="32" r="30" fill="#C8F031"/>'
+    + `<path d="${KNOT}" fill="none" stroke="#0B0D12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
+    + `<animate attributeName="d" begin="indefinite" dur="3.1s" fill="freeze" calcMode="spline" keyTimes="0;.12;.3;.42;.6;.72;.9;1"`
+    + ` keySplines="0 0 1 1;${ease.repeat(3).slice(0, -1)}" values="${[KNOT, KNOT, LOCK, LOCK, BRAIN, BRAIN, KNOT, KNOT].join(";")}"/></path>`
+    + '<circle cx="32" cy="36" r="2.4" fill="#0B0D12" opacity="0"><animate attributeName="opacity" begin="indefinite" dur="3.1s" fill="freeze"'
+    + ' keyTimes="0;.27;.3;.42;.45;1" values="0;0;1;1;0;0"/></circle>'   // the keyhole, while it's a lock
+    + '<circle cx="12" cy="42" r="3.2" fill="#4D5BFF"/><circle cx="52" cy="42" r="3.2" fill="#4D5BFF"/>';
   const words = "Phygital Memory";
   const text = el("div", { class: "pk-text" }, words.replace(/\S/g, "·"));
   const box = el("div", { class: "pk-seal" + (cover ? " pk-cover" : ""), "aria-hidden": "true", onclick: () => box.remove() }, el("div", { class: "pk-card" }, svg, text));
   document.body.append(box);
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!still) svg.querySelectorAll("animate").forEach((x) => x.beginElement());   // starts now, not at page load
   const glyphs = "0123456789abcdef#%&*+=<>";
   const start = performance.now();
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tick = (now) => {
     const k = still ? 1 : Math.min(1, (now - start - 1000) / 900);   // letters settle left to right, once wired
     text.textContent = [...words].map((c, i) => c === " " || i / words.length < k ? c
@@ -1464,7 +1469,7 @@ function sealAnimation(cover = false) {
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
-  setTimeout(() => box.remove(), still ? 900 : 3200);
+  setTimeout(() => box.remove(), still ? 900 : 3800);
 }
 
 

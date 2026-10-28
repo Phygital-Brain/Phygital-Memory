@@ -690,34 +690,19 @@ button.crumb-path:hover { color: var(--text); background: var(--bg-subtle); }
 .share .st-warn .btn { white-space: nowrap; flex: none; }
 .set-name { width: 180px; margin: 0; }
 
-/* Phygital Key: the short "sealed" moment after a signed yes */
+/* The splash: the Knot bends into a lock, a brain and back, over the name settling in */
 .pk-seal { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; cursor: pointer;
-  background: var(--bg-app); animation: pk-screen 3.2s var(--ease) both; }   /* one colour over the whole screen; a click skips it */
-.pk-card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 28px 18px; border-radius: var(--r-l);
-  background: var(--bg-surface); border: 1px solid var(--border); box-shadow: var(--shadow); animation: pk-card 3s var(--ease) both; }
-.pk-lock { width: 176px; height: 64px; overflow: visible; }
-.pk-lock * { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.pk-body { fill: var(--accent-soft); }
-.pk-wire { stroke-width: 2; stroke-dasharray: 60; stroke-dashoffset: 60; animation: pk-wire 3.2s var(--ease) both; }
-.pk-node { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; animation: pk-node 3.2s var(--ease) both; }
-.pk-dot { fill: var(--accent); stroke: none; transform-box: fill-box; transform-origin: center; animation: pk-dot 3.2s var(--ease) both; }
-.pk-shackle { animation: pk-shackle 3.2s var(--ease) both; }
-.pk-ring { stroke-width: 2; stroke-dasharray: 183; stroke-dashoffset: 183; transform: rotate(-90deg); transform-box: fill-box; transform-origin: center;
-  animation: pk-ring 3.2s var(--ease) both; }
+  background: var(--bg-app); animation: pk-screen 3.8s var(--ease) both; }   /* one colour over the whole screen; a click skips it */
+.pk-card { display: flex; flex-direction: column; align-items: center; gap: 14px; animation: pk-card 3.6s var(--ease) both; }
+.pk-knot { width: 76px; height: 76px; }
 .pk-text { font: 500 12.5px/1 var(--font-mono); color: var(--text-2); letter-spacing: .02em; white-space: pre; }
-@keyframes pk-card { 0% { opacity: 0; transform: scale(.94); } 10% { opacity: 1; transform: none; } 82% { opacity: 1; } 100% { opacity: 1; transform: scale(.98); } }
-@keyframes pk-screen { 0% { opacity: 0; } 5% { opacity: 1; } 84% { opacity: 1; } 100% { opacity: 0; } }
-@keyframes pk-screen-cover { 0%, 84% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pk-card { 0% { opacity: 0; transform: scale(.94); } 10% { opacity: 1; transform: none; } 84% { opacity: 1; } 100% { opacity: 1; transform: scale(.98); } }
+@keyframes pk-screen { 0% { opacity: 0; } 5% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes pk-screen-cover { 0%, 86% { opacity: 1; } 100% { opacity: 0; } }
 .pk-seal.pk-cover { animation-name: pk-screen-cover; }   /* on unlock: solid from the very first moment */
-@keyframes pk-node { 0% { transform: scale(0); } 8% { transform: scale(1.3); } 14%, 34% { transform: scale(1); } 40% { transform: scale(1.4); } 48%, 100% { transform: scale(1); } }
-@keyframes pk-wire { 0%, 10% { stroke-dashoffset: 60; } 34%, 100% { stroke-dashoffset: 0; } }
-@keyframes pk-shackle { 0%, 34% { transform: translateY(-6px); } 44% { transform: translateY(1px); } 50%, 100% { transform: none; } }
-@keyframes pk-ring { 0%, 44% { stroke-dashoffset: 183; opacity: 1; } 70% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: .6; } }
-@keyframes pk-dot { 0%, 44% { transform: scale(0); } 52% { transform: scale(1.35); } 58%, 100% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .pk-card { animation: none; }
   .pk-seal { animation: pk-fade .9s linear both; }
-  .pk-shackle, .pk-ring, .pk-dot, .pk-wire, .pk-node { animation: none; stroke-dashoffset: 0; }
   @keyframes pk-fade { 0% { opacity: 0; } 15%, 80% { opacity: 1; } 100% { opacity: 0; } }
 }
 
