@@ -22,7 +22,7 @@ for line in subprocess.run(["uv", "export", "--no-dev", "--no-hashes", "--format
 def texts(dist) -> str:
     files = [f for f in dist.files or [] if re.search(r"(licen[cs]e|copying|notice)", str(f), re.I)
              and not str(f).endswith((".py", ".pyc"))]
-    return "\n\n".join(Path(dist.locate_file(f)).read_text(errors="replace").strip() for f in files)
+    return "\n\n~~~\n\n".join(Path(dist.locate_file(f)).read_text(errors="replace").strip() for f in files)   # ~~~: between two licence files
 
 
 def licence(dist) -> str:

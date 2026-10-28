@@ -28,7 +28,7 @@ while todo:
 def texts(p) -> str:
     here = Path(p["manifest_path"]).parent
     files = sorted(f for f in here.iterdir() if f.is_file() and re.match(r"(licen[cs]e|copying|notice|copyright)", f.name, re.I))
-    return "\n\n".join(f.read_text(errors="replace").strip() for f in files)
+    return "\n\n~~~\n\n".join(f.read_text(errors="replace").strip() for f in files)   # ~~~: between two licence files
 
 
 parts = []
