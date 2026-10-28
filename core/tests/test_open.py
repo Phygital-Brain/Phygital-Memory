@@ -10,8 +10,12 @@ import tempfile
 import time
 from pathlib import Path
 
-from phygital_memory import brain, memory
-from phygital_memory.memory import Memory
+_STATE = tempfile.mkdtemp(prefix="pm-open-state-")
+os.environ["PHYGITAL_MEMORY_STATE"] = _STATE   # never the real app's list: set before the app's code loads
+os.environ.setdefault("PHYGITAL_MEMORY_OFFLINE", "1")
+
+from phygital_memory import brain, memory  # noqa: E402
+from phygital_memory.memory import Memory  # noqa: E402
 
 ok = []
 
@@ -109,6 +113,7 @@ try:
           "the backup file comes back as an Open memory")
     fs.lock_all()
 finally:
+    shutil.rmtree(_STATE, ignore_errors=True)
     shutil.rmtree(tmp, ignore_errors=True)
 
 print(f"\n{sum(ok)} of {len(ok)} passed")
