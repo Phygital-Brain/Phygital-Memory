@@ -38,6 +38,33 @@ It's built around four promises:
 - **Encrypted when you want it.** Lock a memory with a password. Without it (or your recovery key), the files are unreadable.
 - **You own your data.** Notes are normal files. Stop using the app and they're still yours, readable by anything.
 
+## Install
+
+Get the app from the [Releases page](https://github.com/Phygital-Brain/Phygital-Memory/releases). Pick the file for your computer:
+
+| Computer | Download | Then |
+|---|---|---|
+| Mac (Apple chip or Intel) | `..._universal.dmg` | Open it and drag **Phygital Memory** into **Applications**. The first time, right-click the app and choose **Open**. |
+| Windows | `..._x64-setup.exe` | Run it and follow the steps. If Windows asks, choose **More info**, then **Run anyway**. |
+| Linux (Ubuntu, Debian) | `..._amd64.deb` (or `_arm64.deb`) | Open it with your software installer. |
+| Linux (Fedora, openSUSE) | `....rpm` | Open it with your software installer. |
+| Linux (any other) | `....AppImage` | See [Get started](docs/setup-computer.md#1-get-the-app). |
+
+It updates itself after that.
+
+## How to use
+
+1. **Make a memory.** Open the app and press **New memory**. Give it a name, pick **Open** or **Encrypted**, choose where it lives, and press **Set it up**. The app builds a ready-made set of folders for you (a Phygital Brain), or you can start empty.
+2. **Write.** Press **New note**, or open a folder on the left. Notes are Markdown. **Home** shows today's note and what you changed lately. Search finds anything across your memories.
+3. **Connect your AI.** In **Settings › AI apps**, press **Add to Claude Code**, or **Download** the extension for Claude Desktop (Mac). For Codex, Cursor and others, see [Connect your AI](docs/connect-your-ai.md).
+4. **Ask your AI.** Keep the app open and ask things like *"Search my memory for the logo brief"* or *"What did I decide about pricing?"*. More ideas in [Things to ask](docs/examples.md).
+5. **Let it write, when you're ready.** Switch on **Allow edits** for that AI app in **Settings › AI apps**. Every change it makes shows in **AI tasks and activity**, with **Undo**.
+6. **Give it work.** On any note, press **Give AI a task** and say what you want. Then tell your AI *"Do my Phygital Memory tasks."*
+7. **Lock it.** An Encrypted memory locks with **Lock** and opens again with your password (or Touch ID on a Mac).
+8. **Share and back up.** From the memory's menu, **Share** sends an invite to someone, and **Storage and backup** keeps a copy on GitHub, WebDAV, S3 or R2.
+
+The full walkthrough is in [Get started](docs/setup-computer.md).
+
 ## Two kinds of memory
 
 When you make a memory, you pick one:
@@ -57,6 +84,15 @@ You can have both, side by side.
 - Every AI change shows in **Activity**, with **Undo**.
 
 More on how it keeps you safe in [Safety](docs/safety.md).
+
+## Privacy
+
+- **No account, no tracking.** The app never asks who you are and sends no usage data. There is no server of ours.
+- **On your computer.** Your notes stay where you put them. They go online only if you choose a cloud folder, a backup or sharing.
+- **Unreadable without your password.** An Encrypted memory, file names included, can't be read without your password or recovery key, even in your cloud or backup.
+- **The AI sees what you allow.** Each AI app gets its own key and only the memories you pick.
+
+The full list of what leaves your computer, and when, is in [Privacy](docs/privacy.md).
 
 ## Words you'll see
 
@@ -90,16 +126,6 @@ Ideas for what to ask are in [docs/examples.md](docs/examples.md).
 ## Languages
 
 The app's screens come in 41 languages. It follows your computer's language, or you pick one in **Settings › General › Language**. The translations were made with AI and checked by a script. A native speaker's eye always helps: see [docs/languages.md](docs/languages.md) and [core/languages/TRANSLATING.md](core/languages/TRANSLATING.md). The AI tools and these docs stay in English, and your AI app answers you in your own language.
-
-## Get started
-
-1. **Download** the app for your computer from [Releases](https://github.com/Phygital-Brain/Phygital-Memory/releases).
-2. **Open it** and make your first memory. It asks a few questions, all clicks.
-3. **Connect your AI app.** The app sets up Claude Code for you, and Claude Desktop on a Mac. For others, see [Connect your AI](docs/connect-your-ai.md).
-
-Then ask your AI: *"What's in my Phygital Memory?"*
-
-The full guide, with the first-open steps for each system, is [Get started](docs/setup-computer.md).
 
 ## All the guides
 
