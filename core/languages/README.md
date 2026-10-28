@@ -1,6 +1,6 @@
 # Languages
 
-Phygital Memory is written in English and ready in 40 more languages. Rules for making and checking one: [TRANSLATING.md](TRANSLATING.md). For users: [docs/languages.md](../../docs/languages.md).
+Phygital Memory is written in English and ready in 40 more languages. Rules for making and checking one: [TRANSLATING.md](TRANSLATING.md). The key words and how to treat each one: [GLOSSARY.md](GLOSSARY.md). For users: [docs/languages.md](../../docs/languages.md).
 
 ## Ready languages
 
@@ -60,7 +60,7 @@ Never mark `reviewed` without a native speaker. Today every language is `machine
 
 **Right to left:** Arabic (`ar`), Persian (`fa`), Hebrew (`he`) and Urdu (`ur`) set the page direction to right to left. A native reader has not checked that the layout looks right.
 
-All 40 translated files had every one of the 934 texts in `en.json` when last checked on 2026-10-28.
+All 40 translated files had every one of the 1038 texts in `en.json` when last checked on 2026-10-28.
 
 ## Add or fix one
 

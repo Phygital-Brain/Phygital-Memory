@@ -8,6 +8,7 @@ All the guides for Phygital Memory. Pick the one that answers your question.
 |---|---|
 | [Setup on your computer](setup-computer.md) | You want to install the app and make your first memory |
 | [Connect your AI app](connect-your-ai.md) | You want Claude Code, Claude Desktop, Cursor, Codex or another AI app to use your memory |
+| [Claude Desktop extension](claude-desktop-extension.md) | You use Claude Desktop and want to connect it with one file |
 | [Things to ask](examples.md) | You are not sure what to say to your AI |
 | [How it works](how-it-works.md) | You want to know what happens inside, in plain words |
 

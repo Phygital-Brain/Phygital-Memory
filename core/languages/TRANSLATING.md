@@ -11,15 +11,32 @@ For a language with code `{code}` (for example `pt-BR`):
 | `core/languages/{code}.json` | Every text the app shows. The key is the English text, the value is your translation |
 | `core/languages/languages.json` | The list of languages: `["{code}", "the language's own name"]`. Add one line for a new language |
 
-English (`en.json`) is the source and is made by `python3 scripts/i18n.py extract` from the screens and the messages the engine sends to them. Change English first, then run `translate` to add the new texts to every language. A text that is missing shows in English, so a half-done file still works.
+English (`en.json`) is the source. Never edit it by hand: it is made from the screens (every `t("text")` in `frontend/src/`) and the error messages the engine sends to them. Change English in the code first, then run the three commands, from the `core` folder:
 
-Then check it, from the `core` folder:
+```bash
+python3 scripts/i18n.py extract
+```
+
+Refreshes `languages/en.json` from the code and prints how many texts there are.
+
+```bash
+python3 scripts/i18n.py translate
+```
+
+Fills what is missing in every language, or only one with `translate pt-BR`. It uses Claude and needs `ANTHROPIC_API_KEY` in your environment (it is never stored). Add `--dry` to only count, `--model` to pick another model. It keeps only answers with the same `{0}` parts as English.
 
 ```bash
 python3 scripts/i18n.py check
 ```
 
-You should see `N/N done` for your language, with nothing missing and no wrong `{0}` parts.
+You should see `N/N done` for each language, with nothing missing and no wrong `{0}` parts. It fails when a placeholder is lost or added. "No longer used" means a text was removed from English; it does no harm.
+
+A text that is missing shows in English, so a half-done file still works.
+
+## Two special kinds of text
+
+- **Texts with `@@`.** The same English word can mean two things. `Open@@kind` is the kind of memory (an adjective), while `Open` is the button (a verb). The part after `@@` is a hint for you and never shows. Translate only the meaning: the value in `{code}.json` has no `@@`.
+- **Mac words and computer words.** Many texts say "this Mac" or "Finder". Each has a twin in `frontend/src/shell/pc-words.js` that says "this computer" or "your file manager". The app shows the computer wording on every system, the Mac too, except texts about Finder, the Keychain, Touch ID and the security chip, which keep the Mac words on a Mac. Both twins are in `en.json`: translate both, each in its own words. When you add a screen text that names the Mac or Finder, add its twin to `pc-words.js` and run `extract` again.
 
 ## What stays English
 
@@ -40,7 +57,7 @@ You should see `N/N done` for your language, with nothing missing and no wrong `
 - Keep every fact, rule, number and step. Do not add or remove rules.
 - Never use em dashes, three dots or the ellipsis character. Use periods, commas, colons or brackets.
 - Memory kinds are called Open and Encrypted. Keep each name the same everywhere in your language.
-- Feature names get a natural local name. If you want, note the choices and the reason in a `GLOSSARY.md` for your language (not required yet).
+- Feature names get a natural local name, the same one every time. The key words and how to treat each one are in [GLOSSARY.md](GLOSSARY.md).
 - Right-to-left languages (Arabic, Persian, Hebrew, Urdu) are translated the same way. The page direction is set by the code. Tell us if the layout looks wrong.
 
 ## Review

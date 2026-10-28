@@ -8,6 +8,8 @@ release/
 .DS_Store
 .env
 .env.*
+# the example has no real values, so it is kept
+!.env.example
 
 # Made by the build every time, with this Mac's paths in it
 core/packaging/*.spec

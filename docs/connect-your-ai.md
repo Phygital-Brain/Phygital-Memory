@@ -42,9 +42,11 @@ Check it works: start `claude` and ask *"Run status from Phygital Memory."* It s
 ## Claude Desktop
 
 1. In **Settings › AI apps › Connect an AI app**, choose **Claude Desktop** and press **Download**.
-2. The app saves `Phygital Memory.mcpb` in your Downloads folder and copies your key to the clipboard.
+2. The app saves `Phygital Memory.mcpb` in your Downloads folder and shows your key. Press **Copy**. (During the first setup of a memory, the key is copied for you.)
 3. Double-click the file. Claude Desktop asks for the key and the address. Paste the key. Leave the address as it is.
 4. Open a new chat and ask *"Run status from Phygital Memory."*
+
+Every step, the Mac-only limit and fixes: [Claude Desktop extension](claude-desktop-extension.md).
 
 ## Cursor
 
