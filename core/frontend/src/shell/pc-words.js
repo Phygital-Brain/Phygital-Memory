@@ -1,5 +1,5 @@
-// Words for Windows and Linux. The app's English texts say Mac and Finder; off the Mac, t() shows these instead
-// (each is its own text, translated like the rest). Made from the Mac texts once; add a line when a new text
+// Words for any computer. The app's English texts say Mac and Finder; t() shows these instead (on a Mac too, except
+// texts about Finder, the Keychain and Touch ID). Each is its own text, translated like the rest. Made from the Mac texts once; add a line when a new text
 // names the Mac or Finder.
 const tr = (s) => s;   // marks a text for scripts/i18n.py extract
 

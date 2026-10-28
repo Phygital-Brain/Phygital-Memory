@@ -6,12 +6,15 @@ import { PC } from "./pc-words.js";
 
 let words = {};
 let lang = "en";
-const MAC = /Mac/.test(navigator.platform || navigator.userAgent);   // off the Mac, texts that name it use PC's wording
+const MAC = /Mac/.test(navigator.platform || navigator.userAgent);
+// Texts that name the Mac use PC's wording on every system ("This computer"), except those about the Mac's own parts,
+// which keep their real names on a Mac.
+const MAC_ONLY = /Finder|Keychain|Touch ID|security chip/;
 
 // The same English word can mean two things ("Open" the button, "Open" the kind of memory): t("Open@@kind") tells
 // them apart for translators, and English shows the word before "@@".
 export const t = (text, ...parts) => {
-  if (!MAC && PC[text]) text = PC[text];
+  if (PC[text] && (!MAC || !MAC_ONLY.test(text))) text = PC[text];   // "This computer" everywhere; Finder and the like stay on a Mac
   const s = keys((lang !== "en" && words[text]) || text.split("@@")[0]);
   return parts.length ? s.replace(/\{(\d+)\}/g, (m, i) => (parts[i] !== undefined ? String(parts[i]) : m)) : s;
 };
