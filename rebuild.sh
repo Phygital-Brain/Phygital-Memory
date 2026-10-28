@@ -4,45 +4,10 @@ set -e
 cd "$(dirname "$0")"
 [ -d core/frontend/node_modules ] || (cd core/frontend && npm ci >/tmp/pm-front.log 2>&1)   # the page's build tools, once
 (cd core/frontend && npm run -s build >/tmp/pm-front.log 2>&1)
-sh core/packaging/build.sh >/tmp/pm-build.log 2>&1
-rm -rf app/src-tauri/server
-cp -R core/packaging/dist/phygital-memory-server app/src-tauri/server   # the server, a folder (Resources/server)
-install -m 755 "$(readlink -f "$(command -v rclone)")" app/src-tauri/server/rclone   # the cloud helper (MIT)
-install -m 755 "$(readlink -f "$(command -v syncthing)")" app/src-tauri/server/syncthing   # Mac-to-Mac sharing (MPL-2.0)
-# Their licences go with them (Resources/server/licenses, shown in Settings › About): the texts as each project ships them.
-L=app/src-tauri/server/licenses
-mkdir -p "$L"
-ST_HOME="$(dirname "$(readlink -f "$(command -v syncthing)")")/.."
-RC_HOME="$(dirname "$(readlink -f "$(command -v rclone)")")/.."
-{ echo "Syncthing $(syncthing --version | awk '{print $2}')"
-  echo "Copyright the Syncthing contributors. Mozilla Public License 2.0. Included unchanged."
-  echo "Source code: https://github.com/syncthing/syncthing"; echo; cat "$ST_HOME/LICENSE"; } > "$L/1-syncthing.txt"
-{ echo "rclone $(rclone version | awk 'NR==1 {print $2}')"
-  echo "MIT License. Included unchanged."
-  echo "Source code: https://github.com/rclone/rclone"; echo; cat "$RC_HOME/COPYING"; } > "$L/2-rclone.txt"
-cp core/phygital_memory/web/THIRD-PARTY-LICENSES.txt "$L/3-libraries-and-fonts.txt"   # the editor's libraries and the brand fonts
-(cd core && uv run python packaging/python_licences.py "../$L/4-engine-python.txt" >/dev/null)   # Python and its libraries
-python3 core/packaging/rust_licences.py app/src-tauri "$L/5-mac-window.txt" >/dev/null   # Tauri and its Rust crates
-python3 core/packaging/compact_licences.py "$L" 3-libraries-and-fonts.txt 4-engine-python.txt 5-mac-window.txt 3-open-source-parts.txt >/dev/null   # each licence text once
-cat > "$L/0-overview.txt" <<'TXT'
-PHYGITAL MEMORY: OPEN-SOURCE PARTS
-
-These open-source parts are inside Phygital Memory. Each part keeps its own licence.
-
-Inside the app
-  Sharing between Macs: Syncthing (MPL-2.0)
-  Cloud storage: rclone (MIT)
-  Note editor: CodeMirror and Lezer (MIT)
-  Diagrams in notes: Mermaid and the libraries it uses (MIT, ISC, BSD-3-Clause, Unlicense)
-  Graph view: Sigma, Graphology and d3 (MIT, ISC)
-  Safe pasting: DOMPurify (MPL-2.0 or Apache-2.0)
-  Fonts: Anybody, Hanken Grotesk and JetBrains Mono (SIL Open Font License 1.1)
-  Engine: Python and its libraries (PSF-2.0, MIT, BSD, Apache-2.0)
-  Mac window: Tauri and the Rust crates it uses (MIT, Apache-2.0, MPL-2.0 and others)
-
-Thanks
-  Baalda (github.com/naveedharri/baalda, Apache-2.0), for design and feature ideas. No Baalda code is included.
-TXT
+# The engine, then the engine + Syncthing + rclone + every licence into app/src-tauri/server. The same two scripts
+# build Windows and Linux on GitHub (with --fetch there), so all three come from one source.
+(cd core && uv run python packaging/build.py) >/tmp/pm-build.log 2>&1
+python3 core/packaging/bundle_server.py >/tmp/pm-bundle.log 2>&1
 # The Touch ID helper. The Keychain trusts it by its signature: it's signed with this Mac's own fixed certificate
 # (.signing, see its README), so a rebuilt helper keeps that trust and macOS never asks again after an update.
 # The build stops if the helper isn't signed that way: an unsigned one would make macOS ask for every kept item.
