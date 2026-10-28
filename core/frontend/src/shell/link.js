@@ -85,9 +85,10 @@ export function linkDialog(ctx, tab = "server") {
           el("p", { class: "lk-note" }, t("This computer signs in to your server, links it and checks the safety words for you.")));
         const connect = async () => {
           if (!addr.value.trim() || !pass.value) { err.textContent = t("Type the server's address and passphrase."); return; }
-          go.disabled = true; err.textContent = "";
+          button("", null); err.textContent = "";
           const typed = addr.value.trim();
-          body.replaceChildren(steps([[t("Signing in to your server"), "now"], [t("Linking"), ""], [t("Checking the safety words"), ""]]));
+          body.replaceChildren(steps([[t("Signing in to your server and getting this computer ready. The first time takes up to half a minute."), "now"],
+            [t("Linking"), ""], [t("Checking the safety words"), ""]]));
           let s;
           try { s = await ctx.serverStart(typed, pass.value); }
           catch (e) { if (my === gen) { views.server(my); err.textContent = e.message; } return; }

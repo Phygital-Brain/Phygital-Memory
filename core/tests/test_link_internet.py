@@ -63,7 +63,7 @@ def link(a, b, label, arrived):
     print(label, "Link pressed:", r)
     w = {}
     while time.time() - t0 < 360:
-        w = b("linkwait")
+        w = b("linkwait", {"parent": str(b.tmp)} if hasattr(b, "tmp") else {})
         if w.get("state") in ("done", "none") or w.get("error"): break
         time.sleep(3)
     print(label, f"other side done after {int(time.time()-t0)}s:", w)

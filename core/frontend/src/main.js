@@ -1520,7 +1520,7 @@ async function setUpApprover(chip) {
     if (again !== pw) { toastErr(t("Those don't match.")); return false; }
     await api("approversetup", { kind: "password", password: pw });
     toastOk(t("Set. Sharing changes now ask for this password."));
-    return true;
+    return { password: pw };   // the change that asked for it uses it right away, instead of asking a third time
   } catch (e) { toastErr(e.message); return false; }
 }
 
@@ -1621,7 +1621,12 @@ async function shareApi(action, body = {}) {
     try { return await api(action, body); }
     catch (e) {
       const d = e.data || {};
-      if (d.needApprover) { if (!(await setUpApprover(d.chip))) throw new Error(t("Not approved.")); continue; }
+      if (d.needApprover) {
+        const set = await setUpApprover(d.chip);
+        if (!set) throw new Error(t("Not approved."));
+        if (set.password) body = { ...body, approverPassword: set.password };
+        continue;
+      }
       if (d.needPassword) {
         const pw = await askPassword(t("Approve: {0}", d.what), t("Approve"));
         if (!pw) throw new Error(t("Not approved."));
