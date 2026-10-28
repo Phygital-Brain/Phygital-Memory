@@ -707,7 +707,7 @@ and choose the passphrase. <b>Setup code:</b> <mark>1a2b-3c4d-5e6f</mark>
 <button type="button" data-h="compose" aria-pressed="true">Docker Compose</button><button type="button" data-h="docker" aria-pressed="false">Docker</button><button type="button" data-h="coolify" aria-pressed="false">Coolify</button><button type="button" data-h="railway" aria-pressed="false">Railway</button><button type="button" data-h="render" aria-pressed="false">Render</button>
 </div>
 <div class="sc-how" id="how" aria-live="polite"></div>
-<p class="sc-note">Only someone who can open the server's logs sees the code. A restart makes a new one.</p>
+<p class="sc-note">Only someone who can open the server's logs sees the code. It stays the same until you set the passphrase.</p>
 </section></div></div>
 <script>
 const $ = (i) => document.getElementById(i), m = $("m"), go = $("go"), how = $("how");

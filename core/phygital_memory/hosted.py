@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -73,12 +74,34 @@ def configured() -> bool:
     return bool(PASSPHRASE) or _pass_file().exists()
 
 
+def _code_file() -> Path:
+    from .system import state_dir
+    return state_dir() / "setup-code"
+
+
 def setup_code() -> str:
-    """The one-time code for the first visit, made once per start while there's no passphrase."""
+    """The one-time code for the first visit, while there's no passphrase. It stays the same across restarts (hosts
+    restart a server on every deploy) and is deleted once the passphrase is chosen."""
     global SETUP_CODE
-    if not configured() and not SETUP_CODE:
+    if configured() or SETUP_CODE:
+        return SETUP_CODE
+    f = _code_file()
+    try:
+        SETUP_CODE = f.read_text().strip()
+    except OSError:
+        SETUP_CODE = ""
+    if not re.fullmatch(r"[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}", SETUP_CODE):
         SETUP_CODE = "-".join(secrets.token_hex(2) for _ in range(3))
+        f.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            fh.write(SETUP_CODE)
     return SETUP_CODE
+
+
+def _plain(code: str) -> str:
+    """The code as typed, with spaces, dashes and capitals left out."""
+    return re.sub(r"[^0-9a-f]", "", code.lower())
 
 
 def _new_session() -> str:
@@ -97,9 +120,9 @@ def choose(code: str, new: str) -> str:
             raise ValueError("This server already has a passphrase. Sign in instead.")
         if len(_fails) >= TRIES:
             raise ValueError("Too many wrong tries. Wait 15 minutes, then try again.")
-        if not SETUP_CODE or not secrets.compare_digest(code.strip().lower().encode(), SETUP_CODE.encode()):
+        if not SETUP_CODE or not secrets.compare_digest(_plain(code).encode(), _plain(SETUP_CODE).encode()):
             _fails.append(now)
-            raise ValueError("That setup code isn't right. It's in the server's log.")
+            raise ValueError("That setup code isn't right. Check the line that starts with First visit in the server's log.")
         if len(new) < MIN:
             raise ValueError("Make it at least 12 characters.")
         salt = secrets.token_bytes(16)
@@ -108,6 +131,7 @@ def choose(code: str, new: str) -> str:
         fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w") as fh:
             json.dump({"salt": salt.hex(), "fp": _fingerprint(new, salt).hex(), "kind": "scrypt-32768-8-1"}, fh)
+        _code_file().unlink(missing_ok=True)
         return _new_session()
 
 

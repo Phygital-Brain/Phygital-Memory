@@ -107,6 +107,8 @@ try:
     # ---- the first visit: choose the passphrase ----
     code, _, raw = http("GET", "/login", signed_in=False)
     check(b"Setup code" in raw, "the first visit asks for the setup code and a new passphrase")
+    keep = (tmp / "state" / "setup-code").read_text() if (tmp / "state" / "setup-code").exists() else ""
+    check(len(keep) == 14, "the setup code is kept so a restart doesn't change it")
     import re
     found = re.search(r"Setup code: ([0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4})", said())
     check(bool(found), "the setup code is in the server's log", said()[-300:])
@@ -114,8 +116,10 @@ try:
     check(code == 400 and b"setup code" in raw, "a wrong setup code is refused", raw)
     code, _, raw = http("POST", "/setup", {"code": found.group(1) if found else "", "passphrase": "short"}, signed_in=False)
     check(code == 400 and b"12 characters" in raw, "a short passphrase is refused", raw)
-    code, _, raw = http("POST", "/setup", {"code": found.group(1) if found else "", "passphrase": PASSPHRASE}, signed_in=False)
-    check(code == 200, "the right code sets the passphrase", raw)
+    typed = (found.group(1) if found else "").upper().replace("-", " ")   # as someone might type it
+    code, _, raw = http("POST", "/setup", {"code": typed, "passphrase": PASSPHRASE}, signed_in=False)
+    check(code == 200, "the right code sets the passphrase (capitals and spaces are fine)", raw)
+    check(not (tmp / "state" / "setup-code").exists(), "the setup code is gone once used")
     saved = (tmp / "state" / "passphrase.json")
     check(saved.exists() and PASSPHRASE not in saved.read_text() and oct(saved.stat().st_mode)[-3:] == "600",
           "only its fingerprint is kept, readable by the server only")
