@@ -12,6 +12,12 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Build one system only, to save minutes (blank: all)"
+        type: choice
+        options: ["", macos-14, windows-latest, ubuntu-22.04, ubuntu-22.04-arm]
+        default: ""
 
 permissions:
   contents: read
@@ -25,12 +31,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: ${{ fromJSON(inputs.only && format('["{0}"]', inputs.only) || '["macos-14", "windows-latest", "ubuntu-22.04", "ubuntu-22.04-arm"]') }}
         include:
           - os: macos-14
             args: --target universal-apple-darwin   # one Mac download for Apple and Intel chips
-          - os: windows-latest
-          - os: ubuntu-22.04
-          - os: ubuntu-22.04-arm   # Linux on ARM computers
+        # ubuntu-22.04-arm: Linux on ARM computers
     env:
       PYTHONUTF8: "1"   # Windows' Python otherwise writes the licence files in its old code page
     steps:
