@@ -2218,9 +2218,9 @@ async def api(request: Request) -> Response:
             name = re.sub(r"[\x00-\x1f{}\[\]<>`|#]", "", str(body.get("name") or "")).strip()[:60] \
                 or (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the name they confirmed, or the Mac's
             res = await asyncio.to_thread(brain.build, m, picks, lang, name, str(body.get("tz") or "")[:60])
-            rules = "CLAUDE.md"
-            item = await asyncio.to_thread(m.todo_add, res["me"], brain.finish_ask(picks, res["language"], rules, res["me"]))
-            return _ok({**res, "task": item["id"], "folders": brain.plan(picks, lang)})
+            ask = brain.finish_ask(picks, res["language"], f.info()["name"], name)
+            item = await asyncio.to_thread(m.todo_add, res["me"], ask)
+            return _ok({**res, "task": item["id"], "ask": ask, "folders": brain.plan(picks, lang)})
         if action == "handtoai":   # the person gives this note to their AI, with what to do
             item = m.todo_add(body["path"], body.get("ask", ""))
             return _ok({"item": item, "todo": m.todo()})

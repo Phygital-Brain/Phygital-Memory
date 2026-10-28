@@ -96,9 +96,9 @@ ADAPTING = re.compile(r"<!-- ADAPTING.*?-->\n+", re.S)
 
 def _adapt(text: str, where: str, picks: dict) -> str:
     """Do what each file's ADAPTING note asks, so the AI has nothing left to adapt: every folder and skill is made,
-    so only the client rules and the people folders' notes depend on the answers."""
+    so only the client rules and the people folders' notes depend on Work or Personal."""
     text = ADAPTING.sub("", text, count=1)
-    if where == "CLAUDE.md" and not picks.get("clients"):
+    if where == "CLAUDE.md" and not picks.get("work"):
         lines = [l for l in text.split("\n") if not re.match(r"3[12]\. ", l)]   # rules 31, 32: client messages
         text = "\n".join(l.replace("33", "31").replace("34", "32") if l.startswith("<!--") and "33" in l else l for l in lines)
     m = re.match(r"Relationships/(\w+)/CLAUDE\.md$", where)
@@ -115,9 +115,10 @@ def _adapt(text: str, where: str, picks: dict) -> str:
 
 
 def plan(picks: dict, lang: str) -> list[str]:
-    """The folders the memory gets, in its language: all of them, so the AI never has to make one."""
+    """The folders the memory gets, in its language: the same skeleton for everyone, and the people folders for work."""
     paths = _names(lang).get("paths", {})
-    return [_local(f, paths) for f in FOLDERS + [f"Relationships/{p}" for p in PEOPLE] + ["Skills/morning-brief"]]
+    work = [f"Relationships/{p}" for p in PEOPLE] if picks.get("work") else []
+    return [_local(f, paths) for f in FOLDERS + work + ["Skills/morning-brief"]]
 
 
 def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct_time | None = None) -> dict:
@@ -148,7 +149,8 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
         except Exception:
             pass   # there already
     rules = list(RULES)
-    rules += [("relationships-subfolder-CLAUDE.md", f"Relationships/{p}/CLAUDE.md") for p in PEOPLE]
+    if picks.get("work"):
+        rules += [("relationships-subfolder-CLAUDE.md", f"Relationships/{p}/CLAUDE.md") for p in PEOPLE]
     rules.append(("morning-brief.md", "Skills/morning-brief/morning-brief.md"))
     for tpl, where in rules:
         text = _template(lang, "templates", tpl)
@@ -180,37 +182,27 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
         desc = str(page.get("desc", "")).replace('"', "'")
         put(loc(f"About/{key}.md"), f"---\ntype: about\nstatus: active\nupdated: {day}\ntags: [{tags}]\ndescription: \"{desc}\"\n---\n\n"
             + str(page.get("body", "")).strip() + f"\n\n## Evidence\n\n- {day}: {page.get('evidence') or 'from the setup questions.'}\n")
-    # A note for each project and person typed in: the README a project starts with, a profile per person
-    todo = str(picks.get("todo") or "To add.")[:40]
-    clean = lambda v, n: re.sub(r"[\x00-\x1f/\\:*?\"<>|#^\[\]]", "", str(v or "")).strip().lstrip(".").strip()[:n]
-    for p in (picks.get("projects") or [])[:30]:
-        title, what = clean(p.get("name"), 80), clean(p.get("what"), 300)
-        slug = "-".join(w[:1].upper() + w[1:] for w in title.split())
-        if not slug:
-            continue
-        folder = loc("Projects") + "/" + slug
-        try:
-            memory.make_folder(folder)
-        except Exception:
-            pass
-        put(f"{folder}/README.md", f"---\ntype: project\nstatus: active\nproject: {slug}\ncreated: {day}\nupdated: {day}\n"
-            f"tags: [{slug.lower()}, project]\ndescription: \"{what or title}\"\n---\n\n## {picks.get('h_what') or 'What it is'}\n\n{what or todo}\n\n"
-            f"## {picks.get('h_status') or 'Status and next step'}\n\n{todo}\n")
-    kinds = {"clients": ("Clients", "client"), "collaborators": ("Collaborators", "collaborator"), "team": ("Team", "team"), "partners": ("Partners", "partner")}
-    for p in (picks.get("people") or [])[:60]:
-        who, what = clean(p.get("name"), 80), clean(p.get("what"), 300)
-        folder, kind = kinds.get(p.get("kind"), kinds["clients"])
-        if who:
-            put(loc(f"Relationships/{folder}/{who}.md"), f"---\ntype: {kind}\nstatus: active\nlast-contact:\ntags: [relationship, {kind}]\n"
-                f"description: \"{what or who}\"\n---\n\n## {picks.get('h_who') or 'Who they are'}\n\n{what or todo}\n\n"
-                f"## {picks.get('h_contacts') or 'Contacts'}\n\n{todo}\n\n## {picks.get('h_work') or 'Work together'}\n\n{todo}\n")
     return {"made": made, "me": me, "language": lang_name}
 
 
-def finish_ask(picks: dict, lang_name: str, rules: str, me: str = "About/me.md") -> str:
-    """The one AI task left after setup: add detail. The app already made everything from the person's answers."""
-    return (f"Make my Phygital Memory more complete. The app already set it all up from my answers: every folder, "
-            f"the rules, the About pages, and a note for each project and person I typed in. First read {rules} "
-            f"(the rules). Then read the About pages, projects and people. Where a page is thin or says \"To add\", "
-            f"ask me for the details, a few questions at a time with click options where you can. If I gave links, "
-            f"read them first and ask only what they don't answer. Add details; keep what I wrote. Write in {lang_name}.")[:1990]
+GUIDE = "https://raw.githubusercontent.com/Phygital-Brain/phygital-brain/main/skills/brain-setup/SKILL.md"
+
+
+def finish_ask(picks: dict, lang_name: str, memory: str = "", name: str = "") -> str:
+    """The message the person pastes in their AI (and the AI task on Home): finish the setup with Phygital Brain's own
+    setup guide, always the latest from GitHub, through the memory's tools. The app already built the base."""
+    use = " and ".join(x for x, on in (("work", picks.get("work")), ("personal life", picks.get("personal"))) if on) or "personal life"
+    return (f"Set up my Phygital Memory{f' \"{memory}\"' if memory else ''} with the Phygital Brain setup guide.\n\n"
+            f"1. My notes live in the Phygital Memory app, not in a folder. Read and write them only with the "
+            f"phygital-memory tools. If you don't have those tools, stop and tell me to connect you in the app first "
+            f"(AI window, AI apps).\n"
+            f"2. Read the guide: {GUIDE} and, in the same GitHub folder, the files it points to (forms/questions.md "
+            f"and templates/).\n"
+            f"3. The app already built the base: the folders, the rules (CLAUDE.md) and basic About notes. Read "
+            f"CLAUDE.md first. Then follow the guide as if I picked \"Update my answers\": skip Step 1 (the language "
+            f"is {lang_name}), Step 1.6 (the app handles sync and backups) and Steps 3.1 and 3.2. Don't rebuild what's there.\n"
+            f"4. Ask me the forms of Step 2 as click questions. This memory is for my {use}."
+            f"{f' My name is {name}.' if name else ''}\n"
+            f"5. Do Steps 3.3 to 3.7: fill the About notes, a note for each project and person, my own rules, today's "
+            f"daily note. Add to what's there; never overwrite what I wrote.\n"
+            f"6. Skip the Brain Keeper schedule and the add-ons unless I ask. End with 2 or 3 lines on what you did.")[:1990]

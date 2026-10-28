@@ -1,59 +1,15 @@
-// "Set up your Phygital Memory": its own page over the app. One question a screen, every answer a card, more than one
-// always allowed. The app then makes every folder, rule and About page from the answers, so the AI only asks what
-// needs a conversation (projects and people by name, the "To add" lines). ctx: {api, language(), openAI(tab), done(), files()}.
+// "Set up your Phygital Memory": its own page over the app. Your name, then Work or Personal (or both). The app builds
+// the same simple skeleton for everyone (folders, rules, basic About notes), adds the work parts for work, and hands
+// the rest to your AI: one message to paste that has it follow Phygital Brain's own setup guide, always up to date.
+// ctx: {api, language(), openAI(tab), done(), files()}.
 import { el, icon, knot } from "./dom.js";
 import { t } from "./i18n.js";
 import { toastOk, toastErr } from "./toast.js";
 
 // The cards' drawings: 24px grid, one stroke weight, like the app's own icons
 const ART = {
-  freelance: ["M4 20l4-1 11-11-3-3L5 16z", "M14 7l3 3", "M4 20h16"],
-  business: ["M4 10h16l-1.5-5h-13z", "M5 10v10h14V10", "M10 20v-5h4v5", "M4 10c0 1.7 1.8 2.5 4 2.5S12 11.7 12 10c0 1.7 1.8 2.5 4 2.5s4-.8 4-2.5"],
-  company: ["M4 8h16v11H4z", "M9 8V5h6v3", "M4 13h16"],
-  study: ["M2 9l10-5 10 5-10 5z", "M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5", "M21 9v6"],
+  work: ["M4 8h16v11H4z", "M9 8V5h6v3", "M4 13h16"],
   personal: ["M4 11l8-7 8 7", "M6 9.5V20h12V9.5", "M12 17s-3-1.8-3-3.7a1.5 1.5 0 0 1 3-.6 1.5 1.5 0 0 1 3 .6c0 1.9-3 3.7-3 3.7z"],
-  design: ["M4 4h7v7H4z", "M17.5 4a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z", "M7.5 14L11 20H4z", "M14 14h6v6h-6z"],
-  tech: ["M8 7l-5 5 5 5", "M16 7l5 5-5 5", "M13.5 5l-3 14"],
-  strategy: ["M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z", "M15.5 8.5l-2 5-5 2 2-5z"],
-  writing: ["M4 6h10", "M4 10h7", "M4 14h5", "M13 20l1-4 6-6 3 3-6 6z"],
-  care: ["M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M2.5 20c.5-3.5 2.8-5.5 5.5-5.5s5 2 5.5 5.5", "M16.5 11a2.5 2.5 0 1 0 0-5", "M16 14.5c3 0 5 2 5.5 5.5"],
-  craft: ["M14 4l6 6-3 3-6-6z", "M11 7L3 15l3 3 8-8", "M15 20h6"],
-  numbers: ["M4 20V10", "M10 20V4", "M16 20v-7", "M3 20h18"],
-  clients: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M3 20c.6-3.8 3-6 6-6 1.6 0 3 .6 4 1.7", "M15 18l2 2 4-4.5"],
-  collaborators: ["M9 6a6 6 0 1 1 0 12A6 6 0 0 1 9 6z", "M15 6a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"],
-  team: ["M12 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z", "M5 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M19 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M7.5 19c.4-3.4 2.2-6 4.5-6s4.1 2.6 4.5 6", "M2 19c.3-2.5 1.5-4.3 3-4.3", "M22 19c-.3-2.5-1.5-4.3-3-4.3"],
-  partners: ["M4 10v4h3l7 4V6l-7 4z", "M18 9a4 4 0 0 1 0 6", "M7 14l1 5h2.5l-1-4.4"],
-  solo: ["M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M5 20c.7-4 3.6-6.5 7-6.5s6.3 2.5 7 6.5"],
-  target: ["M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z", "M12 7.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9z", "M12 11.2a.8.8 0 1 1 0 1.6.8.8 0 0 1 0-1.6z"],
-  name: ["M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"],
-  money: ["M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z", "M14.8 9c-.4-1-1.5-1.6-2.8-1.6-1.6 0-2.8.9-2.8 2.1 0 2.8 5.8 1.4 5.8 4.4 0 1.2-1.3 2.1-3 2.1-1.4 0-2.6-.7-3-1.7", "M12 6v1.4", "M12 16.6V18"],
-  time: ["M6 3h12", "M6 21h12", "M7 3c0 5 10 5 10 9s-10 4-10 9", "M17 3c0 5-10 5-10 9s10 4 10 9"],
-  learn: ["M3 5.5c3-1.3 6-1.3 9 .5 3-1.8 6-1.8 9-.5V19c-3-1.3-6-1.3-9 .5-3-1.8-6-1.8-9-.5z", "M12 6v13.5"],
-  finish: ["M5 21V4", "M5 4h12l-2.5 4L17 12H5"],
-  health: ["M12 20s-8-4.6-8-10.2A4.3 4.3 0 0 1 12 7.5a4.3 4.3 0 0 1 8 2.3C20 15.4 12 20 12 20z", "M7 12h2.5l1.5-2.5 2 5 1.5-2.5H17"],
-  switching: ["M4 8h13", "M14 5l3 3-3 3", "M20 16H7", "M10 13l-3 3 3 3"],
-  admin: ["M3 6h18v12H3z", "M3 6l9 7 9-7"],
-  payments: ["M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z", "M9 8h6", "M9 12h6", "M9 16h3"],
-  ideas: ["M12 12a2 2 0 1 0 0-.01", "M5 6a1.5 1.5 0 1 0 0-.01", "M19 5a1.5 1.5 0 1 0 0-.01", "M4 17a1.5 1.5 0 1 0 0-.01", "M19 18a1.5 1.5 0 1 0 0-.01", "M6 7l4.5 3.5", "M17.8 6.2l-4.4 4.4", "M5.2 16.2l5-3", "M17.8 17l-4.4-3.6"],
-  finding: ["M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z", "M15.5 15.5L21 21"],
-  alone: ["M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M6.5 19c.6-3.3 2.8-5.3 5.5-5.3s4.9 2 5.5 5.3", "M3 12a9 9 0 0 1 2.6-6.4", "M18.4 5.6A9 9 0 0 1 21 12"],
-  deadlines: ["M12 6a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0-15z", "M12 9.5v4l2.5 1.5", "M3.5 6L7 3", "M20.5 6L17 3"],
-  day: ["M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8z", "M12 2v2", "M12 20v2", "M4.2 4.2l1.4 1.4", "M18.4 18.4l1.4 1.4", "M2 12h2", "M20 12h2", "M4.2 19.8l1.4-1.4", "M18.4 5.6l1.4-1.4"],
-  early: ["M3 18h18", "M7 18a5 5 0 0 1 10 0", "M12 6v3", "M5 10.5l1.8 1.3", "M19 10.5l-1.8 1.3", "M8 21h8"],
-  evening: ["M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"],
-  weekend: ["M4 5h16v15H4z", "M4 9h16", "M8 3v4", "M16 3v4", "M14 13h3v3h-3z"],
-  anytime: ["M7 9c-3 0-4.5 1.5-4.5 3S4 15 7 15c4 0 6-6 10-6 3 0 4.5 1.5 4.5 3S20 15 17 15c-4 0-6-6-10-6z"],
-  brief: ["M3 15h18", "M7 15a5 5 0 0 1 10 0", "M12 4v3", "M6 19h12", "M9 22h6"],
-  meetings: ["M4 5h16v11H9l-5 4z", "M8 9h8", "M8 12h5"],
-  voice: ["M9 3h6v9a3 3 0 0 1-6 0z", "M5.5 11a6.5 6.5 0 0 0 13 0", "M12 17.5V21"],
-  import: ["M12 3v11", "M8 10l4 4 4-4", "M4 15v4h16v-4"],
-  tidy: ["M15 3l-4.5 9", "M7 12h8l1.5 9h-11z", "M9 16v5", "M12 16v5"],
-  think: ["M9 18h6", "M10 21h4", "M12 3a6 6 0 0 1 3.6 10.8c-.7.6-1.1 1.4-1.1 2.2h-5c0-.8-.4-1.6-1.1-2.2A6 6 0 0 1 12 3z"],
-  short: ["M4 8h10", "M4 12h7", "M4 16h12"],
-  detailed: ["M4 5h16", "M4 9h16", "M4 13h16", "M4 17h16", "M4 21h10"],
-  friendly: ["M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18z", "M8.5 14c.8 1.4 2 2 3.5 2s2.7-.6 3.5-2", "M9 9.5v.5", "M15 9.5v.5"],
-  formal: ["M12 3l3 3-1.5 2 2 10L12 21l-3.5-3 2-10L9 6z"],
-  direct: ["M3 12h16", "M14 6l6 6-6 6"],
 };
 const art = (name) => {
   const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
@@ -63,115 +19,38 @@ const art = (name) => {
   return s;
 };
 
-// The questions. [key, title, description]; every answer can be one or many, or none (then the button says Skip)
+// The one question: what the memory is for. Both is fine
 const QUESTIONS = () => [
-  { key: "work", q: t("What do you do?"), options: [
-    ["freelance", t("Freelance or creative"), t("You take on projects for clients.")],
-    ["business", t("I run a business"), t("A shop, studio or company of your own.")],
-    ["company", t("I work for a company"), t("A job with a team and a manager.")],
-    ["study", t("I study"), t("Courses, research, exams.")],
-    ["personal", t("My own life and projects"), t("Home, health, hobbies, side projects.")]] },
-  { key: "strengths", q: t("What are you good at?"), options: [
-    ["design", t("Design and visuals"), t("Images, layout, look and feel.")],
-    ["tech", t("Tech and building"), t("Code, tools, making things work.")],
-    ["strategy", t("Strategy and ideas"), t("Seeing the plan and finding the angle.")],
-    ["writing", t("Writing and stories"), t("Words people read to the end.")],
-    ["care", t("People and care"), t("Teaching, helping, bringing people together.")],
-    ["craft", t("Making by hand"), t("Objects, food, things you can touch.")],
-    ["numbers", t("Numbers and order"), t("Money, data, keeping things on track.")]] },
-  { key: "people", q: t("Who do you work with?"), options: [
-    ["clients", t("Clients"), t("People and companies you deliver work for.")],
-    ["collaborators", t("Collaborators"), t("Partners in the work, no money changing hands.")],
-    ["team", t("A team"), t("People who work with or for you.")],
-    ["partners", t("Press and partners"), t("Venues, platforms and press you show up with.")],
-    ["solo", t("Mostly on my own"), t("Fewer people to keep track of.")]] },
-  { key: "goals", q: t("What do you want most right now?"), options: [
-    ["target", t("More and better clients"), t("Work you want, from people who value it.")],
-    ["name", t("Grow my name"), t("Be known for what you make.")],
-    ["money", t("Earn more"), t("Better prices, steadier income.")],
-    ["time", t("Time and balance"), t("Room to rest and think.")],
-    ["learn", t("Learn something new"), t("A skill, a field, a language.")],
-    ["finish", t("Finish what I started"), t("Close the open loops.")],
-    ["health", t("Health and energy"), t("Sleep, body, steady days.")]] },
-  { key: "drains", q: t("What drains you?"), options: [
-    ["switching", t("Switching between things"), t("Losing the thread every time.")],
-    ["admin", t("Admin and email"), t("The inbox that never ends.")],
-    ["payments", t("Chasing payments"), t("Invoices, reminders, waiting.")],
-    ["ideas", t("Too many ideas"), t("Starting more than you finish.")],
-    ["finding", t("Finding new work"), t("Where the next project comes from.")],
-    ["alone", t("Working alone"), t("No one to think out loud with.")],
-    ["deadlines", t("Deadlines"), t("Everything due at once.")]] },
-  { key: "hours", q: t("When do you work?"), options: [
-    ["early", t("Early mornings"), t("Before the day gets loud.")],
-    ["day", t("Weekdays, daytime"), t("Monday to Friday, office hours.")],
-    ["evening", t("Evenings"), t("When the house is quiet.")],
-    ["weekend", t("Weekends"), t("Saturday and Sunday too.")],
-    ["anytime", t("Whenever it fits"), t("No fixed hours.")]] },
-  { key: "help", q: t("What should your AI help with?"), agent: true, options: [
-    ["brief", t("A morning brief"), t("Today's plan in a few lines, when you ask.")],
-    ["meetings", t("Meeting prep"), t("A short brief before each call.")],
-    ["voice", t("Writing in my voice"), t("Drafts that sound like you, checked for AI patterns.")],
-    ["import", t("Bring in old notes"), t("From other apps, with a plan you approve first.")],
-    ["tidy", t("A daily tidy"), t("Fixes small things, asks before big ones.")],
-    ["think", t("Thinking partner"), t("Challenges ideas, finds patterns in your notes.")]] },
-  { key: "talk", q: t("How should your AI talk to you?"), agent: true, options: [
-    ["short", t("Short and plain"), t("A few sentences, everyday words.")],
-    ["detailed", t("Detailed"), t("The full reasoning, step by step.")],
-    ["friendly", t("Warm and friendly"), t("Like a friendly colleague.")],
-    ["formal", t("Formal"), t("Polite and careful.")],
-    ["direct", t("Tell me when I'm wrong"), t("Honest pushback, no flattery.")]] },
+  { key: "use", q: t("What's this memory for?"), options: [
+    ["work", t("Work"), t("Projects, clients, offers and the people you work with.")],
+    ["personal", t("Personal"), t("Goals, habits, home, health and side projects.")]] },
 ];
 
-// The About pages, written now from the answers. "To add" marks what only the person or their AI can say.
-function pages(name, a, Q, x) {
+// The basic About notes, to fill later (your AI does it with the setup guide). Work adds the business ones
+function pages(name, work) {
   const TODO = t("To add.");
-  const typed = (v) => (v || "").trim() || TODO;
-  const lines = (v) => (v || "").split(/\n+/).map((l) => l.trim()).filter(Boolean).map((l) => `- ${l}`).join("\n") || TODO;
-  const projects = x.projects.filter((p) => p.name.trim()).map((p) => `- ${p.name.trim()}${p.what.trim() ? `: ${p.what.trim()}` : ""}`).join("\n") || TODO;
-  const KIND = { clients: t("Client"), collaborators: t("Collaborator"), team: t("Team"), partners: t("Partner") };
-  const people = x.people.filter((p) => p.name.trim()).map((p) => `- [[${p.name.trim()}]] (${KIND[p.kind]})${p.what.trim() ? `: ${p.what.trim()}` : ""}`).join("\n");
-  const pick = (key) => { const q = Q.find((x) => x.key === key); return q.options.filter(([v]) => a[key].includes(v)); };
-  const list = (key, withDesc) => pick(key).map(([, l, d]) => `- ${l}${withDesc ? `: ${d.charAt(0).toLowerCase()}${d.slice(1)}` : ""}`).join("\n") || TODO;
-  const sec = (h, body) => `## ${h}\n\n${body}\n`;
+  const sec = (h) => `## ${h}\n\n${TODO}\n`;
   const page = (desc, tags, ...parts) => ({ desc, tags, body: parts.join("\n") });
   return {
-    me: page(t("Who {0} is and how they want their agent to work.", name), ["working-style"],
-      `${name}\n`,
-      sec(t("What I do"), list("work")),
-      sec(t("What I'm good at"), list("strengths", true)),
-      sec(t("When I work"), list("hours")),
-      sec(t("What drains me"), list("drains")),
-      sec(t("What my AI helps with"), list("help")),
-      sec(t("How I want my agent to work"), list("talk", true)),
-      sec(t("Life and background"), typed(x.story)),
-      sec(t("Links"), lines(x.links))),
-    goals: page(t("{0}'s goals and priorities.", name), ["priorities"], sec(t("Right now"), list("goals")), sec(t("This year"), TODO)),
-    business: page(t("What {0} does for work.", name), ["work"],
-      sec(t("What I do"), list("work")), sec(t("Who I work with"), [list("people"), people].filter((v) => v && v !== TODO).join("\n") || TODO),
-      sec(t("Current projects"), projects)),
-    services: page(t("What {0} offers.", name), ["offers"],
-      sec(t("Built on"), list("strengths", false)), sec(t("Offers"), lines(x.offers)), sec(t("Prices"), lines(x.prices))),
-    customers: page(t("Who {0} works for and how they find each other.", name), ["audience"],
-      sec(t("Who"), a.people.includes("clients") ? t("Clients: people and companies {0} delivers work for.", name) : TODO),
-      sec(t("How they find me"), TODO)),
-    "pain-points": page(t("The problems {0} wants solved.", name), ["problems"], sec(t("What gets in the way"), list("drains"))),
-    brand: page(t("{0}'s voice and tone.", name), ["voice"], sec(t("Voice"), typed(x.voice)), sec(t("Words to use"), TODO), sec(t("Words to avoid"), TODO)),
-    tools: page(t("The tools {0} uses and where things live.", name), ["stack"], sec(t("Tools"), `- Phygital Memory\n${(x.tools || "").split(/[,\n]+/).map((l) => l.trim()).filter(Boolean).map((l) => `- ${l}`).join("\n")}`.trim()), sec(t("Where things live"), TODO)),
-    cv: page(t("{0}'s work history, education and press.", name), ["history"], sec(t("Work, education and press"), lines(x.history))),
-    biography: page(t("{0}'s story.", name), ["story"], typed(x.story)),
+    me: page(t("Who {0} is and how they want their agent to work.", name), ["working-style"], `${name}\n`,
+      sec(t("What I do")), sec(t("How I want my agent to work"))),
+    goals: page(t("{0}'s goals and priorities.", name), ["priorities"], sec(t("Right now"))),
+    tools: page(t("The tools {0} uses and where things live.", name), ["stack"], `## ${t("Tools")}\n\n- Phygital Memory\n`),
+    ...(work ? {
+      business: page(t("What {0} does for work.", name), ["work"], sec(t("What I do")), sec(t("Who I work with"))),
+      services: page(t("What {0} offers.", name), ["offers"], sec(t("Offers")), sec(t("Prices"))),
+      customers: page(t("Who {0} works for and how they find each other.", name), ["audience"], sec(t("Who")), sec(t("How they find me"))),
+      brand: page(t("{0}'s voice and tone.", name), ["voice"], sec(t("Voice"))),
+      cv: page(t("{0}'s work history, education and press.", name), ["history"], sec(t("Work, education and press"))),
+    } : {}),
   };
 }
 
 export function renderSetup(body, ctx) {
   const Q = QUESTIONS();
   const answers = Object.fromEntries(Q.map((q) => [q.key, []]));
-  const extra = { projects: [{ name: "", what: "" }], people: [{ name: "", kind: "clients", what: "" }],
-    offers: "", prices: "", tools: "", story: "", history: "", links: "", voice: "" };
   let name = "", lang = "en", at = 0;
-  // The screens: the name, the card questions, then the typing ones (all can be skipped)
-  const TYPED = [() => projectsView(), () => peopleView(), () => workView(), () => youView()];
-  const total = 1 + Q.length + TYPED.length;
-  const typedAt = (i) => i - 1 - Q.length;   // which typing screen i is, or below 0 for a card question
+  const total = 1 + Q.length;   // the name screen, then the question
 
   const bar = el("div", { class: "sp-bar", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": total });
   const drawBar = (i) => {
@@ -191,12 +70,12 @@ export function renderSetup(body, ctx) {
     const old = stage.firstElementChild;
     const show = () => {
       at = i; drawBar(i);
-      stage.replaceChildren(i === 0 ? nameView() : typedAt(i) >= 0 ? TYPED[typedAt(i)]() : questionView(Q[i - 1]));
+      stage.replaceChildren(i === 0 ? nameView() : questionView(Q[i - 1]));
       stage.firstElementChild.classList.add(dir > 0 ? "in-up" : "in-down");
       back.hidden = i === 0;
       foot.querySelector(".sp-count").textContent = t("{0} of {1}", i + 1, total);
       refreshNext();
-      (stage.querySelector("input, textarea, .sp-card") || next).focus({ preventScroll: true });
+      (stage.querySelector("input, .sp-card") || next).focus({ preventScroll: true });
     };
     if (old && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
       old.classList.add(dir > 0 ? "out-up" : "out-down");
@@ -205,75 +84,10 @@ export function renderSetup(body, ctx) {
   };
   const refreshNext = () => {
     if (at === 0) { next.textContent = t("Next"); next.disabled = !name.trim(); return; }
-    const k = typedAt(at);
-    const n = k < 0 ? answers[Q[at - 1].key].length : typedFilled(k);
-    next.textContent = at === total - 1 ? (n ? t("Set it up") : t("Skip and set it up")) : n ? t("Next") : t("Skip");
-    next.disabled = false;
+    const n = answers[Q[at - 1].key].length;
+    next.textContent = at === total - 1 ? t("Set it up") : t("Next");
+    next.disabled = !n;   // pick Work, Personal or both
   };
-
-  const typedFilled = (k) => [
-    () => extra.projects.some((p) => p.name.trim()), () => extra.people.some((p) => p.name.trim()),
-    () => [extra.offers, extra.prices, extra.tools].some((v) => v.trim()),
-    () => [extra.story, extra.history, extra.links, extra.voice].some((v) => v.trim())][k]();
-
-  // A text box with its label; what's typed goes straight into extra[key]
-  const field = (key, label, hint, rows = 2) => {
-    const box = el(rows > 1 ? "textarea" : "input", { class: "sp-input", id: `sp-${key}`, rows: rows > 1 ? rows : null, placeholder: hint, spellcheck: "true" });
-    box.value = extra[key];
-    box.addEventListener("input", () => { extra[key] = box.value; refreshNext(); });
-    return el("label", { class: "sp-field", for: `sp-${key}` }, el("span", { class: "sp-flabel" }, label), box);
-  };
-
-  // A list you add rows to (projects, people): each row a few inputs and a remove button. Enter adds a row
-  const rowsView = (list, blank, cells, addText) => {
-    const wrap = el("div", { class: "sp-rows" });
-    const draw = (focusLast) => {
-      wrap.replaceChildren(...list.map((item, k) => el("div", { class: "sp-rowin" },
-        ...cells.map(([key, hint, opts]) => {
-          if (opts) {   // a choice: a small select
-            const sel = el("select", { class: "set-select sp-kind", "aria-label": hint }, ...opts.map(([v, l]) => el("option", { value: v }, l)));
-            sel.value = item[key];
-            sel.addEventListener("change", () => { item[key] = sel.value; });
-            return sel;
-          }
-          const i = el("input", { class: "sp-input", type: "text", value: item[key], placeholder: hint, "aria-label": hint, maxlength: 140 });
-          i.addEventListener("input", () => { item[key] = i.value; refreshNext(); });
-          i.addEventListener("keydown", (e) => { if (e.key === "Enter" && i.value.trim()) { e.preventDefault(); list.push(blank()); draw(true); } });
-          return i;
-        }),
-        el("button", { class: "icon-btn sp-del", type: "button", title: t("Remove"), "aria-label": t("Remove"),
-          onclick: () => { list.splice(k, 1); if (!list.length) list.push(blank()); draw(); refreshNext(); } }, icon("x", 14)))),
-        el("button", { class: "btn sp-add", type: "button", onclick: () => { list.push(blank()); draw(true); } }, icon("plus", 14, 2), addText));
-      if (focusLast) wrap.querySelectorAll(".sp-rowin")[list.length - 1]?.querySelector("input")?.focus();
-    };
-    draw();
-    return wrap;
-  };
-  const screen = (q, hint, ...parts) => el("section", { class: "sp-screen" }, el("h2", { class: "sp-q" }, q), el("p", { class: "sp-hint" }, hint), ...parts);
-
-  const projectsView = () => screen(t("What are you working on?"),
-    t("Name each project and say what it is in a few words. Your AI adds the rest later."),
-    rowsView(extra.projects, () => ({ name: "", what: "" }),
-      [["name", t("Project name")], ["what", t("What it is, in a few words")]], t("Add a project")));
-
-  const peopleView = () => screen(t("Who do you work with, by name?"),
-    t("A person or a company per line. Each gets its own note."),
-    rowsView(extra.people, () => ({ name: "", kind: "clients", what: "" }),
-      [["name", t("Name")], ["kind", t("Kind"), [["clients", t("Client")], ["collaborators", t("Collaborator")], ["team", t("Team")], ["partners", t("Partner")]]],
-       ["what", t("Who they are, in a few words")]], t("Add someone")));
-
-  const workView = () => screen(t("What do you offer?"), t("Short is fine. One thing per line."),
-    el("div", { class: "sp-fields" },
-      field("offers", t("What you offer"), t("For example: logo design, websites, workshops"), 3),
-      field("prices", t("Prices"), t("For example: logo from 900 euros"), 3),
-      field("tools", t("Tools you use"), t("For example: Figma, Gmail, Notion"), 1)));
-
-  const youView = () => screen(t("A bit about you"), t("Your AI uses this to write like you and to know your story."),
-    el("div", { class: "sp-fields two" },
-      field("story", t("Your story, in a few lines"), t("Where you're from, how you started, what you care about"), 3),
-      field("history", t("Work, education and press"), t("One per line: a job, a course, an article"), 3),
-      field("links", t("Links"), t("Your website, LinkedIn, Instagram"), 2),
-      field("voice", t("How you write"), t("Words you like, words you never use"), 2)));
 
   // Screen 1: the name the AI uses, and the language of the folders and rules
   const nameView = () => {
@@ -315,8 +129,8 @@ export function renderSetup(body, ctx) {
 
   // A question: cards with a drawing, a name and a line. Click or press its number to pick; many are fine
   const questionView = (q) => {
-    const n = q.options.length;   // rows that come out even: 4 as 2+2, 5 and 6 as 3s, 7 as 4+3
-    const grid = el("div", { class: `sp-grid c${n === 4 ? 2 : n <= 6 ? 3 : 4}` + (q.agent ? " agent" : ""), role: "group", "aria-label": q.q });
+    const n = q.options.length;   // rows that come out even: 2 and 4 in twos, 5 and 6 in threes, 7 as 4+3
+    const grid = el("div", { class: `sp-grid c${n <= 2 || n === 4 ? 2 : n <= 6 ? 3 : 4}` + (q.agent ? " agent" : ""), role: "group", "aria-label": q.q });
     q.options.forEach(([v, label, desc], k) => {
       const on = () => answers[q.key].includes(v);
       const card = el("button", { class: "sp-card" + (on() ? " on" : ""), type: "button", role: "checkbox", "aria-checked": String(on()),
@@ -347,20 +161,19 @@ export function renderSetup(body, ctx) {
     });
     return el("section", { class: "sp-screen" },
       el("h2", { class: "sp-q" }, q.q),
-      el("p", { class: "sp-hint" }, t("Pick as many as fit.")),
+      el("p", { class: "sp-hint" }, t("Pick one or both.")),
       grid);
   };
 
   // Making it: every folder rolls in while the app writes the rules and About pages
+  let ask = "";   // the message for the AI, made by the engine with this memory's name
   const buildView = () => {
     drawBar(total); foot.hidden = true;
     const list = el("ul", { class: "sp-build", "aria-live": "polite" });
     const status = el("h2", { class: "sp-q" }, t("Setting up your memory"));
     const nextBtn = el("button", { class: "btn primary", type: "button", disabled: true, onclick: () => connectView() }, t("Next"));
-    const clients = answers.people.includes("clients") || answers.work.some((w) => w === "freelance" || w === "business");
-    const choice = { clients, pages: pages(name.trim(), answers, Q, extra),
-      projects: extra.projects.filter((p) => p.name.trim()), people: extra.people.filter((p) => p.name.trim()),
-      todo: t("To add."), h_what: t("What it is"), h_status: t("Status and next step"), h_who: t("Who they are"), h_contacts: t("Contacts"), h_work: t("Work together") };
+    const work = answers.use.includes("work"), personal = answers.use.includes("personal");
+    const choice = { work, personal, pages: pages(name.trim(), work) };
     stage.replaceChildren(el("section", { class: "sp-screen in-up" }, status, list, el("div", { class: "sp-end" }, nextBtn)));
     (async () => {
       try {
@@ -372,7 +185,8 @@ export function renderSetup(body, ctx) {
         }
         const j = await built;
         if (j.error) throw new Error(j.error);
-        list.append(el("li", { class: "sp-row sp-done" }, icon("check", 14, 2.4), el("span", {}, t("Rules, today's note and 10 About pages"))));
+        ask = j.ask || "";
+        list.append(el("li", { class: "sp-row sp-done" }, icon("check", 14, 2.4), el("span", {}, t("Rules, today's note and your About notes"))));
         status.textContent = t("Your memory is ready: {0} folders and notes.", (j.made || []).length + plan.length);
         nextBtn.disabled = false; nextBtn.focus();
         ctx.files();
@@ -396,7 +210,7 @@ export function renderSetup(body, ctx) {
     ctx.api("aiapps").then((j) => { if ((j.apps || []).length) already.textContent = t("Already connected: {0}.", j.apps.map((a) => a.name).join(", ")); }).catch(() => {});
     stage.replaceChildren(el("section", { class: "sp-screen in-up" },
       el("h2", { class: "sp-q" }, t("Connect your AI")),
-      el("p", { class: "sp-hint" }, t("It asks about your projects and people by name, then fills the lines marked To add. Or skip and do it later.")),
+      el("p", { class: "sp-hint" }, t("It finishes the setup with you. Or skip and do it later.")),
       already,
       way("Claude Code", t("Adds it for you."), t("Add to Claude Code"), async () => {
         const r = await ctx.api("claudecodeadd", { key: await key("Claude Code", "claude-code") });
@@ -417,17 +231,16 @@ export function renderSetup(body, ctx) {
   };
 
   const finishView = () => {
-    const say = t("Do my Phygital Memory tasks.");
     const copy = el("button", { class: "btn primary", type: "button", onclick: async () => {
-      await navigator.clipboard.writeText(say).catch(() => {});
+      await navigator.clipboard.writeText(ask).catch(() => {});
       copy.textContent = t("Copied"); toastOk(t("Paste it in your AI chat."));
-    } }, t("Copy"));
+    } }, icon("file", 14), t("Copy"));
     stage.replaceChildren(el("section", { class: "sp-screen in-up" },
-      el("h2", { class: "sp-q" }, t("Last step: tell your AI")),
-      el("p", { class: "sp-hint" }, t("Paste this in your AI's chat. Its task already has your answers.")),
-      el("div", { class: "sp-say" }, el("span", {}, say), copy),
-      el("p", { class: "sp-hint" }, t("No AI yet? Your memory works already. The task waits on Home until you connect one.")),
-      el("div", { class: "sp-end" }, el("button", { class: "btn primary", type: "button", onclick: () => ctx.done() }, t("Open my memory")))));
+      el("h2", { class: "sp-q" }, t("Copy this to your AI")),
+      el("p", { class: "sp-hint" }, t("Your AI follows the Phygital Brain setup and fills in the rest.")),
+      el("div", { class: "sp-say" }, el("pre", { class: "sp-msg" }, ask), copy),
+      el("p", { class: "sp-hint" }, t("It also waits on Home as a task for your AI.")),
+      el("div", { class: "sp-end" }, el("button", { class: "btn", type: "button", onclick: () => ctx.done() }, t("Open my memory")))));
   };
 
   // Keys: 1-9 or Space pick a card, Enter goes on, Escape goes back

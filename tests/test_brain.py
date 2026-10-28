@@ -24,7 +24,7 @@ tmp = Path(tempfile.mkdtemp(prefix="pm-brain-"))
 try:
     check(len(brain.languages()) >= 41, f"{len(brain.languages())} brain languages ship with the app")
     pages = {k: {"desc": f"the {k} page", "tags": ["Setup Test"], "body": f"{k} from the answers\n\nTo add."} for k in brain.ABOUT}
-    picks = {"clients": True, "pages": pages}
+    picks = {"work": True, "pages": pages}
     for lang, about, clients in (("en", "About", "Relationships/Clients"), ("pt-BR", "Sobre", "Contatos/Clientes")):
         Memory.create(tmp / lang, "test password 1")
         m = Memory(tmp / lang)
@@ -51,24 +51,17 @@ try:
         check(heads[-1] == heads[0] + 1 and heads.count(heads[0]) == 3, f"{lang}: only Clients keeps its Leads section")
         check(re.search(r"^31\. ", m.read("CLAUDE.md"), re.M), f"{lang}: client rules kept when there are clients")
         m.lock()
-    Memory.create(tmp / "typed", "test password 1")
-    m = Memory(tmp / "typed")
-    m.unlock("test password 1")
-    brain.build(m, {"projects": [{"name": "new website", "what": "Studio site"}, {"name": "../bad/one", "what": ""}],
-                    "people": [{"name": "Ana Lima", "kind": "team", "what": "Producer"}, {"name": "Acme", "kind": "nope", "what": ""}]}, "en", "Ana", "")
-    files = {f["path"] for f in m.list_files()}
-    check("Projects/New-Website/README.md" in files and 'description: "Studio site"' in m.read("Projects/New-Website/README.md"), "typed project gets its README")
-    check(not [f for f in files if ".." in f] and "Projects/Badone/README.md" in files, "project names can't leave the Projects folder")
-    check("type: team" in m.read("Relationships/Team/Ana Lima.md") and "Relationships/Clients/Acme.md" in files, "typed people get a profile in the right folder")
-    m.lock()
     Memory.create(tmp / "solo", "test password 1")
     m = Memory(tmp / "solo")
     m.unlock("test password 1")
-    brain.build(m, {"clients": False}, "en", "Ana", "")
+    brain.build(m, {"personal": True}, "en", "Ana", "")
     rules = m.read("CLAUDE.md")
     check(not re.search(r"^3[12]\. ", rules, re.M) and "Number them 31, 32" in rules, "no clients: rules 31 and 32 left out, numbering follows")
-    check("Leads" not in m.read("Relationships/Team/CLAUDE.md") and "Leads" in m.read("Relationships/Clients/CLAUDE.md"), "only Clients has Leads")
-    check("To add" in brain.finish_ask({}, "English", "CLAUDE.md"), "the AI task only asks what's left")
+    files = {f["path"] for f in m.list_files()}
+    check("Relationships/Clients" not in files and "Relationships" in files and "Projects" in files, "personal: the simple skeleton, no people folders")
+    ask = brain.finish_ask({"personal": True}, "English", "Home", "Ana")
+    check(brain.GUIDE in ask and "phygital-memory tools" in ask and '"Home"' in ask and "personal life" in ask and "Ana" in ask,
+          "the message for the AI: the guide on GitHub, the memory's tools, its name, what it's for")
     m.lock()
 finally:
     shutil.rmtree(tmp)
