@@ -1,4 +1,4 @@
-import { t, agoText, useLanguage, currentLanguage } from "./shell/i18n.js";
+import { t, agoText, useLanguage, currentLanguage, LANGUAGES } from "./shell/i18n.js";
 import { renderSetup } from "./shell/setup.js";
 import { openAddFiles } from "./shell/addfiles.js";
 import { openShare, joinDialog } from "./shell/share.js";
@@ -13,7 +13,7 @@ import { askText, askPassword, confirmDialog, choiceDialog, showRecoveryKey, rec
 import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
-import { openSettings, closeSettings, onSettings, settings, languagePicker } from "./shell/settings.js";
+import { openSettings, closeSettings, onSettings, settings, setSettings, languagePicker } from "./shell/settings.js";
 import { aiAppsView, allowDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
@@ -92,6 +92,7 @@ async function refreshFolders() {
   joinedSeen = new Set(joined.map((f) => f.id));
   drawSwitcher();
   watchFolders();
+  sendMenu();
   return folderList;
 }
 
@@ -646,6 +647,7 @@ function drawUnlock() {
 }
 
 function showUnlock() {
+  setTimeout(sendMenu);   // the menu bar follows: most items wait until a memory is open
   const info = curInfo();
   if (info?.kind === "open" && !info.joined && info.exists && !creating && !unlockEl._plainFailed) {   // nothing to unlock: open it straight away
     unlockCurrent("").catch((e) => { unlockEl._plainFailed = true; showUnlock(); unlockEl._plainFailed = false; toastErr(e.message); });
@@ -670,6 +672,7 @@ function drawSwitcher() {
   sbTile.replaceChildren(knot(28));
   lockBtn?.classList.toggle("hidden", info?.kind === "open");
   if (info) try { localStorage.setItem(LAST_MEMORY, info.id); } catch {}   // the app starts with it next time
+  sendMenu();
   refreshBar();
   sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
 }
@@ -839,6 +842,7 @@ const isDot = (p) => p.split("/").some((s) => s.startsWith("."));
 function visibleFiles() { return (state.allFiles || []).filter((f) => getPref("showHidden", false) || !isDot(f.path)); }
 function toggleHidden() {
   setPref("showHidden", !getPref("showHidden", false));
+  setTimeout(sendMenu);
   state.files = visibleFiles();
   renderTree();
   toast(getPref("showHidden", false) ? "Showing hidden files" : t("Hidden files hidden"));
@@ -2918,6 +2922,100 @@ function openSearch() {
   });
   update();
 }
+
+// ---------- the Mac menu bar ----------
+// The page describes the menu in the app's language and as things stand (which memory, Open or Encrypted, locked or
+// not); the server hands it to the Mac app, which draws it and calls window.phygitalMenu(id) on a click. Items the
+// Mac does itself (cut, copy, paste, hide, quit) are "native". Shortcuts in the menu reach the same actions as the keys.
+let menuFns = {}, menuSent = "", touchOn = {};
+function menuSpec() {
+  const info = curInfo(), inApp = !appEl.classList.contains("hidden") && !!loadedFolder && hasPass(loadedFolder);
+  const plain = info?.kind === "open", enc = !!info && !plain && !info.joined, open = !!info && unlocked(info.id);
+  const s = settings(), lang = s.lang || "system";
+  menuFns = {};
+  const item = (id, label, fn, more = {}) => { menuFns[id] = fn; return { id, label, ...more }; };
+  const native = (n, label) => ({ native: n, label });
+  const sep = { sep: true };
+  const sub = (label, items) => ({ label, items });
+  const run = (fn) => () => { if (inApp) fn(); };
+  const restartIn = async (code) => {
+    setSettings({ lang: code });
+    if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
+    location.reload();
+  };
+  const encOpen = folderList.filter((f) => f.kind !== "open" && unlocked(f.id));
+  return [
+    { title: "Phygital Memory", items: [
+      item("settings", t("Settings"), run(openSettingsHere), { key: "CmdOrCtrl+,", enabled: inApp }),
+      ...(enc ? [item("touchid", t("Unlock with Touch ID"), () => menuTouchId(info), { check: !!touchOn[info.id], enabled: open })] : []),
+      item("desktopicon", t("Desktop icon"), () => setSettings({ desktopIcon: !s.desktopIcon }), { check: !!s.desktopIcon }),
+      sep, native("hide", t("Hide Phygital Memory")), native("hideothers", t("Hide others")), native("showall", t("Show all")),
+      sep, native("quit", t("Quit Phygital Memory"))] },
+    { title: t("File"), items: [
+      item("newnote", t("New note"), run(() => newNote()), { key: "CmdOrCtrl+N", enabled: inApp }),
+      item("newfolder", t("New folder"), run(() => newFolder()), { enabled: inApp }),
+      sep, item("closetab", t("Close tab"), run(() => state.active && closeTab(state.active)), { key: "CmdOrCtrl+W", enabled: inApp }),
+      item("save", t("Save"), run(() => state.active && saveNow(state.active)), { key: "CmdOrCtrl+S", enabled: inApp })] },
+    { title: t("Edit"), items: [native("undo", t("Undo")), native("redo", t("Redo")), sep,
+      native("cut", t("Cut")), native("copy", t("Copy")), native("paste", t("Paste")), native("selectall", t("Select all")), sep,
+      item("find", t("Search"), run(openSearch), { key: "CmdOrCtrl+K", enabled: inApp })] },
+    { title: t("View"), items: [
+      item("home", t("Home"), run(goHome), { key: "CmdOrCtrl+Shift+H", enabled: inApp }),
+      item("graph", t("Graph"), run(openGraph), { key: "CmdOrCtrl+G", enabled: inApp }),
+      item("searchpage", t("Search notes"), run(() => openSearchView()), { key: "CmdOrCtrl+Shift+F", enabled: inApp }),
+      sep,
+      sub(t("Language"), [item("lang:system", t("System"), () => restartIn("system"), { check: lang === "system" }), sep,
+        ...LANGUAGES.map(([c, n]) => item("lang:" + c, n, () => restartIn(c), { check: lang === c }))]),
+      sub(t("Theme"), [["system", t("System")], ["light", t("Light")], ["dark", t("Dark")]].map(([k, n]) =>
+        item("theme:" + k, n, () => setSettings({ theme: k }), { check: (s.theme || "system") === k }))),
+      sub(t("Text size"), [
+        item("size:up", t("Bigger"), () => setSettings({ size: Math.min(22, s.size + 1) }), { key: "CmdOrCtrl+=" }),
+        item("size:down", t("Smaller"), () => setSettings({ size: Math.max(13, s.size - 1) }), { key: "CmdOrCtrl+-" }),
+        item("size:normal", t("Normal"), () => setSettings({ size: 16 }), { key: "CmdOrCtrl+0" })]),
+      item("props", t("Show properties"), () => setSettings({ props: !s.props }), { check: !!s.props }),
+      item("hidden", t("Show hidden files"), run(toggleHidden), { check: !!getPref("showHidden", false), key: "CmdOrCtrl+Shift+.", enabled: inApp }),
+      sep, native("fullscreen", t("Enter full screen"))] },
+    { title: t("Memory"), items: [
+      sub(t("Switch to"), folderList.length ? folderList.map((f, i) => item("mem:" + f.id, f.name, () => switchTo(f.id),
+        { check: info?.id === f.id, ...(i < 9 ? { key: `CmdOrCtrl+${i + 1}` } : {}) })) : [item("none", t("No memory yet"), () => {}, { enabled: false })]),
+      sep, item("newmem", t("New memory"), createNewFolder),
+      sub(t("Add memory"), openMenuItems().map((m, i) => item("add:" + i, m.label, m.fn))),
+      item("manage", t("Manage memories"), openManage), sep,
+      item("storage", t("Storage and backup"), run(openStoragePanel), { enabled: inApp }),
+      item("share", t("Share"), run(() => openShareHere()), { enabled: inApp }),
+      item("finder", t("Show in Finder"), run(toggleFinder), { enabled: inApp && finder.available }),
+      ...(enc || encOpen.length ? [sep] : []),
+      ...(enc ? [item("lock", t("Lock memory"), () => lockFolder(), { enabled: open })] : []),
+      ...(encOpen.length ? [item("lockall", t("Lock all"), lockAll)] : [])] },
+    { title: t("AI"), items: [
+      item("aitasks", t("AI tasks and activity"), run(() => openAI(openTasks ? "tasks" : "activity")), { enabled: inApp }),
+      item("aiapps", t("AI apps"), run(() => openAI("apps")), { enabled: inApp }),
+      ...(enc ? [item("aihide", t("Hide from AI"), async () => { try { await api("aihide", { hidden: !info.aiHidden }); await refreshFolders(); } catch (e) { toastErr(e.message); } },
+        { check: !!info.aiHidden, enabled: open })] : [])] },
+    { title: t("Window"), items: [native("minimize", t("Minimize")), native("zoom", t("Zoom"))] },
+    { title: t("Help"), items: [item("licences", t("Licences"), async () => { try { showLicenses((await api("licenses")).text); } catch (e) { toastErr(e.message); } })] },
+  ];
+}
+async function menuTouchId(info) {
+  const on = !touchOn[info.id];
+  const password = on ? await askPassword(t("Your password, once, to unlock with Touch ID from now on"), t("Turn on")) : "";
+  if (on && !password) return;
+  try { touchOn[info.id] = (await api("touchid", { on, password, folder: info.id })).on; } catch (e) { toastErr(e.message); }
+  sendMenu();
+}
+async function sendMenu() {
+  const info = curInfo();
+  if (info && info.kind !== "open" && !info.joined && unlocked(info.id) && !(info.id in touchOn)) {
+    touchOn[info.id] = false;
+    try { const j = await api("touchidinfo", { folder: info.id }); touchOn[info.id] = !!(j.available && j.on); } catch {}
+  }
+  const spec = menuSpec(), text = JSON.stringify(spec);
+  if (text === menuSent) return;
+  menuSent = text;
+  api("menu", { spec }).catch(() => { menuSent = ""; });
+}
+window.phygitalMenu = (id) => { const fn = menuFns[id]; if (fn) fn(); };
+onSettings(() => sendMenu());
 
 // ---------- keyboard ----------
 window.addEventListener("keydown", (e) => {

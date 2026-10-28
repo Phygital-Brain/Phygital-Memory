@@ -30,6 +30,7 @@ function update(patch) {
   listeners.forEach((fn) => fn(cur));
 }
 applySettings();
+export const setSettings = (patch) => update(patch);   // the Mac menu bar changes them too
 
 // The app's language: on the lock screen and in Settings › General. Only the app's own words change, never note,
 // folder or file names. onPick runs after the language is loaded.
