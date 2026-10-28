@@ -1,6 +1,6 @@
 // Per-device settings (theme, editor font size, properties on/off, Desktop icon when unlocked). The editor always uses the full width. They live in localStorage, because they
 // belong to this computer, not to the notes.
-import { t, LANGUAGES, useLanguage } from "./i18n.js";
+import { t, keys, LANGUAGES, useLanguage } from "./i18n.js";
 import { el, icon, tabbed } from "./dom.js";
 import { info } from "./panels.js";
 import { toast } from "./toast.js";
@@ -102,7 +102,7 @@ export function openSettings(folderOpts, me) {
       row(t("Stored in"), f.where, btn(t("Change"), f.storage), f.plain ? t("Where the folder lives, and the GitHub backup.") : t("Where the encrypted files live, and the GitHub backup.")));
     if (f.revealVault) memory.push(row(t("Encrypted files"), t("What's stored on disk."), btn(t("Show"), f.revealVault),
       t("These are the real files. Only you can read them, with your password.")));
-    if (f.showHidden) memory.push(row(t("Show hidden files"), "⇧⌘.", toggle(t("Show hidden files"), f.showHidden.on, f.showHidden.set),
+    if (f.showHidden) memory.push(row(t("Show hidden files"), keys("⇧⌘."), toggle(t("Show hidden files"), f.showHidden.on, f.showHidden.set),
       t("Files and folders whose names start with a dot, like .env. They show in Hidden Notes at the bottom of the list.")));
     if (f.touchId) memory.push(row(t("Unlock with Touch ID"), t("Your finger instead of your password."), toggle(t("Unlock with Touch ID"), f.touchId.on, f.touchId.set),
       t("Your password is kept in the Mac's Keychain. Only this app can read it, after your fingerprint.")));

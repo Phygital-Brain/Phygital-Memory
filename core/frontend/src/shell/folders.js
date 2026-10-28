@@ -1,6 +1,6 @@
 // The folder switcher menu. Names and paths from the server are only ever
 // put in as text.
-import { t } from "./i18n.js";
+import { t, keys } from "./i18n.js";
 import { el, icon } from "./dom.js";
 import { modal } from "./dialogs.js";
 import { closeMenu } from "./menu.js";
@@ -46,7 +46,7 @@ export function switcherItems(ctx) {
       el("span", { class: "fo-text" },
         el("span", { class: "fo-name" }, f.name),
         el("span", { class: "fo-sub" + (f.finder ? " warn" : "") }, sub)),
-      i < 9 ? el("span", { class: "fo-key" }, `⌘${i + 1}`) : null),
+      i < 9 ? el("span", { class: "fo-key" }, keys(`⌘${i + 1}`)) : null),
     };
   });
   const cur = ctx.list.find((f) => f.id === ctx.currentId);
@@ -69,7 +69,7 @@ export function switcherItems(ctx) {
       ...(ctx.share ? [actionRow("share", "Share", ctx.share)] : []),
       ...(ctx.ai ? [actionRow("pulse", t("AI tasks and activity"), ctx.ai)] : []),
       ...(ctx.finder ? [actionRow("folder", ctx.finder.shown && cur.kind !== "open" ? "Close the Finder view" : t("Show in Finder"), ctx.finder.toggle)] : []),
-      ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),
+      ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: keys("⌘,") })] : []),
       ...(ctx.lockThis ? [actionRow("lock", t("Lock memory"), ctx.lockThis, anyOpen ? { label: t("Lock all"), fn: ctx.lockAll } : null)] : []));
   }
   return items;

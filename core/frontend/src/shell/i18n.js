@@ -2,15 +2,22 @@
 // uses {0}, {1}: t("Moved {0} items", n). A language without a text yet shows the English, so nothing is ever blank.
 // Only text the app writes goes through here; note, folder and file names never do (they stay as the person wrote them).
 // Languages live in core/languages/{code}.json (scripts/i18n.py extracts, checks and translates them).
+import { PC } from "./pc-words.js";
+
 let words = {};
 let lang = "en";
+const MAC = /Mac/.test(navigator.platform || navigator.userAgent);   // off the Mac, texts that name it use PC's wording
 
 // The same English word can mean two things ("Open" the button, "Open" the kind of memory): t("Open@@kind") tells
 // them apart for translators, and English shows the word before "@@".
 export const t = (text, ...parts) => {
-  const s = (lang !== "en" && words[text]) || text.split("@@")[0];
+  if (!MAC && PC[text]) text = PC[text];
+  const s = keys((lang !== "en" && words[text]) || text.split("@@")[0]);
   return parts.length ? s.replace(/\{(\d+)\}/g, (m, i) => (parts[i] !== undefined ? String(parts[i]) : m)) : s;
 };
+
+// Shortcuts are written the Mac's way (⇧⌘F); Windows and Linux show Ctrl+Shift+F.
+export const keys = (s) => MAC ? s : s.replace(/(⇧?)(⌥?)⌘(\S)/g, (_, sh, alt, k) => `Ctrl+${sh ? "Shift+" : ""}${alt ? "Alt+" : ""}${k}`);
 
 // "5 min ago" and the like, in the person's language. sec: how long ago; null: never.
 export const agoText = (sec) => sec == null ? t("not yet") : sec < 60 ? t("just now")

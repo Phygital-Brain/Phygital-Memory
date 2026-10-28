@@ -1549,6 +1549,11 @@ async def api(request: Request) -> Response:
             return _ok({"v": MENU["v"]})
         if action == "update":   # a newer version installing, for the update screen
             return _ok(dict(UPDATE))
+        # ---- setting up a new memory: asked before there is any memory (a fresh install) ----
+        if action == "brainlanguages":   # the languages a memory can be set up in (folder names and rules), and the account's name
+            return _ok({"languages": brain.languages(), "name": system.first_name()})
+        if action == "brainplan":   # the folders the brain will have, to show while it builds
+            return _ok({"folders": brain.plan(body.get("picks") or {}, str(body.get("lang") or "en"))})
         # ---- the folder list: the switcher shows it before anything is unlocked (names and places only) ----
         if action == "folders":
             return _ok({"folders": folders.list()})
@@ -2277,11 +2282,6 @@ async def api(request: Request) -> Response:
             if not r:
                 return _ok({"error": "That result is gone. Search again."}, 404)
             return _ok({"path": r["path"], "heading": r["heading"], "text": r["text"]})
-        if action == "brainlanguages":   # the languages a memory can be set up in (folder names and rules), and the Mac's name
-            mac = system.first_name()   # the computer account's first name
-            return _ok({"languages": brain.languages(), "name": mac})
-        if action == "brainplan":   # the folders the brain will have, to show while it builds
-            return _ok({"folders": brain.plan(body.get("picks") or {}, str(body.get("lang") or "en"))})
         if action == "brainbuild":   # set this memory up from the person's clicks: folders, rules, About pages
             picks, lang = body.get("picks") or {}, str(body.get("lang") or "en")
             if lang not in {c for c, _ in brain.languages()}:

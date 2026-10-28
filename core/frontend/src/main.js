@@ -1207,6 +1207,10 @@ function copyPathMenu(path, anchor) {
 
 // Show one note (or file) selected in Finder. Opens the folder in Finder first if needed (with the usual warning).
 async function revealInFinder(path) {
+  if (curInfo()?.kind !== "open" && !finder.available) {   // an Encrypted memory's file view needs the Mac's own WebDAV mount
+    toastErr(t("Showing the folder in Finder works on a Mac only."));
+    return;
+  }
   if (!finder.shown) {
     await toggleFinder();
     if (!finder.shown) return;
