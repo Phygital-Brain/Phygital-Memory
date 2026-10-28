@@ -32,6 +32,11 @@ RCLONE = "1.75.2"
 
 OVERVIEW = """PHYGITAL MEMORY: OPEN-SOURCE PARTS
 
+Phygital Memory itself is free software under the GNU Affero General Public License,
+version 3 only (AGPL-3.0-only). Copyright 2026 Phygital-Brain and Phygital Memory
+contributors. Source code: https://github.com/Phygital-Brain/Phygital-Memory
+The full licence is the last file in this list.
+
 These open-source parts are inside Phygital Memory. Each part keeps its own licence.
 
 Inside the app
@@ -140,6 +145,7 @@ def main() -> None:
     subprocess.run([sys.executable, str(CORE / "packaging" / "compact_licences.py"), str(LIC), "3-libraries-and-fonts.txt",
                     "4-engine-python.txt", "5-app-window.txt", "3-open-source-parts.txt"], check=True, capture_output=True)
     (LIC / "0-overview.txt").write_text(OVERVIEW)
+    (LIC / "9-phygital-memory-agpl.txt").write_text((TOP / "NOTICE").read_text() + "\n\n" + (TOP / "LICENSE").read_text())
     print(json.dumps({"server": str(SERVER), "syncthing": st_ver, "rclone": rc_ver}))
 
 

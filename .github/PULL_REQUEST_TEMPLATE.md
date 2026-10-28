@@ -13,7 +13,7 @@
 - [ ] Plain words, no em dashes, no three dots in text people read
 - [ ] No real notes, keys, names or private details anywhere in the change
 - [ ] `CHANGELOG.md` has a line
-- [ ] No `LICENSE`, `NOTICE` or license field was added
+- [ ] `LICENSE` and `NOTICE` are unchanged, and I agree to "Other licenses, and contributions" in `NOTICE`
 - [ ] No safety rule in `AGENTS.md` is weakened
 
 ## Effect on privacy and safety

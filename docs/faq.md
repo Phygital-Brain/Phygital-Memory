@@ -14,7 +14,7 @@ A Mac app that keeps your notes as a memory your AI can use. It has an editor, s
 <details>
 <summary><b>Is it free?</b></summary>
 
-Yes. It is distributed free. Running it on your Mac costs nothing. Your AI app may need its own plan, and a cloud or S3 bucket you choose for backups may cost money. The license is not chosen yet, so the repository is private for now.
+Yes. It is distributed free. Running it on your Mac costs nothing. Your AI app may need its own plan, and a cloud or S3 bucket you choose for backups may cost money. It is open source under the AGPL-3.0 license.
 
 </details>
 

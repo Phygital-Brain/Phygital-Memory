@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for wanting to help. Phygital Memory is a Mac app (Windows and Linux are coming) that keeps your notes as a memory your AI can use. License: not chosen yet. Bug reports, fixes, translations and clearer docs are all welcome. Small, focused changes are the easiest to review.
+Thanks for wanting to help. Phygital Memory is a Mac app (Windows and Linux are coming) that keeps your notes as a memory your AI can use. License: AGPL-3.0-only. Bug reports, fixes, translations and clearer docs are all welcome. Small, focused changes are the easiest to review.
 
 ## Reporting a problem
 
@@ -73,4 +73,4 @@ The screens are in 41 languages. English is the source. Add or fix a language by
 
 ## Credit and license
 
-License: not chosen yet. Because there is no license yet, please open an issue before you send a big change, and the maintainer will tell you how contributions will be licensed once the license is chosen. Add yourself to [CONTRIBUTORS.md](CONTRIBUTORS.md) if you like. Do not add a `LICENSE`, `NOTICE` or license field in a pull request.
+AGPL-3.0-only. Before you send a contribution, read "Other licenses, and contributions" in [NOTICE](NOTICE): sending one means you agree to it. Please open an issue before a big change. Add yourself to [CONTRIBUTORS.md](CONTRIBUTORS.md) if you like.

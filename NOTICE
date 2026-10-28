@@ -1,0 +1,79 @@
+Phygital Memory
+Copyright (C) 2026 Phygital-Brain and Phygital Memory contributors
+Original project: https://github.com/Phygital-Brain/Phygital-Memory
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3 of the License (AGPL-3.0-only).
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details. You should have received a copy of it in the file LICENSE; if not,
+see <https://www.gnu.org/licenses/>.
+
+
+In plain words
+--------------
+
+You may use, study, change and share this project, also for money. In return:
+
+  - Keep this NOTICE file, the LICENSE file and the copyright lines.
+  - If you share a changed version, or run a changed version that other people
+    use over a network (for example as a hosted service), you must offer them
+    its full source code under the same license.
+  - Mark your version as changed.
+
+This summary helps you read the license; it doesn't replace it.
+
+
+Other licenses, and contributions
+---------------------------------
+
+A commercial license is also available. If you want to use Phygital Memory, or
+build on it, without the AGPL's terms (for example in a closed-source product
+or service), ask for one: open an issue at
+https://github.com/Phygital-Brain/Phygital-Memory or write to the maintainer.
+
+Contributions: by sending a contribution (code, translations, docs or anything
+else) to this project, you agree that it is licensed under the AGPL-3.0, and
+you give the copyright holder (Phygital-Brain) a permanent, worldwide,
+royalty-free right to also license your contribution under other terms,
+including commercial licenses. You keep the copyright of your contribution.
+You confirm the contribution is yours to give.
+
+
+Affiliation
+-----------
+
+Encrypted memories use the Cryptomator vault format (version 8), so Cryptomator
+can open them too. Not made by or affiliated with Cryptomator or Skymatic.
+"Cryptomator" is a name and trademark of its owners, used here only to say
+which format this program reads and writes.
+
+
+Credit
+------
+
+To cite the project, use GitHub's "Cite this repository" button, which reads
+CITATION.cff. The vault code in core/phygital_memory/vault/ and the Finder view
+come from Encryptor MCP, by the same author, under the same license.
+
+Design and feature ideas from Baalda (https://github.com/naveedharri/baalda,
+Apache-2.0). No Baalda code is included.
+
+
+Third-party software
+--------------------
+
+No third-party source files are included in this repository. The built app
+bundles these programs unchanged, each with its own license (shown in the app
+under Settings › Licences):
+
+  - Syncthing (MPL-2.0), sharing between computers
+  - rclone (MIT), cloud storage
+
+The program also uses these packages, installed separately under their own
+licenses: the Python libraries listed in core/uv.lock, the JavaScript libraries
+in core/frontend/package-lock.json, and the Rust crates in
+app/src-tauri/Cargo.lock.

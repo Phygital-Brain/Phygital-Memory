@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Phygital Memory",
   "version": "0.1.0",
-  "identifier": "io.phygital.memory.test",
+  "identifier": "io.phygital.memory",
   "build": {
     "frontendDist": "../src"
   },

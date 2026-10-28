@@ -13,7 +13,7 @@ Phygital Memory is a Mac app that keeps a person's notes as a memory their AI ca
 
 It runs as one app window (Tauri, Rust) that starts one local program (Python) listening on `127.0.0.1:8790`. That program serves the app's screens, the app's own `/api`, and the MCP door at `/mcp`.
 
-Mac only today. Windows and Linux are being ported from the same code. Releases will come from GitHub Releases, with auto-update. The repository is private and the license is not chosen yet: do not add a `LICENSE`, a `NOTICE` or a license field anywhere until the maintainer says so.
+Mac only today. Windows and Linux are being ported from the same code. Releases will come from GitHub Releases, with auto-update. The repository is private for now. License: AGPL-3.0-only (see `LICENSE` and `NOTICE`); every new source file may carry `SPDX-License-Identifier: AGPL-3.0-only`.
 
 Works with Cryptomator vaults (it speaks their file format 8 and contains no Cryptomator code). Not made by or affiliated with Cryptomator. It also uses Syncthing and rclone as helper programs.
 
@@ -81,7 +81,7 @@ A change that weakens one needs a very good reason and a test.
 10. **Never change the Touch ID and Keychain helper (`core/packaging/touchid`) without a very good reason.** A changed helper makes macOS ask every user for Keychain access again. Tests and tools must also never change `HOME`: macOS then offers a keychain reset.
 11. **Never write three dots or the ellipsis character in text people read.** This covers the app's words and the docs. Never use em dashes.
 12. **Plain words in everything people read.** Short sentences, everyday words, "you".
-13. **Do not add a license.** No `LICENSE`, `NOTICE` or license field until the maintainer chooses one. Say "License: not chosen yet."
+13. **Keep the license as it is.** AGPL-3.0-only. Never change `LICENSE`; keep `NOTICE` and the copyright lines.
 
 ## How things work
 

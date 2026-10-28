@@ -23,7 +23,7 @@ Say what you think in the issue or pull request, with a concrete example. If the
 
 ## License
 
-License: not chosen yet. The maintainer decides it. See [CONTRIBUTING.md](CONTRIBUTING.md#credit-and-license).
+License: AGPL-3.0-only. The maintainer decides any change to it. See [CONTRIBUTING.md](CONTRIBUTING.md#credit-and-license).
 
 ## Conduct
 

@@ -4,7 +4,8 @@ title: "Phygital Memory"
 type: software
 abstract: "A Mac app that keeps your notes as a memory your AI can use. Open memories are plain folders any AI can read. Encrypted memories are Cryptomator format 8 vaults that AI apps reach only through the app's local MCP door."
 authors:
-  - name: "Phygital Brain"
+  - name: "Phygital-Brain"
+license: AGPL-3.0-only
 repository-code: "https://github.com/Phygital-Brain/Phygital-Memory"
 version: 0.1.0
 keywords: [mcp, notes, encryption, ai, macos, local-first]

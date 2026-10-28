@@ -10,4 +10,4 @@
 - Sharing from Mac to Mac with no account and no cloud: a whole memory, one folder or one file, with Can edit or Can view. Link your own second Mac the same way.
 - Make it a Phygital Brain: one setup page builds the folders, rules and first notes, connects an AI app, and leaves one AI task to finish the rest.
 - The screens come in 41 languages. The translations were made with AI and checked by a script. Native speakers have not read them yet.
-- Mac only for now. Windows and Linux versions are being ported from the same code. The repository is private and has no license yet.
+- Mac only for now. Windows and Linux versions are being ported from the same code. The repository is private for now. License: AGPL-3.0-only.

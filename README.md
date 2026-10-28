@@ -71,4 +71,4 @@ macOS has the language. Native speakers haven't reviewed them yet.
 
 ## License
 
-Not chosen yet. Until there is a `LICENSE` file, all rights are reserved.
+AGPL-3.0-only. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Copyright 2026 Phygital-Brain and Phygital Memory contributors.
