@@ -43,8 +43,8 @@ class CloudError(Exception):
 
 def rclone() -> str:
     """rclone sits next to the server inside the app; in the test setup it's the one on this Mac."""
-    from .system import exe
-    for p in (os.environ.get("PHYGITAL_MEMORY_RCLONE"), str(Path(sys.executable).parent / exe("rclone")), shutil.which("rclone")):
+    from .system import beside, exe
+    for p in (os.environ.get("PHYGITAL_MEMORY_RCLONE"), str(beside(exe("rclone"))), shutil.which("rclone")):
         if p and Path(p).is_file():
             return p
     raise CloudError("The cloud helper (rclone) is missing from this copy of the app.")

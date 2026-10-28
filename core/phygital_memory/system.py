@@ -8,6 +8,7 @@ system it runs on. On a Mac everything works as it always has.
 - first_name(): the account's first name, to greet the person.
 - trash_dir(): where a whole memory moved off this computer goes, so it can come back.
 - exe(): a program's file name (".exe" on Windows).
+- beside(): a file the built app keeps next to the engine (rclone, Syncthing, the licences).
 """
 from __future__ import annotations
 
@@ -35,6 +36,13 @@ def state_dir() -> Path:
 
 def exe(name: str) -> str:
     return name + ".exe" if WINDOWS else name
+
+
+def beside(name: str) -> Path:
+    """A file next to the built engine. The Mac app carries a second engine for Intel Macs one folder down
+    (server/intel); it shares the folder above's tools and licences."""
+    here = Path(sys.executable).parent
+    return here / name if (here / name).exists() or here.name != "intel" else here.parent / name
 
 
 def trash_dir() -> Path:

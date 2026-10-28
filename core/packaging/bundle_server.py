@@ -3,6 +3,8 @@
 Run from the top folder after packaging/build.py:
     python3 core/packaging/bundle_server.py            Syncthing and rclone from this computer (Homebrew on a Mac)
     python3 core/packaging/bundle_server.py --fetch    downloaded from their own releases, for this system (CI)
+    ... --intel DIR    (Mac) also the engine built for Intel Macs, from DIR, into server/intel; with --fetch,
+                       Syncthing and rclone then run on both kinds of Mac
 
 Syncthing (MPL-2.0) and rclone (MIT) go in unchanged, with their licences. The licences of everything else (the
 editor's libraries and the fonts, Python and its libraries, Tauri and its Rust crates) are written next to them and
@@ -84,6 +86,17 @@ def _unpack(data: bytes, url: str, want: str) -> tuple[bytes, dict[str, bytes]]:
     return prog, lic
 
 
+def _universal(a: bytes, b: bytes) -> bytes:
+    """Two Mac builds of one program (Apple chip and Intel) joined into one file that runs on both."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        pa, pb, out = Path(d, "a"), Path(d, "b"), Path(d, "out")
+        pa.write_bytes(a)
+        pb.write_bytes(b)
+        subprocess.run(["lipo", "-create", str(pa), str(pb), "-output", str(out)], check=True)
+        return out.read_bytes()
+
+
 def fetch_tools() -> dict[str, tuple[str, bytes, str]]:
     """Syncthing and rclone for this system, from their own GitHub and download pages."""
     osname = {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
@@ -97,6 +110,9 @@ def fetch_tools() -> dict[str, tuple[str, bytes, str]]:
     out = {}
     for name, url, ver in (("syncthing", st_url, SYNCTHING), ("rclone", rc_url, RCLONE)):
         prog, lic = _unpack(_get(url), url, name + EXE)
+        if name == "rclone" and osname == "macos" and "--intel" in sys.argv:   # one file for Apple and Intel Macs
+            other = url.replace(f"-{arch}.zip", "-amd64.zip" if arch == "arm64" else "-arm64.zip")
+            prog = _universal(prog, _unpack(_get(other), other, name)[0])
         text = b"\n".join(lic.values()).decode("utf-8", "replace")
         if not text and name == "rclone":   # rclone's zip has no licence file: take it from its source, same version
             text = _get(f"https://raw.githubusercontent.com/rclone/rclone/v{RCLONE}/COPYING").decode()
@@ -124,6 +140,8 @@ def main() -> None:
         sys.exit("Build the engine first: cd core && uv run python packaging/build.py")
     shutil.rmtree(SERVER, ignore_errors=True)
     shutil.copytree(dist, SERVER)
+    if "--intel" in sys.argv:   # the Intel Mac engine; it uses the tools and licences one folder up (system.beside)
+        shutil.copytree(Path(sys.argv[sys.argv.index("--intel") + 1]).resolve(), SERVER / "intel")
     tools = fetch_tools() if "--fetch" in sys.argv else local_tools()
     for name, (ver, prog, lic) in tools.items():
         p = SERVER / (name + EXE)

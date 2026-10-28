@@ -25,7 +25,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest, ubuntu-22.04]
+        include:
+          - os: macos-14
+            args: --target universal-apple-darwin   # one Mac download for Apple and Intel chips
+          - os: windows-latest
+          - os: ubuntu-22.04
     env:
       PYTHONUTF8: "1"   # Windows' Python otherwise writes the licence files in its old code page
     steps:
@@ -39,6 +43,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: app/src-tauri
@@ -52,9 +57,22 @@ jobs:
       - name: The engine
         working-directory: core
         run: uv sync --frozen && uv run python packaging/build.py
+      - name: The engine for Intel Macs (built on this Apple-chip Mac, through Rosetta)
+        if: runner.os == 'macOS'
+        working-directory: core
+        run: |
+          softwareupdate --install-rosetta --agree-to-license > /dev/null 2>&1 || true
+          # cryptography stopped making Intel Mac builds at version 49: the Intel engine keeps 48.0.1, the last one
+          uv export --frozen --no-hashes --format requirements-txt | sed 's/^cryptography==.*/cryptography==48.0.1/' > "$RUNNER_TEMP/intel.txt"
+          uv venv .venv-intel --python cpython-3.14-macos-x86_64-none
+          VIRTUAL_ENV=.venv-intel uv pip install --only-binary cryptography -r "$RUNNER_TEMP/intel.txt" pyinstaller
+          # the build tools it calls run as Apple-chip programs (newer developer tools have no Intel part)
+          mkdir -p "$RUNNER_TEMP/shim"
+          for t in lipo codesign otool install_name_tool; do printf '#!/bin/sh\nexec arch -arm64 /usr/bin/%s "$@"\n' $t > "$RUNNER_TEMP/shim/$t"; chmod +x "$RUNNER_TEMP/shim/$t"; done
+          PATH="$RUNNER_TEMP/shim:$PATH" .venv-intel/bin/python packaging/build.py --dist packaging/dist-intel
       - name: Engine, Syncthing, rclone and licences into the app
         working-directory: core
-        run: uv run python packaging/bundle_server.py --fetch
+        run: uv run python packaging/bundle_server.py --fetch ${{ runner.os == 'macOS' && '--intel packaging/dist-intel/phygital-memory-server' || '' }}
 
       - name: Touch ID helper (Mac, with the fixed certificate)
         if: runner.os == 'macOS'
@@ -76,6 +94,11 @@ jobs:
           swiftc -O -o "$T/bin/Phygital Memory" "$T/main.swift"
           codesign -f -s "$ID" --keychain "$KC" -i "Phygital Memory" "$T/bin/Phygital Memory"
           mkdir -p app/src-tauri/server/touchid && cp -p "$T/bin/Phygital Memory" app/src-tauri/server/touchid/
+          # the same helper for the Intel engine (the Apple-chip one above stays exactly as it was)
+          mkdir -p "$RUNNER_TEMP/intel" app/src-tauri/server/intel/touchid
+          swiftc -O -target x86_64-apple-macos13 -o "$RUNNER_TEMP/intel/Phygital Memory" "$T/main.swift"
+          codesign -f -s "$ID" --keychain "$KC" -i "Phygital Memory" "$RUNNER_TEMP/intel/Phygital Memory"
+          cp -p "$RUNNER_TEMP/intel/Phygital Memory" app/src-tauri/server/intel/touchid/
 
       - name: Build the app and upload it to the draft release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
@@ -92,3 +115,4 @@ jobs:
           releaseDraft: true
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

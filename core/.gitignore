@@ -1,9 +1,12 @@
 __pycache__/
 .venv/
+.venv-*/
 .test-password
 *.sqlite*
 packaging/build/
 packaging/dist/
+packaging/dist-*/
+packaging/build-*/
 frontend/node_modules/
 phygital_memory/web/
 .state-dev/

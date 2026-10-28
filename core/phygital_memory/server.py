@@ -1679,7 +1679,7 @@ async def api(request: Request) -> Response:
             async with _link_wait:
                 return await _link_wait_step(body)
         if action == "licenses":   # the open-source licences of what the app includes (Resources/server/licenses)
-            d = Path(sys.executable).parent / "licenses"
+            d = system.beside("licenses")
             files = sorted(d.glob("*.txt")) if getattr(sys, "frozen", False) and d.is_dir() else []
             if not files:
                 return _ok({"error": "The licences come with the installed app."}, 404)

@@ -1,6 +1,6 @@
 """Build the engine into one program folder (packaging/dist/phygital-memory-server), on Mac, Windows or Linux.
 
-Run from core/: uv run python packaging/build.py
+Run from core/: uv run python packaging/build.py [--dist FOLDER]   (default packaging/dist)
 
 A folder, not one file: one file unpacks itself on every start, which doubled the start time.
 """
@@ -18,8 +18,9 @@ DATA = ["app.html", "closeask.html", "web", "engram_config.json", "claude_ext", 
 
 def main() -> None:
     os.chdir(CORE)
+    dist = sys.argv[sys.argv.index("--dist") + 1] if "--dist" in sys.argv else "packaging/dist"
     args = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--noupx",
-            "--name", "phygital-memory-server", "--distpath", "packaging/dist", "--workpath", "packaging/build",
+            "--name", "phygital-memory-server", "--distpath", dist, "--workpath", "packaging/build" + dist.removeprefix("packaging/dist"),
             "--specpath", "packaging", "--paths", ".",
             "--collect-submodules", P, "--collect-all", "wsgidav", "--collect-submodules", "cheroot"]
     for item in DATA:

@@ -36,8 +36,11 @@ fn random_token() -> String {
 fn start_server(app: &tauri::AppHandle) -> Result<(), String> {
     let token = app.state::<ShellToken>().0.clone();
     // The server is a folder in Resources (starts about twice as fast as one packed file, which unpacks itself
-    // on every start). rclone, the cloud helper, sits in the same folder.
-    let name = if cfg!(windows) { "server/phygital-memory-server.exe" } else { "server/phygital-memory-server" };
+    // on every start). rclone, the cloud helper, sits in the same folder. The Mac app is one download for both
+    // kinds of Mac: an Intel Mac runs the engine built for it, in server/intel.
+    let name = if cfg!(windows) { "server/phygital-memory-server.exe" }
+        else if cfg!(all(target_os = "macos", target_arch = "x86_64")) { "server/intel/phygital-memory-server" }
+        else { "server/phygital-memory-server" };
     let exe = app.path().resource_dir().map_err(|e| e.to_string())?.join(name);
     let cmd = app.shell().command(exe)
         .env("PHYGITAL_MEMORY_FOLDER", folder()).env("PHYGITAL_MEMORY_PORT", "8790")

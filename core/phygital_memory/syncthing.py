@@ -39,8 +39,8 @@ class SyncthingError(Exception):
 
 def binary() -> str:
     """Next to the server inside the app; in the test setup the one on this Mac."""
-    from .system import exe
-    for p in (str(Path(sys.executable).parent / exe("syncthing")) if getattr(sys, "frozen", False) else None,
+    from .system import beside, exe
+    for p in (str(beside(exe("syncthing"))) if getattr(sys, "frozen", False) else None,
               shutil.which("syncthing"), "/opt/homebrew/bin/syncthing"):
         if p and Path(p).is_file():
             return p
