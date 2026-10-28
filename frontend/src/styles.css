@@ -990,3 +990,13 @@ body { font-family: var(--font-body); font-size: 14px; }
 .sp-where-row { display: flex; align-items: center; gap: 10px; }
 .sp-where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--font-mono); color: var(--text-2); }
 .sp-field .sp-sub { margin: 0; }
+/* Open memories in purple: the lock screen list, Home's status, the storage panel */
+.ul-mem.k-open > svg, .ul-mem.k-open .ul-state { color: var(--kind-purple); }
+.ul-mem.k-open.on { background: color-mix(in srgb, var(--kind-purple) 16%, transparent); box-shadow: inset 0 0 0 1px var(--kind-purple); }
+.hs-open { color: var(--kind-purple); }
+.st-e2e.st-plain { background: color-mix(in srgb, var(--kind-purple) 14%, transparent); }
+.st-e2e.st-plain svg { color: var(--kind-purple); }
+.unlock-card.k-open .btn.primary { background: var(--kind-purple); color: var(--kind-lime); }
+.sp-places { margin-top: 2px; }
+.sp-places .sp-lang svg { color: var(--text-3); }
+.sp-places .sp-lang.on svg { color: var(--accent); }

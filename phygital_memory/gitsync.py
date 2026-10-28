@@ -1,4 +1,4 @@
-"""Keep a locked folder in a private GitHub repo.
+"""Keep a memory in a private GitHub repo: an Encrypted one's scrambled files, or an Open one's readable files.
 
 The folder stays where it is on this Mac and the app works on it as always (instant reads and edits). This keeps a
 git repo in it in step with GitHub: a few seconds after a change it commits and pushes, and every so often it pulls
@@ -33,7 +33,7 @@ IGNORE = ".DS_Store\n._*\n.encryptor-*\n*.tmp\n"
 # Every file is scrambled: git must never merge inside one (a small one can look like text to it and get spliced).
 ATTRIBUTES = "* binary\n"
 LOST = "phygital-lost-folders.json"   # in .git: folder IDs that lost a clash, for the app to fold back in
-README_MARK = "<!-- phygital-memory-readme 7 -->"   # the app updates its own README when this goes up
+README_MARK = "<!-- phygital-memory-readme 8 -->"   # the app updates its own README when this goes up
 README = README_MARK + """
 <p><img src="phygital-memory-mark.svg" width="56" alt="Phygital Memory"></p>
 
@@ -58,7 +58,7 @@ before it comes here. Only the memory's password or its recovery key can open it
 **On a new Mac, or after losing this one**
 
 1. Install Phygital Memory.
-2. Click the memory name at the top of the sidebar, then **Open memory › From GitHub**.
+2. Click the memory name at the top of the sidebar, then **Add memory › From GitHub**.
 3. Sign in to GitHub if the app asks, type `{repo}` and choose where to keep it.
 4. Unlock it with the password. If you forget it, use the recovery key on the lock screen.
 
@@ -97,6 +97,41 @@ folders nest and when things change.
 > If both the password and the recovery key are lost, nobody can open these notes. There is no reset. Keep both in
 > a safe place, like a password manager.
 """
+# An Open memory's repo holds the notes as they are: readable on GitHub, and by AI apps that can reach GitHub.
+README_PLAIN = README_MARK + """
+<p><img src="phygital-memory-mark.svg" width="56" alt="Phygital Memory"></p>
+
+# {name}
+
+This private repo is the GitHub backup of **{name}**, an Open memory in Phygital Memory. The notes here are plain
+files, the same as on the Mac: you can read them on GitHub, and so can AI apps you connect to GitHub.
+
+> [!IMPORTANT]
+> Keep this repo private. The app checks before every upload and stops the backup if the repo becomes public.
+
+## How it's saved
+
+- A few seconds after you change a note, the app uploads the change here.
+- Every 30 seconds it checks for changes from your other devices and brings them down.
+- Each upload is a new commit, so GitHub keeps every past state of every note.
+- Files over 95 MB stay on your Mac, because GitHub doesn't take files that big. The app lists them.
+
+## Use the backup
+
+On a new Mac: install Phygital Memory, click the memory name at the top of the sidebar, then **Add memory › From
+GitHub**, and type `{repo}`.
+
+To check or stop the backup, open **Storage and backup › Backup** in the app. **Stop backup** keeps your notes on
+your Mac and sends nothing more here. The app never deletes this repo.
+
+## If something goes wrong
+
+- **The same note changed in two places:** both versions are kept. The second shows next to the note as
+  "name (1)".
+- **You want this repo gone:** first make sure your Mac still has the memory. Then on GitHub, open Settings and
+  press Delete this repository.
+"""
+IGNORE_PLAIN = IGNORE + ".versions/\n.trash/\n.phygital/\n"   # git keeps the history; the app's own folders stay home
 # The Knot (brand/phygital-memory-mark.svg), shown at the top of the README.
 LOGO = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><circle cx="32" cy="32" r="30" '
         'fill="#C8F031"/><path d="M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 '
@@ -216,11 +251,13 @@ def rename_repo(repo: str, new_name: str) -> str:
 
 
 class GitSync:
-    def __init__(self, folder: Path, repo: str, branch: str = "main", watch=None, git_dir: Path | None = None):
+    def __init__(self, folder: Path, repo: str, branch: str = "main", watch=None, git_dir: Path | None = None,
+                 plain: bool = False):
         """watch: returns a number that changes when a note changes here (Memory's gen), to send changes up soon.
         git_dir: where git keeps its own files. Outside the memory folder, so a cloud app syncing that folder (or a
         cloud-only memory's drive) never sees them. None: the older way, a .git inside the folder."""
         self.folder, self.repo, self.branch, self.watch = Path(folder), repo, branch, watch
+        self.plain = plain   # an Open memory: readable files, its own README
         self.gitdir = Path(git_dir) if git_dir else self.folder / ".git"
         self._outside = git_dir is not None
         self.state = {"repo": repo, "last": None, "error": "", "too_big": [], "stopped": False}
@@ -303,7 +340,7 @@ class GitSync:
             self.git("read-tree", best)   # this Mac's changes since then get committed on top of it
 
     def _make_repo(self) -> str:
-        about = "Phygital Memory: an encrypted notes folder."
+        about = "Phygital Memory: an Open notes folder." if self.plain else "Phygital Memory: an encrypted notes folder."
         if _own():
             code, made = github_auth.api("/user/repos", method="POST", body={
                 "name": self.repo, "private": True, "has_issues": False, "has_wiki": False, "has_projects": False,
@@ -317,7 +354,10 @@ class GitSync:
         return "/".join(url.rstrip("/").split("/")[-2:])
 
     def same_memory(self, repo: str) -> bool:
-        """Is that repo a copy of this very memory? Its vault.cryptomator (the memory's own ID, not secret) matches."""
+        """Is that repo a copy of this very memory? Its vault.cryptomator (the memory's own ID, not secret) matches.
+        An Open memory has no ID like that, so a taken name just gets "-2"."""
+        if self.plain:
+            return False
         path = f"/repos/{repo}/contents/vault.cryptomator?ref={self.branch}"
         if _own():
             code, info = github_auth.api(path)
@@ -333,7 +373,7 @@ class GitSync:
 
     def prepare(self, name: str) -> None:
         """The plain files the repo needs next to the scrambled ones: what to leave out, binary only, a README."""
-        (self.folder / ".gitignore").write_text(IGNORE)
+        (self.folder / ".gitignore").write_text(IGNORE_PLAIN if self.plain else IGNORE)
         (self.folder / ".gitattributes").write_text(ATTRIBUTES)
         self.update_readme(name)
 
@@ -357,7 +397,7 @@ class GitSync:
         old = p.read_text(errors="replace") if p.exists() else None
         if old is None or (ours(old) and (force or not old.startswith(README_MARK))):
             p.parent.mkdir(exist_ok=True)
-            p.write_text(README.format(name=name, repo=self.repo))
+            p.write_text((README_PLAIN if self.plain else README).format(name=name, repo=self.repo))
             (p.parent / "phygital-memory-mark.svg").write_text(LOGO)
 
     @staticmethod

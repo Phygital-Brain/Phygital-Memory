@@ -85,6 +85,24 @@ try:
     check(not m.is_open and (root / "Old.md").exists(), "closing leaves the files as they are")
     m.unlock("")
     check(m.search("lighthouse"), "opens again")
+    # The memory list: an Open memory made, zipped as a backup file, and that zip added back as an Open memory
+    from phygital_memory.folders import Folders
+    fs = Folders(None)
+    made = fs.create(str(tmp), "Zip Me", None)
+    f = fs.get(made["id"])
+    f.memory.unlock("")
+    f.memory.save("Hello.md", "zipped note")
+    f.memory.save("Hello.md", "zipped note, changed", keep_version=True)
+    zipped = tmp / "zip-me.zip"
+    fs.save_backup(f.id, str(zipped))
+    import zipfile
+    names = zipfile.ZipFile(zipped).namelist()
+    check("Zip Me/Hello.md" in names and not any("/.versions/" in n for n in names), "the backup file holds the notes, not the app's history")
+    (tmp / "restore").mkdir()
+    back = fs.open_backup(str(zipped), str(tmp / "restore"))
+    check(back["kind"] == "open" and (tmp / "restore" / "Zip Me" / "Hello.md").read_text() == "zipped note, changed",
+          "the backup file comes back as an Open memory")
+    fs.lock_all()
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
 

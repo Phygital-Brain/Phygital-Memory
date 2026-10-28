@@ -33,7 +33,7 @@ export function linkMacDialog(ctx) {
     ctx.start().then((s) => {
       const link = el("textarea", { class: "dlg-input rk-input link-box", rows: "4", readonly: true, spellcheck: "false", "aria-label": t("Link") }, s.link);
       const copy = el("button", { class: "btn small", type: "button", onclick: () => navigator.clipboard.writeText(s.link).then(() => { copy.textContent = t("Copied"); }) }, t("Copy"));
-      body.replaceChildren(el("div", { class: "mf-hint" }, t("On your other Mac, open Phygital Memory, then Open memory › From my other Mac, and paste this. It works for {0} minutes, once.", s.minutes)),
+      body.replaceChildren(el("div", { class: "mf-hint" }, t("On your other Mac, open Phygital Memory, then Add memory › From my other Mac, and paste this. It works for {0} minutes, once.", s.minutes)),
         link, copy, el("div", { class: "mf-hint" }, t("Waiting for your other Mac. Keep this window open.")));
       let seen = false;
       timer = setInterval(async () => {

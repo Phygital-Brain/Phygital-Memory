@@ -9,12 +9,13 @@ const ago = (s) => (s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min 
 const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // Where a memory is stored: this Mac only, or this Mac + cloud (a synced folder, Mac + WebDAV, WebDAV only), and a
-// GitHub backup that works with any of them.
+// GitHub backup that works with any of them. An Open memory (ctx.plain) gets this Mac, synced folders, GitHub and a
+// backup file, all as readable files; WebDAV and S3 are for Encrypted ones.
 // ctx: {name, storage, pick(prompt, start), move(parent, label), toMac(parent, label, keepSync), toWebdav(), toCloudOnly(),
 //       stopWebdav(), toGithub(), stopGithub(repo), reveal(), download()}. Each action resolves true when done.
 export function openStorage(ctx) {
   return modal((done) => {
-    const s = ctx.storage;
+    const s = ctx.storage, plain = !!ctx.plain;
     const err = el("div", { class: "dlg-err" });
     const busy = (b) => card.classList.toggle("busy", b);
     const run = async (fn, result) => {
@@ -62,34 +63,39 @@ export function openStorage(ctx) {
     const card = el("div", { class: "dlg storage", role: "dialog" },
       el("div", { class: "dlg-title" }, t("Storage and backup: {0}", ctx.name)),
       el("div", { class: "st-where" }, icon(s.cloudOnly || s.cloud || s.webdav ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
-        s.cloudOnly ? null : btn(t("Show encrypted files"), () => ctx.reveal())),
+        s.cloudOnly ? null : btn(plain ? t("Show in Finder") : t("Show encrypted files"), () => ctx.reveal())),
       s.offline ? el("div", { class: "st-warn" },
         el("span", {}, t("{0} file{1} only in the cloud and can't open yet.", s.offline, s.offline === 1 ? " is" : "s are")),
         btn(t("Download now"), () => ctx.download())) : null,
-      el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, t("Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password."))),
+      plain ? el("div", { class: "st-e2e st-plain" }, icon("folder", 14), el("span", {}, t("An Open memory is a normal folder. Every copy, in a cloud folder or a backup, is readable, so your AI can use it anywhere. Keep backups private.")))
+        : el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, t("Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password."))),
       tabbed([{ title: t("Stored in"), rows: [
       option("laptop", t("This Mac only"),
-        t("A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup."),
+        plain ? t("A normal folder on this Mac. Nothing goes online unless you add a backup.")
+          : t("A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup."),
         macOnly,
         macOnly ? null : el("div", {}, s.webdav
           ? btn(t("Keep on this Mac only"), () => run(ctx.stopWebdav, "changed"))
           : btn(t("Move to this Mac"), async () => { const w = await ctx.pick(t("Choose a place on this Mac")); if (w) toPlace(w, "this Mac"); }))),
-      option("cloud", t("This Mac + cloud"), t("Your cloud only gets encrypted files. Only you can read them, with your password."),
+      option("cloud", t("This Mac + cloud"), plain ? t("Your cloud app keeps the folder in sync, so it's on your phone and other computers too.")
+          : t("Your cloud only gets encrypted files. Only you can read them, with your password."),
         !macOnly,
         sub(t("Synced folder"), t("A folder your cloud app keeps in sync, like iCloud Drive or Dropbox."), folderSynced, chips),
-        sub(t("WebDAV"), t("A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server."),
+        plain ? null : sub(t("WebDAV"), t("A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server."),
           !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns))] },
       { title: t("Backup"), rows: [
-      option("lock", t("Private GitHub"), t("A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB."),
+      option(plain ? "cloud" : "lock", t("Private GitHub"), plain ? t("A private GitHub repo keeps a copy and every past version. The notes are readable there, so AI apps connected to GitHub (on your phone too) can read them. It updates a few seconds after each change. GitHub takes files up to 95 MB each.")
+        : t("A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB."),
         !!s.github, el("div", { class: "st-gh-note" }, t("Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup.")), github),
-      option("cloud", t("Amazon S3 or Cloudflare R2"), t("An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size."),
+      plain ? null : option("cloud", t("Amazon S3 or Cloudflare R2"), t("An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size."),
         !!s.s3, s.s3
           ? el("div", { class: "st-gh" }, el("div", {}, el("b", {}, s.s3), s.s3Status && s.s3Status.error ? el("span", { class: "st-gh-err" }, ` · ${s.s3Status.error}`) : ` · saved ${ago(s.s3Status && s.s3Status.ago)}`),
               el("div", {}, btn(t("Stop backup"), () => run(ctx.stopS3, "changed"), "st-stop")))
           : el("div", {}, btn(t("Turn on backup"), () => run(ctx.toS3, "changed")))),
-      option("file", t("Backup file"), t("One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file."),
+      option("file", t("Backup file"), plain ? t("One .zip of your notes, to keep on a USB stick, a drive or anywhere. Unzip it and add the folder: Add memory › From this Mac.")
+        : t("One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Add memory › From a backup file."),
         false, el("div", {}, btn(t("Save backup file"), () => run(ctx.saveBackup, null))))] }]),
-      el("div", { class: "st-note" }, t("Moving locks the memory first. Unlock it again after.")),
+      el("div", { class: "st-note" }, plain ? t("Moving closes the memory and opens it again in its new place.") : t("Moving locks the memory first. Unlock it again after.")),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, t("Close"))));
     return { card };

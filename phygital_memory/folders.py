@@ -116,8 +116,8 @@ class Folder:
             self.drive = cloud.Drive({k: cloud_at[k] for k in ("kind", "url", "user")}, cloud_at["path"], path,
                                      CLOUDS / f"{fid}.cache")
         self.plain = plain
-        if plain:
-            github = cloud_at = mirror_at = s3_at = None
+        if plain:   # an Open memory moves and backs up as a plain folder: synced cloud folders and GitHub
+            cloud_at = mirror_at = s3_at = None
         self.id, self.name, self.path = fid, name, Path(path)
         self.memory = Memory(self.path, plain=plain)
         self.memory.tasks_file = TASKS / f"{fid}.bin"   # AI tasks stay on this Mac (see Memory.todo)
@@ -178,7 +178,7 @@ class Folder:
             self.mirror = None
 
     def start_sync(self) -> None:
-        self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen, git_dir=self.gitdir)
+        self.sync = GitSync(self.path, self.github, watch=lambda: self.memory._gen, git_dir=self.gitdir, plain=self.plain)
         try:
             self.sync.update_readme(self.name)   # an older README from the app goes up to date with the next sync
         except OSError:
@@ -565,7 +565,8 @@ class Folders:
 
     def save_backup(self, fid: str, dest: str) -> int:
         """One zip of the memory's encrypted files, at dest (the person chose it). It opens with the same password
-        (or the recovery key), so it's safe to keep anywhere. Returns its size."""
+        (or the recovery key), so it's safe to keep anywhere. An Open memory's zip holds its readable notes (without
+        the app's history and trash). Returns its size."""
         f = self.get(fid)
         if f.cloud_at and not f.memory.is_open:
             raise ValueError("Unlock it first.")
@@ -579,6 +580,7 @@ class Folders:
                 for p in sorted(f.path.rglob("*")):
                     rel = p.relative_to(f.path)
                     if p.is_symlink() or not p.is_file() or rel.parts[0] in (".git", ".github") \
+                            or (f.plain and rel.parts[0] in (".versions", ".trash", ".phygital")) \
                             or p.name in (".DS_Store", ".gitignore", ".gitattributes") or p.name.startswith(("._", ".encryptor-")):
                         continue
                     z.write(p, f"{top}/{rel.as_posix()}")
@@ -595,7 +597,8 @@ class Folders:
 
     def open_backup(self, src: str, parent: str | None) -> dict:
         """A backup back into the list: a zip the app saved (unzipped into parent), or a masterkey.cryptomator /
-        vault.cryptomator file (its folder is used where it is). Refused if that memory is already here."""
+        vault.cryptomator file (its folder is used where it is). Refused if that memory is already here. A zip of an
+        Open memory (one folder of readable notes) comes back as an Open memory."""
         src = Path(src).expanduser()
         if src.name in ("masterkey.cryptomator", "vault.cryptomator"):
             folder = src.parent
@@ -613,13 +616,14 @@ class Folders:
         with zipfile.ZipFile(src) as z:
             names = [n for n in z.namelist() if not n.endswith("/")]
             tops = {n.split("/")[0] for n in names}
-            if len(tops) != 1 or not any(n.endswith("/vault.cryptomator") and n.count("/") == 1 for n in names):
+            plain = not any(n.endswith("/vault.cryptomator") and n.count("/") == 1 for n in names)
+            if len(tops) != 1 or (plain and not any(n.lower().endswith(".md") for n in names)):
                 raise ValueError("That zip isn't a Phygital Memory backup.")
             top = tops.pop()
-            if top in (".", "..") or any(".." in n.split("/") or n.startswith("/") for n in names):
+            if top in (".", "..") or any(".." in n.split("/") or n.startswith("/") or "/" not in n for n in names):
                 raise ValueError("That zip isn't a Phygital Memory backup.")
-            mine = z.read(f"{top}/vault.cryptomator")
-            same = next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
+            mine = None if plain else z.read(f"{top}/vault.cryptomator")
+            same = None if plain else next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
                          and (x.path / "vault.cryptomator").read_bytes() == mine), None)
             if same:
                 raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
@@ -632,13 +636,13 @@ class Folders:
                     out.parent.mkdir(parents=True, exist_ok=True)
                     with z.open(n) as r, open(out, "xb") as w:
                         shutil.copyfileobj(r, w, 1024 * 1024)
-                if not is_vault(dest):
+                if not plain and not is_vault(dest):
                     raise ValueError("That zip isn't a whole memory.")
             except Exception:
                 shutil.rmtree(dest, ignore_errors=True)
                 raise
         with self._lock:
-            return self._add(dest, top).info()
+            return self._add(dest, top, plain=plain).info()
 
     # ---------- a private GitHub repo ----------
 
@@ -651,7 +655,7 @@ class Folders:
             raise ValueError("Unlock it first.")
         if f.gitdir.exists():   # left from an earlier backup that was stopped
             shutil.rmtree(f.gitdir)
-        f.github = GitSync(f.path, repo_name(f.name), git_dir=f.gitdir).create(reuse)
+        f.github = GitSync(f.path, repo_name(f.name), git_dir=f.gitdir, plain=f.plain).create(reuse)
         with self._lock:
             self._save()
         f.start_sync()
@@ -699,16 +703,19 @@ class Folders:
             raise ValueError(f'There is already a "{name}" in that place.')
         fid = secrets.token_hex(4)
         GitSync.clone(repo, dest, git_dir=GITDIRS / fid)
-        if not is_vault(dest):
+        plain = not is_vault(dest)   # an Open memory's repo: readable notes
+        if plain and not any(dest.rglob("*.md")):
+            shutil.rmtree(dest, ignore_errors=True)
+            shutil.rmtree(GITDIRS / fid, ignore_errors=True)
             raise ValueError("That repo isn't a Phygital Memory folder.")
-        same = next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
+        same = None if plain else next((x for x in self.items.values() if not x.cloud_at and (x.path / "vault.cryptomator").is_file()
                      and (x.path / "vault.cryptomator").read_bytes() == (dest / "vault.cryptomator").read_bytes()), None)
         if same:   # a copy of a memory that's already here (under another backup, or none): don't keep a second one
             shutil.rmtree(dest, ignore_errors=True)
             shutil.rmtree(GITDIRS / fid, ignore_errors=True)
             raise ValueError(f'That\'s the same memory as "{same.name}", which is already here.')
         with self._lock:
-            f = Folder(fid, name, dest, repo)
+            f = Folder(fid, name, dest, repo, plain=plain)
             self.items[f.id] = f
             self._save()
         return f.info()
@@ -745,7 +752,8 @@ class Folders:
 
     def relocate(self, fid: str, parent: str) -> dict:
         """Move a folder to another place on disk (a cloud folder, or back to the Mac). It is locked first: only
-        scrambled files move, and the person unlocks it again afterwards."""
+        scrambled files move, and the person unlocks it again afterwards. (An Open memory is closed, moved, and the
+        app opens it again by itself.)"""
         with self._lock:
             f = self.get(fid)
             if f.cloud_at:

@@ -88,16 +88,17 @@ export function openSettings(folderOpts, me) {
     row(t("Language"), t("The app's words. Note and folder names stay as you wrote them."),
       languagePicker(() => toast(t("Language changed. Lock and unlock to see it everywhere.")))),
     section(t("Finder"))];
-  if (f && f.finderAvailable) general.push(row(t("Show in Finder"), t("Your notes as a normal folder."), toggle(t("Show in Finder"), f.finderShown, f.toggleFinder),
+  if (f && f.plain) general.push(row(t("Show in Finder"), t("This memory is a normal folder."), btn(t("Show"), f.toggleFinder)));
+  else if (f && f.finderAvailable) general.push(row(t("Show in Finder"), t("Your notes as a normal folder."), toggle(t("Show in Finder"), f.finderShown, f.toggleFinder),
     t("While it's open, any app on this Mac can read your notes. It closes when you lock.")));
-  general.push(row(t("Desktop icon"), t("A shortcut on the Desktop while unlocked."), sw(onUnlock), t("It opens your notes in Finder and goes away when you lock.")));
+  if (!f || !f.plain) general.push(row(t("Desktop icon"), t("A shortcut on the Desktop while unlocked."), sw(onUnlock), t("It opens your notes in Finder and goes away when you lock.")));
   if (me && me.licenses) general.push(el("button", { class: "set-lic", type: "button", onclick: () => { close(); me.licenses(); } }, t("Licences")));
 
   const memory = [];
   if (f) {
     memory.push(el("div", { class: "set-mem" }, f.name),
       row(t("Name"), null, btn(t("Rename"), f.rename)),
-      row(t("Stored in"), f.where, btn(t("Change"), f.storage), t("Where the encrypted files live, and the GitHub backup.")));
+      row(t("Stored in"), f.where, btn(t("Change"), f.storage), f.plain ? t("Where the folder lives, and the GitHub backup.") : t("Where the encrypted files live, and the GitHub backup.")));
     if (f.revealVault) memory.push(row(t("Encrypted files"), t("What's stored on disk."), btn(t("Show"), f.revealVault),
       t("These are the real files. Only you can read them, with your password.")));
     if (f.showHidden) memory.push(row(t("Show hidden files"), "⇧⌘.", toggle(t("Show hidden files"), f.showHidden.on, f.showHidden.set),
@@ -128,7 +129,7 @@ export function openSettings(folderOpts, me) {
     sharing.push(section(t("AI")));
     if (f.aiApps) sharing.push(row(t("AI apps"), t("Which AI apps can use your notes."), btn(t("Manage"), f.aiApps),
       t("Each app gets its own key and only reaches unlocked memories.")));
-    sharing.push(row(t("Hide from AI"), t("No AI app can reach this memory."), toggle(t("Hide from AI"), f.aiHidden, f.setAiHidden),
+    sharing.push(row(t("Hide from AI"), f.plain ? t("No AI app reaches it through this app. An AI that can open files can still read the folder.") : t("No AI app can reach this memory."), toggle(t("Hide from AI"), f.aiHidden, f.setAiHidden),
       t("Turns off AI access to this memory, whatever each app is allowed.")));
   }
   const pages = [{ title: t("General"), rows: general }];

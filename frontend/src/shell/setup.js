@@ -2,15 +2,18 @@
 // name, place and password, then Work or Personal (or both). The app builds the same simple skeleton for everyone
 // (folders, rules, basic About notes), adds the work parts for work, and hands the rest to your AI: one message to
 // paste that has it follow Phygital Brain's own setup guide, always up to date.
-// ctx: {api, language(), openAI(tab), done(), files(), create?({kind, parent, name, password}), pick?()}. With create,
-// the memory is made right before the build.
+// ctx: {api, language(), openAI(tab), done(), files(), create?({kind, parent, name, password}), pick?(), backup?()}.
+// With create, the memory is made right before the build, then backed up to GitHub if that was picked.
 import { el, icon, knot } from "./dom.js";
 import { t } from "./i18n.js";
 import { toastOk, toastErr } from "./toast.js";
+import { shortPath } from "./folders.js";
 
 // The cards' drawings: 24px grid, one stroke weight, like the app's own icons
 const ART = {
   open: ["M6 11h12v9H6z", "M9 11V7.5a3 3 0 0 1 5.8-1.1"],
+  github: ["M12 3a9 9 0 0 0-2.8 17.5c.5.1.6-.2.6-.4v-1.6c-2.5.5-3-1.1-3-1.1-.4-1-1-1.3-1-1.3-.8-.6.1-.6.1-.6.9.1 1.4.9 1.4.9.8 1.4 2.1 1 2.6.8.1-.6.3-1 .6-1.2-2-.2-4.1-1-4.1-4.4 0-1 .3-1.8.9-2.4-.1-.2-.4-1.1.1-2.4 0 0 .8-.2 2.5.9a8.6 8.6 0 0 1 4.6 0c1.7-1.1 2.5-.9 2.5-.9.5 1.3.2 2.2.1 2.4.6.6.9 1.4.9 2.4 0 3.4-2.1 4.2-4.1 4.4.3.3.6.8.6 1.6v2.4c0 .2.1.5.6.4A9 9 0 0 0 12 3z"],
+  later: ["M12 7v5l3 2", "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"],
   encrypted: ["M6 11h12v9H6z", "M9 11V8a3 3 0 0 1 6 0v3", "M12 14.5v2.5"],
   work: ["M4 8h16v11H4z", "M9 8V5h6v3", "M4 13h16"],
   personal: ["M4 11l8-7 8 7", "M6 9.5V20h12V9.5", "M12 17s-3-1.8-3-3.7a1.5 1.5 0 0 1 3-.6 1.5 1.5 0 0 1 3 .6c0 1.9-3 3.7-3 3.7z"],
@@ -35,6 +38,12 @@ const KINDS = () => ({ key: "kind", one: true, q: t("What kind of memory?"), opt
   ["open", t("Open"), t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
   ["encrypted", t("Encrypted"), t("Locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.")]] });
 
+// A backup now, or later from Storage and backup. The text follows the kind picked before
+const BACKUP = (open) => ({ key: "backup", one: true, q: t("Back it up?"), hint: t("You can change this any time in Storage and backup."), options: [
+  ["github", t("Private GitHub"), open ? t("A private repo keeps a copy and every past version. AI apps connected to GitHub, on your phone too, can read it.")
+    : t("A private repo keeps an encrypted copy and every past version. Only you can open it, with your password.")],
+  ["later", t("Later"), t("Keep it on this Mac for now. Turn on a backup when you're ready.")]] });
+
 // The basic About notes, to fill later (your AI does it with the setup guide). Work adds the business ones
 function pages(name, work) {
   const TODO = t("To add.");
@@ -57,10 +66,10 @@ function pages(name, work) {
 
 export function renderSetup(body, ctx) {
   const Q = QUESTIONS();
-  const answers = Object.fromEntries([...Q, KINDS()].map((q) => [q.key, []]));
+  const answers = Object.fromEntries([...Q, KINDS(), BACKUP(true)].map((q) => [q.key, []]));
   let name = "", lang = "en", at = 0;
   const mem = { name: t("My memory"), parent: "", password: "", again: "" };   // a new memory's name, place and password
-  const screens = ctx.create ? ["name", KINDS(), "place", ...Q] : ["name", ...Q];
+  const screens = ctx.create ? ["name", KINDS(), "place", "backup", ...Q] : ["name", ...Q];
   const total = screens.length;
   const encrypted = () => answers.kind.includes("encrypted");
   const valid = (i) => {
@@ -68,8 +77,11 @@ export function renderSetup(body, ctx) {
     if (sc === "name") return !!name.trim();
     if (sc === "place") return !!mem.name.trim() && !/[\/\\:*?"<>|]/.test(mem.name) && !mem.name.trim().startsWith(".") && !!mem.parent
       && (!encrypted() || (mem.password.length >= 8 && mem.password === mem.again));
+    if (sc === "backup") return answers.backup.length > 0;
     return answers[sc.key].length > 0;
   };
+  let places = null;   // the synced cloud folders on this Mac, for the place screen
+  if (ctx.create) ctx.api("places").then((j) => { places = j; if (screens[at] === "place") go(at, 0); }).catch(() => { places = { places: [], home: "" }; });
 
   const bar = el("div", { class: "sp-bar", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": total });
   const drawBar = (i) => {
@@ -90,14 +102,15 @@ export function renderSetup(body, ctx) {
     const show = () => {
       at = i; drawBar(i);
       const sc = screens[i];
-      stage.replaceChildren(sc === "name" ? nameView() : sc === "place" ? placeView() : questionView(sc));
-      stage.firstElementChild.classList.add(dir > 0 ? "in-up" : "in-down");
+      stage.replaceChildren(sc === "name" ? nameView() : sc === "place" ? placeView()
+        : sc === "backup" ? questionView(BACKUP(!encrypted())) : questionView(sc));
+      if (dir) stage.firstElementChild.classList.add(dir > 0 ? "in-up" : "in-down");
       back.hidden = i === 0;
       foot.querySelector(".sp-count").textContent = t("{0} of {1}", i + 1, total);
       refreshNext();
       (stage.querySelector("input, .sp-card") || next).focus({ preventScroll: true });
     };
-    if (old && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (old && dir && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
       old.classList.add(dir > 0 ? "out-up" : "out-down");
       setTimeout(show, 170);
     } else show();
@@ -154,18 +167,25 @@ export function renderSetup(body, ctx) {
       x.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); next.click(); } });
       return x;
     };
-    const where = el("span", { class: "sp-where" }, mem.parent || t("Not chosen yet"));
-    const choose = el("button", { class: "btn", type: "button", onclick: async () => {
-      choose.disabled = true;
-      try { const p = await ctx.pick(); if (p) { mem.parent = p; where.textContent = p; where.title = p; refreshNext(); } }
-      catch (e) { toastErr(e.message); }
-      choose.disabled = false;
-    } }, icon("folder", 14), t("Choose"));
+    // Stored in: this Mac, a synced cloud folder (one click puts it at its top), or any other folder
+    const where = el("span", { class: "sp-where" }, mem.parent ? shortPath(mem.parent) : "");
+    const home = places?.home ? `${places.home}/Documents` : "";
+    const opts = [["mac", t("This Mac"), home, "laptop"], ...(places?.places || []).map((p) => [p.path, p.name, p.path, "cloud"])];
+    const chips = el("div", { class: "sp-langs sp-places", role: "radiogroup", "aria-label": t("Where to keep it") });
+    const draw = () => chips.replaceChildren(...opts.map(([k, label, path, ic]) => el("button", {
+      class: "sp-lang" + (mem.parent === path && mem.picked === k ? " on" : ""), type: "button", role: "radio", "aria-checked": String(mem.parent === path && mem.picked === k),
+      onclick: () => { mem.parent = path; mem.picked = k; where.textContent = shortPath(path); draw(); refreshNext(); } }, icon(ic, 13), label)),
+      el("button", { class: "sp-lang" + (mem.picked === "other" ? " on" : ""), type: "button", onclick: async () => {
+        try { const p = await ctx.pick(); if (p) { mem.parent = p; mem.picked = "other"; where.textContent = shortPath(p); draw(); refreshNext(); } }
+        catch (e) { toastErr(e.message); }
+      } }, icon("folder", 13), t("Other folder")));
+    draw();
+    if (!places) chips.append(el("span", { class: "sp-hint" }, t("Looking for cloud folders")));
     const kids = [el("h2", { class: "sp-q" }, encrypted() ? t("Name it and lock it") : t("Name it and pick its place")),
       field(t("Memory name"), inp("name", { maxlength: 60, "aria-label": t("Memory name") })),
-      el("div", { class: "sp-field" }, el("span", { class: "sp-sub" }, t("Where to keep it")), el("div", { class: "sp-where-row" }, where, choose)),
+      el("div", { class: "sp-field" }, el("span", { class: "sp-sub" }, t("Stored in")), chips, where),
       el("p", { class: "sp-hint" }, encrypted() ? t("A cloud folder (iCloud Drive, Dropbox) keeps a locked copy safe in the cloud.")
-        : t("Pick iCloud Drive, Dropbox or Google Drive to have it on your phone too."))];
+        : t("A cloud folder like iCloud Drive or Dropbox puts it on your phone too."))];
     if (encrypted()) kids.push(
       field(t("Password (8 or more characters)"), inp("password", { type: "password", "aria-label": t("Password") })),
       field(t("Password again"), inp("again", { type: "password", "aria-label": t("Password again") })),
@@ -209,7 +229,7 @@ export function renderSetup(body, ctx) {
     });
     return el("section", { class: "sp-screen" },
       el("h2", { class: "sp-q" }, q.q),
-      el("p", { class: "sp-hint" }, q.one ? t("You can't switch later, so pick the one that fits.") : t("Pick one or both.")),
+      el("p", { class: "sp-hint" }, q.hint || (q.one ? t("You can't switch later, so pick the one that fits.") : t("Pick one or both."))),
       grid);
   };
 
@@ -241,6 +261,12 @@ export function renderSetup(body, ctx) {
         if (j.error) throw new Error(j.error);
         ask = j.ask || "";
         list.append(el("li", { class: "sp-row sp-done" }, icon("check", 14, 2.4), el("span", {}, t("Rules, today's note and your About notes"))));
+        if (ctx.create && answers.backup[0] === "github") {   // after the build, so the first upload has it all
+          const row = el("li", { class: "sp-row sp-done" }, icon("clock", 14), el("span", {}, t("Backing up to GitHub")));
+          list.append(row);
+          try { row.lastChild.textContent = (await ctx.backup()) ? t("Backed up to GitHub") : t("GitHub backup: not now. Turn it on in Storage and backup."); }
+          catch (e) { row.lastChild.textContent = t("GitHub backup didn't start: {0}", e.message); }
+        }
         status.textContent = t("Your memory is ready: {0} folders and notes.", (j.made || []).length + plan.length);
         nextBtn.disabled = false; nextBtn.focus();
         ctx.files();

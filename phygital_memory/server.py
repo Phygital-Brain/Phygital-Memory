@@ -1521,6 +1521,8 @@ async def api(request: Request) -> Response:
             if kind == "chip":
                 return _ok({"card": await asyncio.to_thread(pka.set_up_chip)})
             return _ok({"card": await asyncio.to_thread(pka.set_up_password, str(body.get("password", "")))})
+        if action == "places":   # a new memory's setup: the synced cloud folders on this Mac, and the home folder
+            return _ok({"places": await asyncio.to_thread(cloud_places), "home": str(Path.home())})
         if action == "pickfolder":   # the Mac's own folder chooser
             start = body.get("start")   # only a known cloud folder, so the page can't point the picker anywhere
             # Otherwise the Mac reopens wherever the last pick was (often inside a cloud): start at home instead.
@@ -1850,7 +1852,7 @@ async def api(request: Request) -> Response:
             return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
 
         m = f.memory
-        if f.plain and action in ("togithub", "towebdav", "tos3", "tocloud", "savebackup", "recoverykey", "touchid"):
+        if f.plain and action in ("towebdav", "tos3", "tocloud", "recoverykey", "touchid"):
             return _ok({"error": "That's for Encrypted memories. An Open memory is a normal folder: keep it in iCloud Drive, "
                         "Dropbox or another cloud folder to have it everywhere.", "plain": True}, 400)
         if action == "lock":
@@ -1865,7 +1867,7 @@ async def api(request: Request) -> Response:
                         "places": cloud_places(), "home": str(Path.home()), "offline": 0,
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
-            return _ok({"path": str(f.path), "cloud": cloud_place(f.path), "places": cloud_places(),
+            return _ok({"path": str(f.path), "kind": "open" if f.plain else "encrypted", "cloud": cloud_place(f.path), "places": cloud_places(),
                         "webdav": f.info()["webdav"], "webdavStatus": f.mirror.status() if f.mirror else None,
                         "s3": f.info()["s3"], "s3Status": f.s3.status() if f.s3 else None,
                         "home": str(Path.home()), "offline": await asyncio.to_thread(not_downloaded, f.path),

@@ -50,11 +50,11 @@ export function switcherItems(ctx) {
     };
   });
   const cur = ctx.list.find((f) => f.id === ctx.currentId);
-  const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id));
+  const anyOpen = ctx.list.some((f) => ctx.unlocked(f.id) && f.kind !== "open");
   const mine = rows.filter((_, i) => !ctx.list[i].joined), theirs = rows.filter((_, i) => ctx.list[i].joined);
   const items = [...mine, ...(theirs.length ? [{ sep: true }, { node: el("div", { class: "fo-head" }, t("Shared with me")) }, ...theirs] : []), { sep: true },
     actionRow("plus", t("New memory"), ctx.createNew),
-    { label: t("Open memory"), icon: "folder", cls: "fo-menu-item", sub: [
+    { label: t("Add memory"), icon: "folder", cls: "fo-menu-item", sub: [
       { label: t("From this Mac"), fn: ctx.openOther },
       ...(ctx.fromGithub ? [{ label: t("From GitHub"), fn: ctx.fromGithub }] : []),
       ...(ctx.fromCloud ? [{ label: t("From WebDAV"), fn: ctx.fromCloud }] : []),
@@ -68,9 +68,10 @@ export function switcherItems(ctx) {
       ...(ctx.storage ? [actionRow(cur.cloudOnly || cur.webdav ? "cloud" : "laptop", t("Storage and backup"), ctx.storage)] : []),
       ...(ctx.share ? [actionRow("share", "Share", ctx.share)] : []),
       ...(ctx.ai ? [actionRow("pulse", t("AI tasks and activity"), ctx.ai)] : []),
-      ...(ctx.finder ? [actionRow("folder", ctx.finder.shown ? "Close the Finder view" : t("Show in Finder"), ctx.finder.toggle)] : []),
+      ...(ctx.finder ? [actionRow("folder", ctx.finder.shown && cur.kind !== "open" ? "Close the Finder view" : t("Show in Finder"), ctx.finder.toggle)] : []),
       ...(ctx.settings ? [actionRow("gear", "Settings", ctx.settings, { label: "⌘," })] : []),
-      actionRow("lock", t("Lock memory"), ctx.lockThis, anyOpen ? { label: t("Lock all"), fn: ctx.lockAll } : null));
+      ...(ctx.lockThis ? [actionRow("lock", t("Lock memory"), ctx.lockThis, anyOpen ? { label: t("Lock all"), fn: ctx.lockAll } : null)]
+        : anyOpen ? [actionRow("lock", t("Lock all"), ctx.lockAll)] : []));
   }
   return items;
 }
@@ -92,18 +93,18 @@ export function manageFolders(list, actions) {
           el("div", { class: "mf-state" + (f.finder ? " warn" : "") },
             !f.exists ? "Not found at this place" : f.kind === "open" ? t("Open · a normal folder") : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : ""))),
         el("div", { class: "mf-actions" },
-          btn(open ? "Open" : "Unlock", actions.switchTo),
+          btn(open || f.kind === "open" ? t("Open") : t("Unlock"), actions.switchTo),
           btn(t("Rename"), actions.rename),
-          open ? btn(t("Lock"), actions.lock) : null,
+          open && f.kind !== "open" ? btn(t("Lock"), actions.lock) : null,
           btn(t("Remove"), actions.forget, "danger"))));
     }
     if (!list.length) body.append(el("div", { class: "mf-empty" }, t("No folders yet.")));
     const card = el("div", { class: "dlg mf", role: "dialog" },
       el("div", { class: "dlg-title" }, t("Folders")),
-      el("div", { class: "mf-hint" }, t("Each memory is encrypted with its own password. Remove only takes it off this list. Nothing is deleted.")),
+      el("div", { class: "mf-hint" }, t("Open memories are normal folders. Encrypted ones each have their own password. Remove only takes a memory off this list. Nothing is deleted.")),
       body,
       el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, t("Open memory")),
+        el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, t("Add memory")),
         el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, t("New memory"))));
     return { card };
   });

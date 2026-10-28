@@ -243,7 +243,7 @@ async function openFromBackup() {
     const j = await api("openbackup");
     if (j.cancelled) return;
     await refreshFolders();
-    toastOk(t("\"{0}\" is back. Unlock it with its password or recovery key.", j.folder.name));
+    toastOk(j.folder.kind === "open" ? t("\"{0}\" is back.", j.folder.name) : t("\"{0}\" is back. Unlock it with its password or recovery key.", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -285,7 +285,7 @@ async function openFromGithub() {
   const known = new Set(folderList.map((f) => f.github).filter(Boolean));
   let repo = await pickRepo(repos.filter((r) => !known.has(r.repo)));
   if (repo === "") {   // "Another repo": type it
-    repo = await askText("Open from GitHub", "", t("Open"), (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
+    repo = await askText(t("Add from GitHub"), "", t("Add"), (v) => /^[\w.-]+\/[\w.-]+$/.test(v.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$/, "")) ? "" : 'Like "your-name/Notes-Phygital-Memory".');
   }
   if (!repo) return;
   try {
@@ -293,7 +293,7 @@ async function openFromGithub() {
     const j = await api("fromgithub", { repo });
     if (j.cancelled) return;
     await refreshFolders();
-    toastOk(t("Brought \"{0}\" down from GitHub. Unlock it with its password.", j.folder.name));
+    toastOk(j.folder.kind === "open" ? t("Brought \"{0}\" down from GitHub.", j.folder.name) : t("Brought \"{0}\" down from GitHub. Unlock it with its password.", j.folder.name));
     await switchTo(j.folder.id);
   } catch (e) { toastErr(e.message); }
 }
@@ -358,7 +358,7 @@ async function openShareHere(path = null) {
 }
 
 // An invite: find the shared files on this side, then ask the owner to let you in.
-// Linking your other Mac: this Mac shows the link (Settings), the other one pastes it (Open memory › From my other Mac).
+// Linking your other Mac: this Mac shows the link (Settings), the other one pastes it (Add memory › From my other Mac).
 async function linkOtherMac() {
   const r = await linkMacDialog({
     start: () => api("linkstart"), status: () => api("linkstatus"), cancel: () => api("linkcancel").catch(() => {}),
@@ -450,6 +450,15 @@ function createNewFolder() {
         toastOk(t("Created \"{0}\".", j.folder.name));
       } finally { creating = false; }
     },
+    backup: async () => {   // picked on the setup page: sign in to GitHub if needed, then the private repo
+      let account = (await api("githubaccount")).account;
+      if (!account) account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
+      if (!account) return false;
+      const j = await api("togithub");
+      if (j.existing) await api("togithub", { reuse: j.existing });
+      refreshBar();
+      return true;
+    },
   });
 }
 let creating = false;   // a new memory is opened by its setup page, not by the unlock screen
@@ -493,7 +502,7 @@ async function lockFolder(id) {
 
 async function lockAll() {
   if (loadedFolder) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); }
-  for (const f of folderList) if (hasPass(f.id)) { try { const r = await api("lock", { folder: f.id }); if (r.warning) toastErr(r.warning); } catch {} lockedLocally(f.id); }
+  for (const f of folderList) if (hasPass(f.id) && f.kind !== "open") { try { const r = await api("lock", { folder: f.id }); if (r.warning) toastErr(r.warning); } catch {} lockedLocally(f.id); }
   showUnlock();
 }
 
@@ -524,9 +533,9 @@ function drawUnlock() {
         el("div", { class: "ul-head" }, el("span", {}, t("Your memories")), el("span", {}, String(folderList.length))),
         ...folderList.map((f) => {
           const open = unlocked(f.id);
-          return el("button", { class: "ul-mem" + (f.id === info.id ? " on" : ""), type: "button", role: "listitem", "aria-current": f.id === info.id ? "true" : null,
+          return el("button", { class: "ul-mem" + (f.id === info.id ? " on" : "") + (f.kind === "open" ? " k-open" : " k-encrypted"), type: "button", role: "listitem", "aria-current": f.id === info.id ? "true" : null,
             onclick: () => { if (f.id !== info.id) switchTo(f.id); } },
-            icon(open ? "unlock" : "lock", 15), el("span", { class: "ul-text" }, el("span", { class: "ul-name" }, f.name), el("span", { class: "ul-path" }, shortPath(f.path))),
+            icon(f.kind === "open" ? "folder" : open ? "unlock" : "lock", 15), el("span", { class: "ul-text" }, el("span", { class: "ul-name" }, f.name), el("span", { class: "ul-path" }, shortPath(f.path))),
             el("span", { class: "ul-state" + (open ? " open" : "") }, f.kind === "open" ? t("Open") : open ? t("Unlocked") : t("Locked")));
         }));
     }
@@ -613,11 +622,11 @@ function drawUnlock() {
   links.push(el("button", { class: "link-btn", type: "button", onclick: (e) => {
       const r = e.currentTarget.getBoundingClientRect();
       showMenu(openMenuItems(), r.left, r.bottom + 4);
-    } }, t("Open memory")),
+    } }, t("Add memory")),
     el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, t("New memory")));
   kids.push(el("div", { class: "unlock-links" }, ...links),
     el("div", { class: "unlock-lang" }, languagePicker(() => drawUnlock())));
-  const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
+  const form = el("form", { class: "unlock-card" + (info?.kind === "open" ? " k-open" : ""), onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(unlockDrag, el("div", { class: "unlock-wrap" + (list ? " many" : "") }, form, list));
 }
 
@@ -629,6 +638,7 @@ function showUnlock() {
 }
 
 // ---------- app shell ----------
+let lockBtn = null;   // the sidebar's lock button: an Open memory has nothing to lock
 let treeEl, tabsEl, paneHost, statusEl, sidebarEl, homeRowEl, selBarEl, finderBtn, noteTools, blPill, sbName, sbBadge, sbPath, sbTile, graphRowEl = null;
 
 function drawSwitcher() {
@@ -638,6 +648,7 @@ function drawSwitcher() {
   sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : t("No folder yet");
   sbPath.title = info ? info.path : "";
   sbTile.replaceChildren(knot(28));
+  lockBtn?.classList.toggle("hidden", info?.kind === "open");
   refreshBar();
   sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
 }
@@ -648,8 +659,8 @@ async function openSwitcher() {
   const head = appEl.querySelector(".sb-head");
   const r = head.getBoundingClientRect();
   showMenu(switcherItems({ list: folderList, currentId: currentFolder(), unlocked, switchTo, openOther: openOtherFolder, fromGithub: openFromGithub, fromCloud: openFromCloud, fromBackup: openFromBackup, fromS3: openFromS3, fromInvite: joinFromInvite, fromMac: joinOtherMac,
-    createNew: createNewFolder, manage: openManage, lockThis: () => lockFolder(), lockAll,
-    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
+    createNew: createNewFolder, manage: openManage, lockThis: curInfo()?.kind === "open" ? null : () => lockFolder(), lockAll,
+    ...(unlocked(currentFolder()) ? { storage: openStoragePanel, share: curInfo()?.kind === "open" ? null : () => openShareHere(), ai: () => openAI("activity"), settings: openSettingsHere } : {}),
     finder: finder.available && unlocked(currentFolder()) ? { shown: finder.shown, toggle: toggleFinder } : null }), r.left + 6, r.bottom + 2);
 }
 
@@ -725,7 +736,7 @@ function buildApp() {
     treeEl,
     el("div", { class: "sb-foot" },
       statusBar(),
-      el("span", { class: "sb-foot-btns" }, ib("unlock", t("Unlocked. Click to lock this folder"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere))),
+      el("span", { class: "sb-foot-btns" }, lockBtn = ib("unlock", t("Unlocked. Click to lock this folder"), () => lockFolder()), ib("trash", t("Trash"), openTrashPanel), finderBtn, ib("gear", t("Settings (⌘,)"), openSettingsHere))),
     resize);
 
   tabsEl = el("div", { class: "tabs", role: "tablist" });
@@ -862,9 +873,10 @@ async function checkFinder(first) {
 }
 function drawFinder() {
   if (!finderBtn) return;
+  const plain = curInfo()?.kind === "open";   // a normal folder: always just "Show in Finder"
   finderBtn.classList.toggle("hidden", !finder.available);
-  finderBtn.classList.toggle("on", finder.shown);
-  finderBtn.title = finder.shown ? "Close the Finder folder" : t("Show in Finder");
+  finderBtn.classList.toggle("on", finder.shown && !plain);
+  finderBtn.title = finder.shown && !plain ? "Close the Finder folder" : t("Show in Finder");
   clearInterval(finderTimer); finderTimer = null;
   if (finder.shown) finderTimer = setInterval(async () => { await checkFinder(); if (finder.shown) syncFromDisk(); }, 10000);
 }
@@ -883,7 +895,10 @@ async function openSettingsHere() {
     me.macs = { list: (await api("mymacs")).macs, link: linkOtherMac };
     me.licenses = async () => { try { showLicenses((await api("licenses")).text); } catch (e) { toastErr(e.message); } };
   } catch {}
+  const plain = info?.kind === "open";   // an Open memory: no password, Touch ID, recovery key or encrypted files
+  if (plain) touch = null;
   openSettings(info && unlocked(info.id) ? {
+    plain,
     touchId: touch && touch.available ? { on: touch.on, set: async (v) => {
       const password = v ? await askPassword(t("Your password, once, to unlock with Touch ID from now on"), t("Turn on")) : "";
       if (v && !password) return false;
@@ -893,9 +908,9 @@ async function openSettingsHere() {
     toggleFinder: async () => { await toggleFinder(); return finder.shown; },
     rename: () => renameFolder(), storage: openStoragePanel, lock: () => lockFolder(),
     lockAll: folderList.filter((f) => unlocked(f.id)).length > 1 ? lockAll : null,
-    revealVault: info.cloudOnly ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
+    revealVault: info.cloudOnly || plain ? null : () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
     aiHidden: !!info.aiHidden,
-    recoveryKey: async () => {
+    recoveryKey: plain ? null : async () => {
       const password = await askPassword(t("Your password, to show the recovery key"), t("Show"));
       if (!password) return;
       try { showRecoveryKey((await api("recoverykey", { password })).words); } catch (e) { toastErr(e.message); }
@@ -978,7 +993,8 @@ async function refreshBar() {
   barEls.cloud.replaceChildren(icon(b.cloud ? "cloud" : "laptop", 16, 1.8));
   barEls.cloud.classList.toggle("on", !!b.cloud);
   barEls.cloud.title = (b.cloudOnly ? `Stored in ${b.cloud} only` : b.cloud ? `Stored on this Mac and in ${b.cloud}` : t("Stored on this Mac only"))
-    + (b.backup ? `. Backed up to ${b.backup}` : "") + ". Encrypted: only you can read it, with your password.";
+    + (b.backup ? `. Backed up to ${b.backup}` : "")
+    + (curInfo()?.kind === "open" ? t(". Open: plain files any app on this Mac can read.") : t(". Encrypted: only you can read it, with your password."));
   const h = b.cloudHealth;   // a cloud memory whose cloud refuses saves (full): say so once, keep the icon amber
   barEls.cloud.classList.toggle("warn", !!(h && h.problem));
   if (h && h.problem) {
@@ -1024,15 +1040,16 @@ async function openStoragePanel() {
   let storage;
   try { storage = await api("storage"); } catch (e) { toastErr(e.message); return; }
   const saveAll = async () => { if (loadedFolder === info.id) { await Promise.all(state.tabs.map((t) => saveNow(t))); await flushPrefs(); } };
+  const plain = storage.kind === "open";
   const result = await openStorage({
-    name: info.name, storage,
+    name: info.name, storage, plain,
     pick: (prompt, start) => pickFolder(prompt, start),
     move: async (parent, label) => {
-      if (!await confirmDialog(t("Move \"{0}\" to {1}? It locks first, then moves.", info.name, label), t("Move"), false)) return false;
+      if (!await confirmDialog(plain ? t("Move \"{0}\" to {1}?", info.name, label) : t("Move \"{0}\" to {1}? It locks first, then moves.", info.name, label), t("Move"), false)) return false;
       await saveAll();
       if (storage.webdav) await api("stopwebdav");
       await api("movefolder", { parent });
-      toastOk(t("Moved to {0}. Unlock it to keep working.", label));
+      toastOk(plain ? t("Moved to {0}.", label) : t("Moved to {0}. Unlock it to keep working.", label));
       return true;
     },
     toMac: async (parent, label, keepSync) => {
@@ -1083,7 +1100,8 @@ async function openStoragePanel() {
         account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
         if (!account) return false;
       }
-      if (!await confirmDialog(t("Back up \"{0}\" to a new private repo on GitHub ({1})? Only encrypted files go up.", info.name, account), t("Back up"), false)) return false;
+      if (!await confirmDialog(plain ? t("Back up \"{0}\" to a new private repo on GitHub ({1})? Your notes go up as readable files, so you and AI apps you connect to GitHub can read them there.", info.name, account)
+        : t("Back up \"{0}\" to a new private repo on GitHub ({1})? Only encrypted files go up.", info.name, account), t("Back up"), false)) return false;
       toast("Making the private repo and uploading");
       const j = await api("togithub");
       if (j.existing) {   // backed up before, then stopped: that repo is still on GitHub
@@ -1110,7 +1128,7 @@ async function openStoragePanel() {
     saveBackup: async () => {
       await saveAll();
       const j = await api("savebackup");
-      if (!j.cancelled) toastOk(t("Saved \"{0}\" ({1} MB), encrypted.", j.name, (j.size / 1e6).toFixed(1)));
+      if (!j.cancelled) toastOk(plain ? t("Saved \"{0}\" ({1} MB).", j.name, (j.size / 1e6).toFixed(1)) : t("Saved \"{0}\" ({1} MB), encrypted.", j.name, (j.size / 1e6).toFixed(1)));
       return false;   // the window stays open
     },
     download: async () => { const j = await api("download"); toastOk(t("Downloading {0} file{1}.", j.asked, j.asked === 1 ? "" : "s")); },
@@ -1166,6 +1184,10 @@ async function revealInFinder(path) {
 }
 
 async function toggleFinder() {
+  if (curInfo()?.kind === "open") {   // a normal folder already: open it, nothing to mount or close
+    try { await api("finder", { do: "show" }); } catch (e) { toastErr(e.message); }
+    return;
+  }
   if (finder.shown) { hideFinder(); return; }
   if (!finder.confirmed) {
     const ok = await confirmDialog(t("While it's open in Finder, any app on this Mac can read your notes, AI apps too. It closes when you lock."), t("Show in Finder"), false);
@@ -2484,7 +2506,7 @@ async function homeExtras(status, ai, leaving) {
   const [bar, store, todo, act, trash, reqs, offers] = await Promise.all([get("bar"), get("storage"), get("aitodo"), get("aiactivity"), get("trashlist"), get("sharerequests"), get("shareoffers")]);
   if (!status.isConnected) return;
   const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
-  const bits = [el("span", { class: "hs-ok" }, t("Locked on disk")),
+  const bits = [curInfo()?.kind === "open" ? el("span", { class: "hs-open" }, t("Open folder")) : el("span", { class: "hs-ok" }, t("Locked on disk")),
     el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : t("This Mac only"))];
   const problems = [];
   for (const [name, st] of [[t("GitHub backup"), store.github && store.githubStatus], ["S3 backup", store.s3 && store.s3Status]]) {
