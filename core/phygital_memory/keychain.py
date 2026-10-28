@@ -89,7 +89,7 @@ def save(service: str, account: str, secret: str) -> None:
 
 
 def read(service: str, account: str) -> str | None:
-    if not touchid.bundled():
+    if MAC and not touchid.bundled():
         return _security_read(service, account)
     k = (service, account)
     with _guard:

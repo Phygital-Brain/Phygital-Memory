@@ -76,6 +76,14 @@ jobs:
         env:
           PYTHONUTF8: "1"
         run: uv run python tests/test_smoke_server.py packaging/dist/phygital-memory-server/phygital-memory-server
+      - name: What a Windows library is missing (only when it failed)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $db = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1
+          Get-ChildItem packaging\dist\phygital-memory-server\_internal -Recurse -Include _rust*.pyd | ForEach-Object { & $db /dependents $_.FullName }
+          Get-ChildItem packaging\dist\phygital-memory-server\_internal -Filter *.dll | Select-Object Name
 
   webdav:
     name: WebDAV, with WebDAV only (${{ matrix.os }})
@@ -99,7 +107,9 @@ jobs:
         run: |
           if [ "$RUNNER_OS" = Windows ]; then os=windows; choco install winfsp -y --no-progress; else os=linux; sudo apt-get update && sudo apt-get install -y fuse3; fi
           curl -sSfLo "$RUNNER_TEMP/rc.zip" "https://downloads.rclone.org/v$RCLONE/rclone-v$RCLONE-$os-amd64.zip"
-          unzip -q "$RUNNER_TEMP/rc.zip" -d "$RUNNER_TEMP/rc" && echo "$(cd "$RUNNER_TEMP"/rc/rclone-* && pwd)" >> "$GITHUB_PATH"
+          unzip -q "$RUNNER_TEMP/rc.zip" -d "$RUNNER_TEMP/rc"
+          d="$(cd "$RUNNER_TEMP"/rc/rclone-* && pwd)"; [ "$RUNNER_OS" = Windows ] && d="$(cygpath -w "$d")"   # a Windows path for Windows programs
+          echo "$d" >> "$GITHUB_PATH"
       - run: uv sync --frozen
       - name: Test
         env:

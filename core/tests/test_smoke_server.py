@@ -46,7 +46,9 @@ env = {**os.environ, "PHYGITAL_MEMORY_STATE": str(tmp / "state"), "PHYGITAL_MEMO
 env.pop("PHYGITAL_MEMORY_SHELL_TOKEN", None)
 cmd = [str(Path(sys.argv[1]).resolve())] if len(sys.argv) > 1 else [sys.executable, "-m", "phygital_memory.server"]
 core = Path(__file__).resolve().parent.parent
-proc = subprocess.Popen(cmd, env=env, cwd=core, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+log = open(tmp / "engine.log", "wb")   # a file, not a pipe: a full pipe would stall the engine
+proc = subprocess.Popen(cmd, env=env, cwd=core, stdout=log, stderr=subprocess.STDOUT)
+said = lambda: (tmp / "engine.log").read_text(encoding="utf-8", errors="replace")[-3000:]
 try:
     up = False
     for _ in range(120):
@@ -58,15 +60,18 @@ try:
             if proc.poll() is not None:
                 break
             time.sleep(0.5)
-    check(up, "the engine starts and its page answers", proc.stdout.read().decode(errors="replace")[-1500:] if not up else "")
+    check(up, "the engine starts and its page answers", said() if not up else "")
     if not up:
         raise SystemExit(1)
 
     (tmp / "places").mkdir()
     o = api("createfolder", {"parent": str(tmp / "places"), "name": "Open Notes", "kind": "open"}).get("folder", {})
     check(o.get("kind") == "open", "an Open memory is made", o)
-    po = api("unlock", {"folder": o.get("id"), "password": ""}).get("pass")
-    check(bool(po), "it opens with no password")
+    r = api("unlock", {"folder": o.get("id"), "password": ""})
+    po = r.get("pass")
+    check(bool(po), "it opens with no password", r)
+    if not po:
+        raise SystemExit(1)
     api("save", {"folder": o.get("id"), "path": "Projects/Kite.md", "text": "# Kite\nthe orange kite festival\n"}, po)
     check((tmp / "places" / "Open Notes" / "Projects" / "Kite.md").read_text(encoding="utf-8").endswith("festival\n"),
           "a note is a normal file on disk")
@@ -80,8 +85,11 @@ try:
 
     e = api("createfolder", {"parent": str(tmp / "places"), "name": "Locked Notes", "password": "smoke test password 1"}).get("folder", {})
     check(e.get("kind") == "encrypted", "an Encrypted memory is made", e)
-    pe = api("unlock", {"folder": e.get("id"), "password": "smoke test password 1"}).get("pass")
-    check(bool(pe), "it unlocks with its password")
+    r = api("unlock", {"folder": e.get("id"), "password": "smoke test password 1"})
+    pe = r.get("pass")
+    check(bool(pe), "it unlocks with its password", r)
+    if not pe:
+        raise SystemExit(1)
     api("save", {"folder": e.get("id"), "path": "Secret.md", "text": "# Secret\nthe blue lighthouse\n"}, pe)
     raw = b"".join(p.read_bytes() for p in (tmp / "places" / "Locked Notes").rglob("*") if p.is_file())
     check(b"blue lighthouse" not in raw, "nothing readable on disk")
@@ -104,6 +112,8 @@ try:
     check(code in (200, 401), "the AI door (MCP) answers", code)
 finally:
     proc.terminate()
+    if not all(ok):   # what the engine said, for the failure
+        print(said())
     try:
         proc.wait(timeout=15)
     except Exception:

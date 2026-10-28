@@ -3016,7 +3016,21 @@ async function sendMenu() {
 }
 window.phygitalMenu = (id) => { const fn = menuFns[id]; if (fn) fn(); };
 // The Mac app downloaded an update from GitHub and put it in place: it starts the next time the app opens.
-window.phygitalUpdated = (v) => toastOk(t("Phygital Memory {0} is ready. It starts the next time you open the app.", v));
+// A newer version is out (the app window checks the latest GitHub Release when the app opens): ask now. Later asks
+// again the next time it opens. Update now downloads it, locks every memory, puts it in place and restarts.
+let updateAsked = false;
+window.phygitalUpdate = async (v) => {
+  if (!v || updateAsked) return;
+  updateAsked = true;
+  const go = await choiceDialog(t("Phygital Memory {0} is here", v),
+    t("Update now? The app restarts, and your open memories lock first."), [["now", t("Update now"), "primary"]], t("Later"));
+  if (go !== "now") return;
+  window.phygitalSaveAll && window.phygitalSaveAll();
+  toastOk(t("Updating Phygital Memory. It restarts by itself."));
+  api("updatenow").catch((e) => toastErr(e.message));
+};
+api("update").then((r) => window.phygitalUpdate(r.v)).catch(() => {});
+window.phygitalUpdateFailed = () => toastErr(t("The update didn't finish. It asks again the next time you open the app."));
 onSettings(() => sendMenu());
 
 // ---------- keyboard ----------
