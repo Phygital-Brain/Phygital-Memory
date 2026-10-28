@@ -5,7 +5,7 @@ import { api, uploadStream, setPass, setFolder, currentFolder, forgetPass, hasPa
 import { csvEditor, parseCsv, CSV_EDIT_MAX_ROWS } from "./shell/csvedit.js";
 import { docxEditor } from "./shell/docxedit.js";
 import { createEditor } from "./editor.js";
-import { el, icon } from "./shell/dom.js";
+import { el, icon, knot } from "./shell/dom.js";
 import { splitFM, parseYaml, headFor } from "./shell/frontmatter.js";
 import { askText, askPassword, confirmDialog, choiceDialog, showRecoveryKey, recoveryDialog, showLicenses } from "./shell/dialogs.js";
 import { toast, toastOk, toastErr } from "./shell/toast.js";
@@ -16,12 +16,15 @@ import { openAIApps, allowDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
-import { switcherItems, createFolderForm, manageFolders, folderTile, shortPath } from "./shell/folders.js";
+import { switcherItems, createFolderForm, manageFolders, shortPath } from "./shell/folders.js";
 import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo, openCloud, openS3 } from "./shell/panels.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
+import "@fontsource-variable/anybody/standard.css";   // brand fonts (SIL Open Font Licence)
+import "@fontsource-variable/hanken-grotesk/index.css";
+import "@fontsource-variable/jetbrains-mono/index.css";
 import "./styles.css";
 
-const PALETTE = ["#7c5cff", "#cf3f8e", "#d9773a", "#3f8850", "#23877e", "#2f86bf", "#5262d0", "#c98a12", "#d24d43", "#6f9a2c"];
+const PALETTE = ["#26D0F2", "#FF6B5A", "#C8F031", "#4D5BFF", "#FFC23D", "#FF5FA2"];   // folder colours: Phygital Key cyan and coral, plus brights from the family
 const BAD_NAME = /[\/\\:*?"<>|]/;
 
 const state = {
@@ -500,19 +503,25 @@ const touchTried = new Set(); // memories whose Touch ID ask already came up by 
 
 function drawUnlock() {
   const info = curInfo();
-  const kids = [el("div", { class: "wordmark" }, "Phygital ", el("span", {}, "Memory"))];
+  const kids = [knot(44), el("div", { class: "wordmark" }, "Phygital Memory")];
   const links = [];
+  let list = null;
   if (info) {
     const pw = el("input", { type: "password", placeholder: "Password", autocomplete: "off", "aria-label": "Password" });
     const err = el("div", { class: "unlock-err" }, info.exists || (info.joined && info.syncthing) ? "" : "Can't find this memory. It may have moved, or its drive isn't connected.");
     const btn = el("button", { class: "btn primary", type: "submit" }, "Unlock");
-    if (folderList.length > 1) {
-      const sel = el("select", { class: "unlock-pick", "aria-label": "Folder" },
-        ...folderList.map((f) => el("option", { value: f.id }, f.name + (unlocked(f.id) ? " (unlocked)" : ""))));
-      sel.value = info.id;
-      sel.addEventListener("change", () => switchTo(sel.value));
-      kids.push(sel);
-    } else kids.push(el("div", { class: "unlock-folder" }, info.name));
+    kids.push(el("div", { class: "unlock-folder" }, info.name));
+    if (folderList.length > 1) {   // every memory on show beside the card: one click switches, no list to open
+      list = el("div", { class: "unlock-list", role: "list", "aria-label": "Your memories" },
+        el("div", { class: "ul-head" }, el("span", {}, "Your memories"), el("span", {}, String(folderList.length))),
+        ...folderList.map((f) => {
+          const open = unlocked(f.id);
+          return el("button", { class: "ul-mem" + (f.id === info.id ? " on" : ""), type: "button", role: "listitem", "aria-current": f.id === info.id ? "true" : null,
+            onclick: () => { if (f.id !== info.id) switchTo(f.id); } },
+            icon(open ? "unlock" : "lock", 15), el("span", { class: "ul-text" }, el("span", { class: "ul-name" }, f.name), el("span", { class: "ul-path" }, shortPath(f.path))),
+            el("span", { class: "ul-state" + (open ? " open" : "") }, open ? "Open" : "Locked"));
+        }));
+    }
     if (info.joined) {   // shared with this person: it opens with their own key, no password
       const open = el("button", { class: "btn primary", type: "submit" }, "Open");
       kids.push(el("div", { class: "unlock-sub" }, "Shared with you. It opens with your own key."), open, err);
@@ -587,7 +596,7 @@ function drawUnlock() {
     el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, "New memory"));
   kids.push(el("div", { class: "unlock-links" }, ...links));
   const form = el("form", { class: "unlock-card", onsubmit: (e) => unlockEl._submit(e) }, ...kids);
-  unlockEl.replaceChildren(unlockDrag, form);
+  unlockEl.replaceChildren(unlockDrag, el("div", { class: "unlock-wrap" + (list ? " many" : "") }, form, list));
 }
 
 function showUnlock() {
@@ -606,7 +615,7 @@ function drawSwitcher() {
   sbName.textContent = info ? info.name : "Phygital Memory";
   sbPath.textContent = info ? (info.joined && info.syncthing ? "Shared with you" : shortPath(info.path)) : "No folder yet";
   sbPath.title = info ? info.path : "";
-  sbTile.replaceChildren(folderTile(info || {}, !!(info && unlocked(info.id)), 34));
+  sbTile.replaceChildren(knot(28));
   refreshBar();
   sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
 }
@@ -665,7 +674,7 @@ function buildApp() {
     if (e.target !== treeEl) return;
     e.preventDefault();
     showMenu([{ label: "New note", fn: () => newNote("") }, { label: "New folder", fn: () => newFolder("") }, { sep: true },
-      { label: "Import files", fn: () => importInto("", false) }, { label: "Import folder", fn: () => importInto("", true) }], e.clientX, e.clientY);
+      { label: "Import", sub: [{ label: "Files", fn: () => importInto("", false) }, { label: "Folder", fn: () => importInto("", true) }] }], e.clientX, e.clientY);
   });
   dropFromFinder(treeEl);
 
@@ -1340,7 +1349,7 @@ function rowFor(n, depth, where = "") {
   const cur = state.active && state.active.path === n.path;
   const open = state.open.has(n.path);
   const ic = folder ? icon("folder", 18) : icon(isImg(n.name) ? "image" : "file", 18);
-  if (folder) ic.style.color = folderColor(n.path);
+  if (folder) { ic.classList.add("ic-fill"); ic.style.color = folderColor(n.path); }
   const pinned = getPref("pins", []).includes(n.path);
   const more = el("button", { class: "row-more", title: "More", "aria-label": "More", onclick: (e) => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); rowMenu(n, r.left, r.bottom + 4); } }, icon("more", 15));
   const row = el("div", {
@@ -1534,8 +1543,7 @@ async function rowMenu(n, x, y) {
       { label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) },
       { label: (state.aiPrivate || []).includes(n.path) ? "Open to AI" : "Private for AI", fn: () => toggleAiPrivate(n.path) },
       { sep: true },
-      { label: "Import files", fn: () => importInto(n.path, false) },
-      { label: "Import folder", fn: () => importInto(n.path, true) });
+      { label: "Import", sub: [{ label: "Files", fn: () => importInto(n.path, false) }, { label: "Folder", fn: () => importInto(n.path, true) }] });
   } else {
     items.push({ label: "Open in new tab", fn: () => openPath(n.path) });
     items.push({ label: pinned ? "Unpin" : "Pin", fn: () => togglePin(n.path) });
@@ -1549,20 +1557,22 @@ async function rowMenu(n, x, y) {
     { label: "Show in Finder", fn: () => revealInFinder(n.path) },
     { label: "Rename", fn: () => renameDialog(n) });
   if (folder) {
-    const swatches = el("div", { class: "swatches" }, ...PALETTE.map((c) =>
-      el("button", { class: "swatch" + (colorsPref()[n.path] === c ? " on" : ""), style: `background:${c}`, title: c, "aria-label": "Colour " + c,
-        onclick: () => { closeMenu(); setMapPref("colors", n.path, c); renderTree(); } })));
-    const mode = folderMode(n.path), own = getPref("folderSort", {})[n.path], manual = (getPref("order", {})[n.path] || []).length;
+    const own = colorsPref()[n.path];
+    const swatch = (c) => el("button", { class: "swatch" + ((c ? own === c : !own) ? " on" : "") + (c ? "" : " auto"), style: c ? `background:${c}` : null,
+      title: c ? "Colour" : "Auto colour", "aria-label": c ? "Colour " + c : "Auto colour",
+      onclick: () => { closeMenu(); setMapPref("colors", n.path, c); renderTree(); } });
+    const colourRow = el("div", { class: "menu-item mi-colour", role: "group", "aria-label": "Colour" },
+      el("span", { class: "mi-main" }, "Colour"), el("span", { class: "swatches" }, ...PALETTE.map(swatch), swatch(null)));
+    const mode = folderMode(n.path), ownSort = getPref("folderSort", {})[n.path], manual = (getPref("order", {})[n.path] || []).length;
     items.push(
       { sep: true },
-      { label: "Sort by", value: own ? SORTS.find(([k]) => k === own)?.[1] : "Default", sub: [
+      { label: "Sort by", value: ownSort ? SORTS.find(([k]) => k === ownSort)?.[1] : "Default", sub: [
         ...SORTS.map(([k, t, hint]) => ({ label: t, hint, check: mode === k, fn: () => { setMapPref("folderSort", n.path, k); setMapPref("order", n.path, null); renderTree(); } })),
-        ...(own ? [{ sep: true }, { label: "Use the default sort", fn: () => { setMapPref("folderSort", n.path, null); renderTree(); } }] : []),
+        ...(ownSort ? [{ sep: true }, { label: "Use the default sort", fn: () => { setMapPref("folderSort", n.path, null); renderTree(); } }] : []),
         ...(manual ? [{ sep: true }, { label: "Reset dragged order", fn: () => { setMapPref("order", n.path, null); renderTree(); } }] : []),
       ] },
-      { sep: true },
-      { label: "Colour", value: colorsPref()[n.path] ? "" : "Auto", dot: folderColor(n.path), sub: [
-        { node: swatches }, { label: "Auto colour", check: !colorsPref()[n.path], fn: () => { setMapPref("colors", n.path, null); renderTree(); } }] });
+      { node: colourRow },
+      { sep: true });
   }
   items.push({ label: "Move to trash", cls: "danger", fn: () => trashDialog(n) });
   showMenu(items, x, y);

@@ -164,3 +164,21 @@ a.md-wiki-missing { color: var(--text-3); border-bottom-style: dashed; border-bo
                        color: var(--text-3); cursor: pointer; font-size: .85em; line-height: 1.4; }
 
 .md-table-live td, .md-table-live th { height: 34px; }
+
+/* brand look */
+.md-h1, .md-h2, .md-h3 { font-stretch: 118%; }
+.md-highlight { background: var(--accent-soft); color: var(--text); border-radius: 2px; }
+.md-code { background: var(--bg-rec); }
+.md-tag { border-radius: var(--r-xs); }
+.md-check { border-radius: 3px; }
+.md-check:checked { background: var(--fill); border-color: var(--fill); }
+.md-check:checked::after { border-color: var(--on-fill); }
+.md-callout { --c: var(--agent); border-radius: 0; }
+.md-callout-first { border-top-right-radius: 6px; }
+.md-callout.md-block-last { border-bottom-right-radius: 6px; }
+.md-codeblock { background: var(--bg-rec); }
+.md-codeblock-first { border-radius: 6px 6px 0 0; }
+.md-codeblock-last { border-radius: 0 0 6px 6px; }
+.md-copy { border-radius: var(--r-xs); }
+.tok-keyword { color: var(--agent); } .tok-string { color: var(--accent); }
+.cm-searchMatch { background: var(--accent-soft); }

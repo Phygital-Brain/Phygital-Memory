@@ -1,6 +1,6 @@
 // Panels from the sidebar's status icons: where this folder is stored, the AI panel (tasks and activity), the trash.
 // Everything from the server is put in as text only.
-import { el, icon } from "./dom.js";
+import { el, icon, tabbed } from "./dom.js";
 import { modal } from "./dialogs.js";
 import { shortPath } from "./folders.js";
 
@@ -66,7 +66,7 @@ export function openStorage(ctx) {
         el("span", {}, `${s.offline} file${s.offline === 1 ? " is" : "s are"} only in the cloud and can't open yet.`),
         btn("Download now", () => ctx.download())) : null,
       el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, "Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password.")),
-      el("div", { class: "set-section" }, "Stored in"),
+      tabbed([{ title: "Stored in", rows: [
       option("laptop", "This Mac only",
         "A folder on this Mac. It's encrypted: only you can read it, with your password. Nothing goes online unless you add a backup.",
         macOnly,
@@ -77,8 +77,8 @@ export function openStorage(ctx) {
         !macOnly,
         sub("Synced folder", "A folder your cloud app keeps in sync, like iCloud Drive or Dropbox.", folderSynced, chips),
         sub("WebDAV", "A server such as Nextcloud. Mac + WebDAV keeps a copy on this Mac that stays in sync. WebDAV only keeps nothing on this Mac: the memory opens from the server.",
-          !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns)),
-      el("div", { class: "set-section" }, "Backup"),
+          !!(s.webdav || s.cloudOnly), webdavNow ? el("div", { class: "st-gh-note" }, webdavNow) : null, webdavBtns))] },
+      { title: "Backup", rows: [
       option("lock", "Private GitHub", "A private GitHub repo keeps an encrypted copy and every past version. It updates a few seconds after each change, and works with any place above. GitHub takes files up to 95 MB each, and works best when the whole memory is under about 5 GB.",
         !!s.github, el("div", { class: "st-gh-note" }, "Limits: each file up to 95 MB, the whole memory up to about 5 GB. Bigger files stay out of this backup."), github),
       option("cloud", "Amazon S3 or Cloudflare R2", "An encrypted copy in your Amazon S3 or Cloudflare R2 bucket. It updates a few seconds after each change, keeps the files it replaces in a history folder, and takes files of any size.",
@@ -87,7 +87,7 @@ export function openStorage(ctx) {
               el("div", {}, btn("Stop backup", () => run(ctx.stopS3, "changed"), "st-stop")))
           : el("div", {}, btn("Turn on backup", () => run(ctx.toS3, "changed")))),
       option("file", "Backup file", "One .zip of the encrypted files, to keep on a USB stick, a drive or anywhere. It opens with the same password, or the recovery key: Open memory › From a backup file.",
-        false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null)))),
+        false, el("div", {}, btn("Save backup file", () => run(ctx.saveBackup, null))))] }]),
       el("div", { class: "st-note" }, "Moving locks the memory first. Unlock it again after."),
       err,
       el("div", { class: "dlg-actions" }, el("button", { class: "btn", onclick: () => done(null) }, "Close")));

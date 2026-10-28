@@ -70,3 +70,40 @@ export function icon(name, size = 16, width = 1.7) {
   }
   return s;
 }
+
+// The Knot: the app's mark (brand/phygital-memory-mark.svg). Above 32px the fine wire, below it the thicker favicon wire.
+export function knot(size = 24) {
+  const NS = "http://www.w3.org/2000/svg", w = size < 32 ? 4 : 3, r = size < 32 ? 4 : 3.2;
+  const s = document.createElementNS(NS, "svg");
+  s.setAttribute("viewBox", "0 0 64 64"); s.setAttribute("width", size); s.setAttribute("height", size);
+  s.setAttribute("class", "knot"); s.setAttribute("aria-hidden", "true");
+  const add = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); s.append(n); return n; };
+  add("circle", { cx: 32, cy: 32, r: 30, fill: "#C8F031" });
+  add("path", { class: "knot-wire", d: "M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 C45 29 46 36 46 42 H52",
+    fill: "none", stroke: "#0B0D12", "stroke-width": w, "stroke-linecap": "round", "stroke-linejoin": "round" });
+  add("circle", { cx: 12, cy: 42, r, fill: "#4D5BFF" });
+  add("circle", { cx: 52, cy: 42, r, fill: "#4D5BFF" });
+  return s;
+}
+
+
+// Small tabs over pages of rows: [{title, rows}]. The box eases to the open page's height, so a short page leaves no gap.
+export function tabbed(pages, start = 0) {
+  const body = el("div", { class: "tab-body" });
+  const strip = el("div", { class: "tab-strip", role: "tablist" });
+  const show = (i, ease) => {
+    const from = body.offsetHeight;
+    strip.querySelectorAll(".tab-b").forEach((b, j) => { b.classList.toggle("on", j === i); b.setAttribute("aria-selected", j === i ? "true" : "false"); });
+    body.replaceChildren(el("div", { class: "tab-page", role: "tabpanel" }, ...pages[i].rows));
+    if (!ease) return;
+    body.style.height = "auto";
+    const to = body.offsetHeight;
+    body.style.height = from + "px";
+    body.offsetHeight;   // start from the old height
+    body.style.height = to + "px";
+  };
+  body.addEventListener("transitionend", () => { body.style.height = ""; });   // back to natural height, so later changes fit
+  pages.forEach((pg, i) => strip.append(el("button", { class: "tab-b", type: "button", role: "tab", onclick: () => show(i, true) }, pg.title)));
+  show(start, false);
+  return el("div", { class: "tabbed" }, strip, body);
+}

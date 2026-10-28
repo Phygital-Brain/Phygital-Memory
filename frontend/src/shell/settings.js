@@ -1,6 +1,6 @@
 // Per-device settings (theme, editor font size, properties on/off, Desktop icon when unlocked). The editor always uses the full width. They live in localStorage, because they
 // belong to this computer, not to the notes.
-import { el, icon } from "./dom.js";
+import { el, icon, tabbed } from "./dom.js";
 import { info } from "./panels.js";
 
 const KEY = "phygital-memory-settings";
@@ -68,55 +68,62 @@ export function openSettings(folderOpts, me) {
   const section = (title) => el("div", { class: "set-section" }, title);
   const f = folderOpts;
 
-  const rows = [section("Look"),
+  const general = [section("Look"),
     row("Theme", null, seg([["system", "System"], ["light", "Light"], ["dark", "Dark"]], () => cur.theme, (v) => update({ theme: v })),
       "System follows your Mac's light or dark mode."),
     row("Font size", null, el("div", { class: "set-range" }, size, sizeVal), "Text size in the editor."),
-    row("Show properties", "Fields under a note's title.", sw(props), "The info block at the top of a note, like tags and dates.")];
+    row("Show properties", "Fields under a note's title.", sw(props), "The info block at the top of a note, like tags and dates."),
+    section("Finder")];
+  if (f && f.finderAvailable) general.push(row("Show in Finder", "Your notes as a normal folder.", toggle("Show in Finder", f.finderShown, f.toggleFinder),
+    "While it's open, any app on this Mac can read your notes. It closes when you lock."));
+  general.push(row("Desktop icon", "A shortcut on the Desktop while unlocked.", sw(onUnlock), "It opens your notes in Finder and goes away when you lock."));
+  if (me && me.licenses) general.push(el("button", { class: "set-lic", type: "button", onclick: () => { close(); me.licenses(); } }, "Licences"));
+
+  const memory = [];
+  if (f) {
+    memory.push(el("div", { class: "set-mem" }, f.name),
+      row("Name", null, btn("Rename", f.rename)),
+      row("Stored in", f.where, btn("Change", f.storage), "Where the encrypted files live, and the GitHub backup."));
+    if (f.revealVault) memory.push(row("Encrypted files", "What's stored on disk.", btn("Show", f.revealVault),
+      "These are the real files. Only you can read them, with your password."));
+    if (f.showHidden) memory.push(row("Show hidden files", "⇧⌘.", toggle("Show hidden files", f.showHidden.on, f.showHidden.set),
+      "Files and folders whose names start with a dot, like .env. They show in Hidden Notes at the bottom of the list."));
+    if (f.touchId) memory.push(row("Unlock with Touch ID", "Your finger instead of your password.", toggle("Unlock with Touch ID", f.touchId.on, f.touchId.set),
+      "Your password is kept in the Mac's Keychain. Only this app can read it, after your fingerprint."));
+    if (f.recoveryKey) memory.push(row("Recovery key", "44 words that open the memory if you forget the password.", btn("Show", f.recoveryKey),
+      "Write them down or keep them in a password manager. Anyone with these words can open the memory."));
+  }
+
+  const sharing = [];
   if (me) {
     const name = el("input", { class: "dlg-input set-name", value: me.name || "", maxlength: "60", spellcheck: "false", "aria-label": "Your name" });
     name.addEventListener("change", async () => { name.value = await me.set(name.value.trim()); });
-    rows.push(section("Sharing"), row("Your name", null, name, "What others see when you share a memory with them or join one."));
-    if (me.macs) rows.push(row("Your Macs", me.macs.list.length ? "Linked: " + me.macs.list.map((m) => m.name).join(", ") : "Only this Mac.",
+    sharing.push(section("Sharing"), row("Your name", null, name, "What others see when you share a memory with them or join one."));
+    if (me.macs) sharing.push(row("Your Macs", me.macs.list.length ? "Linked: " + me.macs.list.map((m) => m.name).join(", ") : "Only this Mac.",
       btn("Link a Mac", me.macs.link), "Your other Mac becomes you too: the memories you pick sync between your Macs, still locked with the same password."));
     if (me.approver) {
       const a = me.approver;
-      rows.push(row("Approve sharing with", a.label, a.setUp ? btn("Set up", a.setUp) : null,
+      sharing.push(row("Approve sharing with", a.label, a.setUp ? btn("Set up", a.setUp) : null,
         "Letting someone in, adding, removing or forgetting a person is signed with your own key (Phygital Key format), so there's a record nobody can change."));
-      if (a.signed.length) rows.push(el("div", { class: "act-list share-hist" }, ...a.signed.map((x) => el("div", { class: "todo-row share-row" },
+      if (a.signed.length) sharing.push(el("div", { class: "act-list share-hist" }, ...a.signed.map((x) => el("div", { class: "todo-row share-row" },
         el("div", { class: "act-main" }, el("div", { class: "act-line" }, x.what[0].toUpperCase() + x.what.slice(1)),
           el("div", { class: "act-folder" }, "Signed · " + new Date(x.t * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })))))));
     }
   }
   if (f) {
-    rows.push(section(`This memory: ${f.name}`),
-      row("Name", null, btn("Rename", f.rename)),
-      row("Stored in", f.where, btn("Change", f.storage), "Where the encrypted files live, and the GitHub backup."));
-    if (f.revealVault) rows.push(row("Encrypted files", "What's stored on disk.", btn("Show", f.revealVault),
-      "These are the real files. Only you can read them, with your password."));
-    if (f.showHidden) rows.push(row("Show hidden files", "⇧⌘.", toggle("Show hidden files", f.showHidden.on, f.showHidden.set),
-      "Files and folders whose names start with a dot, like .env. They show in Hidden Notes at the bottom of the list."));
-  }
-  rows.push(section("Finder"));
-  if (f && f.finderAvailable) rows.push(row("Show in Finder", "Your notes as a normal folder.", toggle("Show in Finder", f.finderShown, f.toggleFinder),
-    "While it's open, any app on this Mac can read your notes. It closes when you lock."));
-  rows.push(row("Desktop icon", "A shortcut on the Desktop while unlocked.", sw(onUnlock), "It opens your notes in Finder and goes away when you lock."));
-  if (f) {
-    rows.push(section("Security and AI"));
-    if (f.touchId) rows.push(row("Unlock with Touch ID", "Your finger instead of your password.", toggle("Unlock with Touch ID", f.touchId.on, f.touchId.set),
-      "Your password is kept in the Mac's Keychain. Only this app can read it, after your fingerprint."));
-    if (f.recoveryKey) rows.push(row("Recovery key", "44 words that open the memory if you forget the password.", btn("Show", f.recoveryKey),
-      "Write them down or keep them in a password manager. Anyone with these words can open the memory."));
-    if (f.aiApps) rows.push(row("AI apps", "Which AI apps can use your notes.", btn("Manage", f.aiApps),
+    sharing.push(section("AI"));
+    if (f.aiApps) sharing.push(row("AI apps", "Which AI apps can use your notes.", btn("Manage", f.aiApps),
       "Each app gets its own key and only reaches unlocked memories."));
-    rows.push(row("Hide from AI", "No AI app can reach this memory.", toggle("Hide from AI", f.aiHidden, f.setAiHidden),
+    sharing.push(row("Hide from AI", "No AI app can reach this memory.", toggle("Hide from AI", f.aiHidden, f.setAiHidden),
       "Turns off AI access to this memory, whatever each app is allowed."));
   }
-  if (me && me.licenses) rows.push(section("About"), row("Open-source licences", "Syncthing and rclone, which this app includes.", btn("Show", me.licenses)));
+  const pages = [{ title: "General", rows: general }];
+  if (memory.length) pages.push({ title: "This memory", rows: memory });
+  if (sharing.length) pages.push({ title: me ? "Sharing and AI" : "AI", rows: sharing });
   const card = el("div", { class: "dlg settings", role: "dialog", "aria-label": "Settings" },
     el("div", { class: "set-head" }, el("div", { class: "dlg-title" }, "Settings"),
       el("button", { class: "icon-btn", title: "Close", "aria-label": "Close", onclick: close }, icon("x", 14, 2))),
-    ...rows);
+    tabbed(pages));
   const back = el("div", { class: "overlay modal", onmousedown: (e) => { if (e.target === back) close(); } }, card);
   document.addEventListener("keydown", onKey, true);
   document.body.append(back);

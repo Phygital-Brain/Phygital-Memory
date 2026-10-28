@@ -18,6 +18,8 @@ const options = {
   minify: !process.argv.includes("--watch"),
   sourcemap: false,
   legalComments: "none",
+  loader: { ".woff2": "file" },   // the brand fonts ship inside the app, nothing loads from the internet
+  assetNames: "[name]-[hash]",
   outdir: join(OUT, "assets"),
   metafile: true,
   logLevel: "info",
