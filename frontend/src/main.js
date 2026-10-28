@@ -18,7 +18,7 @@ import { aiAppsView, allowDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
-import { switcherItems, createFolderForm, manageFolders, shortPath } from "./shell/folders.js";
+import { switcherItems, manageFolders, shortPath } from "./shell/folders.js";
 import { openStorage, openAIPanel, openTrash, openGithubSignIn, pickRepo, openCloud, openS3 } from "./shell/panels.js";
 import { CSV, PDF, VIDEO, AUDIO, csvTable } from "./ed/media.js";
 import "@fontsource-variable/anybody/standard.css";   // brand fonts (SIL Open Font Licence)
@@ -426,7 +426,7 @@ async function watchShare() {
 
 async function openOtherFolder() {
   try {
-    const p = await pickFolder(t("Choose a locked notes folder"));
+    const p = await pickFolder(t("Choose a notes folder"));
     if (!p) return;
     const j = await api("addfolder", { path: p });
     await refreshFolders();
@@ -435,19 +435,24 @@ async function openOtherFolder() {
   } catch (e) { toastErr(e.message); }
 }
 
-async function createNewFolder() {
-  const v = await createFolderForm(() => pickFolder(t("Choose where to put the new folder")));
-  if (!v) return;
-  try {
-    toast(t("Making the folder"));
-    const j = await api("createfolder", v);
-    await refreshFolders();
-    await switchTo(j.folder.id);
-    if (currentFolder() === j.folder.id) await unlockCurrent(v.password);
-    toastOk(t("Created \"{0}\".", j.folder.name));
-    openSetupTab();   // a new memory starts with its setup
-  } catch (e) { toastErr(e.message); }
+// A new memory is made on the setup page: kind, name, place, password, then what it's for.
+function createNewFolder() {
+  openSetupTab({
+    pick: () => pickFolder(t("Choose where to keep the new memory")),
+    create: async (v) => {
+      creating = true;
+      try {
+        const j = await api("createfolder", v);
+        await refreshFolders();
+        await switchTo(j.folder.id);
+        if (currentFolder() !== j.folder.id) throw new Error(t("Couldn't open the new memory."));
+        if (!hasPass(j.folder.id)) await unlockCurrent(v.password || "");
+        toastOk(t("Created \"{0}\".", j.folder.name));
+      } finally { creating = false; }
+    },
+  });
 }
+let creating = false;   // a new memory is opened by its setup page, not by the unlock screen
 
 async function renameFolder(id) {
   const info = (id && folderList.find((f) => f.id === id)) || curInfo();
@@ -522,10 +527,23 @@ function drawUnlock() {
           return el("button", { class: "ul-mem" + (f.id === info.id ? " on" : ""), type: "button", role: "listitem", "aria-current": f.id === info.id ? "true" : null,
             onclick: () => { if (f.id !== info.id) switchTo(f.id); } },
             icon(open ? "unlock" : "lock", 15), el("span", { class: "ul-text" }, el("span", { class: "ul-name" }, f.name), el("span", { class: "ul-path" }, shortPath(f.path))),
-            el("span", { class: "ul-state" + (open ? " open" : "") }, open ? "Open" : "Locked"));
+            el("span", { class: "ul-state" + (open ? " open" : "") }, f.kind === "open" ? t("Open") : open ? t("Unlocked") : t("Locked")));
         }));
     }
-    if (info.joined) {   // shared with this person: it opens with their own key, no password
+    if (info.kind === "open") {   // a plain folder: no password, it just opens
+      const open = el("button", { class: "btn primary", type: "submit" }, t("Open"));
+      kids.push(el("div", { class: "unlock-sub" }, t("An Open memory: a normal folder, no password.")), open, err);
+      const tryOpen = async (e) => {
+        e?.preventDefault();
+        if (creating || (!e && (!document.body.contains(open) || currentFolder() !== info.id || hasPass(info.id)))) return;
+        err.textContent = ""; open.disabled = true;
+        try { await unlockCurrent(""); } catch (x) { err.textContent = x.message; }
+        open.disabled = false;
+      };
+      unlockEl._submit = tryOpen;
+      if (info.exists) setTimeout(tryOpen, 0);   // opens by itself
+      unlockEl._focus = () => open.focus();
+    } else if (info.joined) {   // shared with this person: it opens with their own key, no password
       const open = el("button", { class: "btn primary", type: "submit" }, t("Open"));
       kids.push(el("div", { class: "unlock-sub" }, t("Shared with you. It opens with your own key.")), open, err);
       const tryOpen = async (e) => {
@@ -2377,14 +2395,15 @@ function openHomeTab() {
 }
 
 // "Set up your Phygital Memory": its own page over the app, opened from Home or right after a new memory is made.
-function openSetupTab() {
+function openSetupTab(more = {}) {
   if (document.querySelector(".setup-page")) return;
   const page = el("div", { class: "setup-page", role: "dialog", "aria-modal": "true", "aria-label": t("Set up your Phygital Memory") });
   document.body.append(page);
   renderSetup(page, {
     api, language: currentLanguage, openAI: (k) => openAI(k),
     files: async () => { await syncFromDisk(); refreshHome(); },
-    done: () => { page.remove(); goHome(); },
+    done: () => { page.remove(); if (hasPass(currentFolder())) goHome(); },
+    ...more,
   });
 }
 const isBrain = () => state.files.some((f) => f.path === "CLAUDE.md");
@@ -2406,10 +2425,13 @@ function renderHome(tab) {
   const recent = [...notes].sort((a, b) => (b.mtime || 0) - (a.mtime || 0)).slice(0, 8);
   const pinned = getPref("pins", []).map((p) => state.files.find((f) => f.path === p)).filter(Boolean);
   const status = el("div", { class: "home-status" }), ai = el("div", { class: "home-ai" }), leaving = el("div", { class: "home-leaving" });
+  const daily = el("div", { class: "home-daily" });
+  homeDaily(daily, notes);
   tab.body.replaceChildren(
     el("div", { class: "home-top" }, el("h1", { class: "home-title" }, t("Home")),
       homeClock()),
     status,
+    daily,
     ...(isBrain() ? [] : [el("button", { class: "home-brain", type: "button", onclick: openSetupTab }, knot(30),
       el("span", { class: "hb-text" }, el("span", { class: "hb-t" }, t("Set up your Phygital Memory")),
         el("span", { class: "hb-s" }, t("A few questions, all clicks. Folders, rules and About pages your AI works with."))),
@@ -2420,6 +2442,24 @@ function renderHome(tab) {
     recent.length ? el("div", { class: "home-list" }, ...recent.map(item)) : el("div", { class: "home-none" }, t("No notes yet. Press ⌘N to write one.")),
     leaving);
   homeExtras(status, ai, leaving);
+}
+
+// The latest daily note (the newest note named like 2026-10-28), shown on Home as plain text; a click opens it.
+async function homeDaily(box, notes) {
+  const day = (f) => (f.path.split("/").pop().match(/^(\d{4}-\d{2}-\d{2})\.md$/i) || [])[1];
+  const f = notes.filter(day).sort((a, b) => day(b).localeCompare(day(a)))[0];
+  if (!f) return;
+  let body = "";
+  try { body = splitFM((await api("read", { path: f.path })).text || "").body; } catch { return; }
+  if (!box.isConnected) return;
+  const inline = (line) => line.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2").replace(/\[\[([^\]]+)\]\]/g, "$1").replace(/==|`/g, "")
+    .split(/(\*\*[^*]+\*\*)/).map((p) => /^\*\*.+\*\*$/.test(p) ? el("strong", {}, p.slice(2, -2)) : p);
+  const lines = body.split("\n").map((l) => l.trim()).filter((l) => l && !/^%%.*%%$/.test(l) && !/^---+$/.test(l));
+  box.replaceChildren(el("h2", { class: "home-h" }, t("Daily")),
+    el("button", { class: "hd-card", type: "button", onclick: () => openPath(f.path) },
+      el("span", { class: "hd-date" }, label(f.path)),
+      el("span", { class: "hd-text" }, ...(lines.length ? lines : [t("Nothing written yet.")]).map((l) =>
+        el("span", { class: /^#/.test(l) ? "hd-line hd-head" : "hd-line" }, ...inline(l.replace(/^#+\s*|^[-*]\s+(\[[ x]\]\s*)?|^>\s*(\[![^\]]+\]\s*)?/gi, "")))))));
 }
 
 // The Mac's date and time beside the title, kept current while Home is on screen.

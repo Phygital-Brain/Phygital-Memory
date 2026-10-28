@@ -1,13 +1,17 @@
-// "Set up your Phygital Memory": its own page over the app. Your name, then Work or Personal (or both). The app builds
-// the same simple skeleton for everyone (folders, rules, basic About notes), adds the work parts for work, and hands
-// the rest to your AI: one message to paste that has it follow Phygital Brain's own setup guide, always up to date.
-// ctx: {api, language(), openAI(tab), done(), files()}.
+// "Set up your Phygital Memory": its own page over the app. Your name, then (for a new memory) Open or Encrypted, its
+// name, place and password, then Work or Personal (or both). The app builds the same simple skeleton for everyone
+// (folders, rules, basic About notes), adds the work parts for work, and hands the rest to your AI: one message to
+// paste that has it follow Phygital Brain's own setup guide, always up to date.
+// ctx: {api, language(), openAI(tab), done(), files(), create?({kind, parent, name, password}), pick?()}. With create,
+// the memory is made right before the build.
 import { el, icon, knot } from "./dom.js";
 import { t } from "./i18n.js";
 import { toastOk, toastErr } from "./toast.js";
 
 // The cards' drawings: 24px grid, one stroke weight, like the app's own icons
 const ART = {
+  open: ["M6 11h12v9H6z", "M9 11V7.5a3 3 0 0 1 5.8-1.1"],
+  encrypted: ["M6 11h12v9H6z", "M9 11V8a3 3 0 0 1 6 0v3", "M12 14.5v2.5"],
   work: ["M4 8h16v11H4z", "M9 8V5h6v3", "M4 13h16"],
   personal: ["M4 11l8-7 8 7", "M6 9.5V20h12V9.5", "M12 17s-3-1.8-3-3.7a1.5 1.5 0 0 1 3-.6 1.5 1.5 0 0 1 3 .6c0 1.9-3 3.7-3 3.7z"],
 };
@@ -25,6 +29,11 @@ const QUESTIONS = () => [
     ["work", t("Work"), t("Projects, clients, offers and the people you work with.")],
     ["personal", t("Personal"), t("Goals, habits, home, health and side projects.")]] },
 ];
+
+// A new memory: one kind or the other, never both
+const KINDS = () => ({ key: "kind", one: true, q: t("What kind of memory?"), options: [
+  ["open", t("Open"), t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
+  ["encrypted", t("Encrypted"), t("Locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.")]] });
 
 // The basic About notes, to fill later (your AI does it with the setup guide). Work adds the business ones
 function pages(name, work) {
@@ -48,9 +57,19 @@ function pages(name, work) {
 
 export function renderSetup(body, ctx) {
   const Q = QUESTIONS();
-  const answers = Object.fromEntries(Q.map((q) => [q.key, []]));
+  const answers = Object.fromEntries([...Q, KINDS()].map((q) => [q.key, []]));
   let name = "", lang = "en", at = 0;
-  const total = 1 + Q.length;   // the name screen, then the question
+  const mem = { name: t("My memory"), parent: "", password: "", again: "" };   // a new memory's name, place and password
+  const screens = ctx.create ? ["name", KINDS(), "place", ...Q] : ["name", ...Q];
+  const total = screens.length;
+  const encrypted = () => answers.kind.includes("encrypted");
+  const valid = (i) => {
+    const sc = screens[i];
+    if (sc === "name") return !!name.trim();
+    if (sc === "place") return !!mem.name.trim() && !/[\/\\:*?"<>|]/.test(mem.name) && !mem.name.trim().startsWith(".") && !!mem.parent
+      && (!encrypted() || (mem.password.length >= 8 && mem.password === mem.again));
+    return answers[sc.key].length > 0;
+  };
 
   const bar = el("div", { class: "sp-bar", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": total });
   const drawBar = (i) => {
@@ -65,12 +84,13 @@ export function renderSetup(body, ctx) {
   // Move to screen i with the page's one motion: the old screen lifts away, the new one rises in
   const go = (i, dir = 1) => {
     if (i < 0) return;
-    if (i === 1 && !name.trim()) return;
+    if (i > at && !valid(at)) return;   // moving on needs this screen done
     if (i >= total) return buildView();
     const old = stage.firstElementChild;
     const show = () => {
       at = i; drawBar(i);
-      stage.replaceChildren(i === 0 ? nameView() : questionView(Q[i - 1]));
+      const sc = screens[i];
+      stage.replaceChildren(sc === "name" ? nameView() : sc === "place" ? placeView() : questionView(sc));
       stage.firstElementChild.classList.add(dir > 0 ? "in-up" : "in-down");
       back.hidden = i === 0;
       foot.querySelector(".sp-count").textContent = t("{0} of {1}", i + 1, total);
@@ -83,10 +103,8 @@ export function renderSetup(body, ctx) {
     } else show();
   };
   const refreshNext = () => {
-    if (at === 0) { next.textContent = t("Next"); next.disabled = !name.trim(); return; }
-    const n = answers[Q[at - 1].key].length;
     next.textContent = at === total - 1 ? t("Set it up") : t("Next");
-    next.disabled = !n;   // pick Work, Personal or both
+    next.disabled = !valid(at);
   };
 
   // Screen 1: the name the AI uses, and the language of the folders and rules
@@ -127,17 +145,47 @@ export function renderSetup(body, ctx) {
       el("p", { class: "sp-hint" }, t("Your notes stay in whatever language you write.")));
   };
 
+  // A new memory's name, where it lives, and (Encrypted) its password
+  const placeView = () => {
+    const field = (label, input) => el("label", { class: "sp-field" }, el("span", { class: "sp-sub" }, label), input);
+    const inp = (key, props) => {
+      const x = el("input", { class: "sp-input", value: mem[key], spellcheck: "false", autocomplete: "off", ...props });
+      x.addEventListener("input", () => { mem[key] = x.value; refreshNext(); });
+      x.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); next.click(); } });
+      return x;
+    };
+    const where = el("span", { class: "sp-where" }, mem.parent || t("Not chosen yet"));
+    const choose = el("button", { class: "btn", type: "button", onclick: async () => {
+      choose.disabled = true;
+      try { const p = await ctx.pick(); if (p) { mem.parent = p; where.textContent = p; where.title = p; refreshNext(); } }
+      catch (e) { toastErr(e.message); }
+      choose.disabled = false;
+    } }, icon("folder", 14), t("Choose"));
+    const kids = [el("h2", { class: "sp-q" }, encrypted() ? t("Name it and lock it") : t("Name it and pick its place")),
+      field(t("Memory name"), inp("name", { maxlength: 60, "aria-label": t("Memory name") })),
+      el("div", { class: "sp-field" }, el("span", { class: "sp-sub" }, t("Where to keep it")), el("div", { class: "sp-where-row" }, where, choose)),
+      el("p", { class: "sp-hint" }, encrypted() ? t("A cloud folder (iCloud Drive, Dropbox) keeps a locked copy safe in the cloud.")
+        : t("Pick iCloud Drive, Dropbox or Google Drive to have it on your phone too."))];
+    if (encrypted()) kids.push(
+      field(t("Password (8 or more characters)"), inp("password", { type: "password", "aria-label": t("Password") })),
+      field(t("Password again"), inp("again", { type: "password", "aria-label": t("Password again") })),
+      el("p", { class: "sp-hint" }, t("There's no way back in without it. You get a recovery key in Settings.")));
+    return el("section", { class: "sp-screen sp-place" }, ...kids);
+  };
+
   // A question: cards with a drawing, a name and a line. Click or press its number to pick; many are fine
   const questionView = (q) => {
     const n = q.options.length;   // rows that come out even: 2 and 4 in twos, 5 and 6 in threes, 7 as 4+3
-    const grid = el("div", { class: `sp-grid c${n <= 2 || n === 4 ? 2 : n <= 6 ? 3 : 4}` + (q.agent ? " agent" : ""), role: "group", "aria-label": q.q });
+    const grid = el("div", { class: `sp-grid c${n <= 2 || n === 4 ? 2 : n <= 6 ? 3 : 4}` + (q.agent ? " agent" : "") + (q.one ? " kinds" : ""),
+      role: q.one ? "radiogroup" : "group", "aria-label": q.q });
     q.options.forEach(([v, label, desc], k) => {
       const on = () => answers[q.key].includes(v);
-      const card = el("button", { class: "sp-card" + (on() ? " on" : ""), type: "button", role: "checkbox", "aria-checked": String(on()),
+      const card = el("button", { class: "sp-card" + (on() ? " on" : "") + (q.one ? ` k-${v}` : ""), type: "button", role: q.one ? "radio" : "checkbox", "aria-checked": String(on()),
         style: `--i:${k}`,
         onclick: (e) => {
           const list = answers[q.key];
-          if (on()) list.splice(list.indexOf(v), 1);
+          if (q.one) list.splice(0, list.length, v);   // one kind only
+          else if (on()) list.splice(list.indexOf(v), 1);
           else {
             if (v === "solo") list.length = 0;   // "mostly on my own" stands alone
             else if (list.includes("solo")) list.splice(list.indexOf("solo"), 1);
@@ -161,7 +209,7 @@ export function renderSetup(body, ctx) {
     });
     return el("section", { class: "sp-screen" },
       el("h2", { class: "sp-q" }, q.q),
-      el("p", { class: "sp-hint" }, t("Pick one or both.")),
+      el("p", { class: "sp-hint" }, q.one ? t("You can't switch later, so pick the one that fits.") : t("Pick one or both.")),
       grid);
   };
 
@@ -177,6 +225,12 @@ export function renderSetup(body, ctx) {
     stage.replaceChildren(el("section", { class: "sp-screen in-up" }, status, list, el("div", { class: "sp-end" }, nextBtn)));
     (async () => {
       try {
+        if (ctx.create) {   // a new memory: made and opened first, then filled
+          status.textContent = t("Making the memory");
+          await ctx.create({ kind: answers.kind[0], parent: mem.parent, name: mem.name.trim(), password: encrypted() ? mem.password : undefined });
+          mem.password = mem.again = "";
+          status.textContent = t("Setting up your memory");
+        }
         const plan = (await ctx.api("brainplan", { picks: choice, lang })).folders || [];
         const built = ctx.api("brainbuild", { picks: choice, lang, name: name.trim(), tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
         for (const [i, f] of plan.entries()) {   // a quick roll call: the making itself takes about a second
@@ -190,7 +244,14 @@ export function renderSetup(body, ctx) {
         status.textContent = t("Your memory is ready: {0} folders and notes.", (j.made || []).length + plan.length);
         nextBtn.disabled = false; nextBtn.focus();
         ctx.files();
-      } catch (e) { status.textContent = e.message; toastErr(e.message); }
+      } catch (e) {
+        status.textContent = e.message; toastErr(e.message);
+        if (ctx.create && !ask) {   // not made: back to the place screen to fix it
+          foot.hidden = false;
+          nextBtn.textContent = t("Back"); nextBtn.disabled = false;
+          nextBtn.onclick = () => go(screens.indexOf("place"), -1);
+        }
+      }
     })();
   };
 
@@ -246,14 +307,14 @@ export function renderSetup(body, ctx) {
   // Keys: 1-9 or Space pick a card, Enter goes on, Escape goes back
   body.addEventListener("keydown", (e) => {
     if (foot.hidden || e.metaKey || e.ctrlKey || e.altKey || e.target.matches("input, textarea, select")) return;
-    if (at > 0 && /^[1-9]$/.test(e.key)) { stage.querySelectorAll(".sp-card")[+e.key - 1]?.click(); e.preventDefault(); }
+    if (typeof screens[at] === "object" && /^[1-9]$/.test(e.key)) { stage.querySelectorAll(".sp-card")[+e.key - 1]?.click(); e.preventDefault(); }
     else if (e.key === "Enter" && at > 0 && (!e.target.closest("button") || e.target.closest(".sp-card"))) { next.click(); e.preventDefault(); }
     else if (e.key === "Escape" && at > 0) { go(at - 1, -1); e.preventDefault(); }
   });
 
   body.replaceChildren(el("div", { class: "sp" },
     el("div", { class: "win-drag-top", "data-tauri-drag-region": "" }),
-    el("header", { class: "sp-head" }, knot(28), el("h1", { class: "sp-title" }, t("Set up your Phygital Memory")),
+    el("header", { class: "sp-head" }, knot(28), el("h1", { class: "sp-title" }, ctx.create ? t("New memory") : t("Set up your Phygital Memory")),
       el("button", { class: "icon-btn sp-close", type: "button", title: t("Not now"), "aria-label": t("Not now"), onclick: () => ctx.done() }, icon("x", 16))),
     bar, stage, foot));
   go(0);

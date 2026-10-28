@@ -1,8 +1,9 @@
-"""One locked notes folder, opened only in memory.
+"""One notes folder: Encrypted (a locked vault) or Open (a plain folder of readable files, vault/plain.py).
 
-The folder on disk is always encrypted (Cryptomator format 8). Unlocking keeps the key and a search index in
+An Encrypted folder on disk is always encrypted (Cryptomator format 8). Unlocking keeps the key and a search index in
 memory only: nothing readable is written to disk, not even the index. Every AI read goes through Engram search
 (search, then open a result by its id). Locking wipes the key and drops the index.
+An Open folder has no key and no password: any app can read its files, and the app adds search, history and trash.
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from .engram_lib.db import connect, remove_file
 from .engram_lib import search as engram
 from .vault import keys
 from .vault.manage import create_vault
+from .vault.plain import PlainTree, PlainWriter
 from .vault.tree import Entry, NotFound, Tree
 from .vault.writer import Exists, Writer, parent_and_name
 
@@ -48,8 +50,9 @@ def _engram_config() -> dict:
 
 
 class Memory:
-    def __init__(self, folder: Path, idle_lock: int | None = IDLE_LOCK_SECONDS):
+    def __init__(self, folder: Path, idle_lock: int | None = IDLE_LOCK_SECONDS, plain: bool = False):
         self.folder = Path(folder).expanduser()
+        self.plain = plain   # an Open memory: plain files, opened without a password
         self.idle_lock = idle_lock
         self.cfg = _engram_config()
         self._lock = threading.RLock()
@@ -71,6 +74,11 @@ class Memory:
     def create(folder: Path, password: str) -> None:
         create_vault(Path(folder), password).wipe()
 
+    @staticmethod
+    def create_open(folder: Path) -> None:
+        """A new Open memory: just a folder (or an existing one, which is left as it is)."""
+        Path(folder).mkdir(parents=True, exist_ok=True)
+
     @property
     def is_open(self) -> bool:
         with self._lock:
@@ -79,6 +87,14 @@ class Memory:
 
     def unlock(self, password: str) -> dict:
         with self._lock:
+            if self.plain:   # nothing to unlock: open the folder as it is
+                if self._con is None:
+                    if not self.folder.is_dir():
+                        raise NotFound(f"The folder isn't there any more: {self.folder}")
+                    self.read_only = False
+                    self._open_tree(PlainTree(self.folder), None)
+                self._touch()
+                return self.status()
             if self._con is not None:
                 # Already open: the password must still be right. (Otherwise anyone could ask for a fresh app pass
                 # for an open folder and read every note directly, around Engram.)
@@ -102,16 +118,29 @@ class Memory:
 
     def _open_with(self, key) -> dict:
         with self._lock:
+            if self.plain:
+                key.wipe()
+                raise ValueError("An Open memory has no key.")
             try:
                 config = keys.verify_vault_config((self.folder / "vault.cryptomator").read_bytes(), key)
                 tree = Tree(self.folder, key, config)
-                con = connect(":memory:", text_once=self.cfg["store_text_once"])
-                con.execute("PRAGMA temp_store=MEMORY")   # sorting never spills note text to a temp file
             except BaseException:
                 key.wipe()
                 raise
+            return self._open_tree(tree, key)
+
+    def _open_tree(self, tree, key) -> dict:
+        with self._lock:
+            try:
+                con = connect(":memory:", text_once=self.cfg["store_text_once"])
+                con.execute("PRAGMA temp_store=MEMORY")   # sorting never spills note text to a temp file
+            except BaseException:
+                if key is not None:
+                    key.wipe()
+                raise
             self._key, self._tree, self._con = key, tree, con
-            self._writer = _NoWrites() if getattr(self, "read_only", False) else Writer(tree)
+            self._writer = _NoWrites() if getattr(self, "read_only", False) else \
+                PlainWriter(tree) if self.plain else Writer(tree)
             self._touch()
             self._fix_clash_copies()
             try:
@@ -127,6 +156,8 @@ class Memory:
         """The recovery key (44 words), after checking the password again."""
         with self._lock:
             self._need_open()
+            if self.plain:
+                raise ValueError("An Open memory has no password or recovery key.")
             keys.unlock_masterkey((self.folder / "masterkey.cryptomator").read_bytes(), password).wipe()
             from .vault.manage import recovery_key
             return recovery_key(self._key)
@@ -135,7 +166,7 @@ class Memory:
         with self._lock:
             if self._con is not None:
                 self._con.close()
-            was_open = self._key is not None
+            was_open = self._con is not None
             if self._key is not None:
                 self._key.wipe()
             self._key = self._tree = self._writer = self._con = None
@@ -1115,6 +1146,8 @@ class Memory:
         """The memory's key (both halves), for locking a copy to a person's own key when sharing. Unlocked only."""
         with self._lock:
             self._need_open()
+            if self.plain:
+                raise ValueError("An Open memory has no key, so it can't be shared this way.")
             return self._key.raw
 
     def save_prefs(self, prefs: dict) -> dict:
@@ -1136,6 +1169,14 @@ class Memory:
     # there that the AI would take as the person's own request. A list from before this moves out once.
 
     def _tasks_key(self) -> bytes:
+        if self.plain:   # no memory key: a random one, kept on this Mac next to the tasks
+            kf = self.tasks_file.with_suffix(".key")
+            if not kf.exists():
+                kf.parent.mkdir(parents=True, exist_ok=True)
+                fd = os.open(kf, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    f.write(secrets.token_bytes(32))
+            return kf.read_bytes()
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.kdf.hkdf import HKDF
         return HKDF(hashes.SHA256(), 32, None, b"phygital-memory ai tasks").derive(bytes(self._key.raw))

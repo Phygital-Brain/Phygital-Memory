@@ -958,3 +958,35 @@ body { font-family: var(--font-body); font-size: 14px; }
 @media (max-width: 760px) { .sp-grid.sp-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .sp { padding: 40px 16px 20px; } .sp-foot { margin: 0 -16px -20px; padding: 12px 16px 16px; } .sp-grid.sp-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .setup-page, .sp-screen, .sp-card, .sp-row, .sp-seg.on, .sp-card.pop .sp-art svg { animation: none !important; } .sp-card::before { transition: none; } }
+
+/* Home: the latest daily note */
+.hd-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 12px 14px; text-align: left; border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text-2); transition: background 140ms var(--ease); }
+.hd-card:hover { background: var(--bg-subtle); }
+.hd-date { font: 600 13px/1.3 var(--font-display); color: var(--text); }
+.hd-text { display: flex; flex-direction: column; gap: 6px; max-height: 15.5em; overflow: hidden; font-size: 13px; line-height: 1.5;
+  -webkit-mask-image: linear-gradient(#000 80%, transparent); mask-image: linear-gradient(#000 80%, transparent); }
+.hd-line strong { color: var(--text); font-weight: 600; }
+.hd-head { font-weight: 600; color: var(--text); }
+
+/* The two kinds of memory: Open is purple with lime, Encrypted is lime with purple (the same in both themes) */
+:root { --kind-lime: #C8F031; --kind-purple: #4D5BFF; }
+.fo-tile.k-open { background: var(--kind-purple); color: var(--kind-lime); }
+.fo-tile.k-encrypted { background: var(--kind-lime); color: var(--kind-purple); }
+.fo-tile.k-encrypted:not(.open) { background: color-mix(in srgb, var(--kind-lime) 35%, transparent); color: var(--kind-purple); }
+.sp-grid.kinds .sp-card.k-open { --tint: var(--kind-purple); --soft: color-mix(in srgb, var(--kind-purple) 16%, transparent); }
+.sp-grid.kinds .sp-card.k-encrypted { --tint: var(--kind-lime); --soft: color-mix(in srgb, var(--kind-lime) 16%, transparent); }
+.sp-grid.kinds .sp-card.k-open .sp-art { background: var(--kind-purple); color: var(--kind-lime); }
+.sp-grid.kinds .sp-card.k-encrypted .sp-art { background: var(--kind-lime); color: var(--kind-purple); }
+.sp-grid.kinds .sp-tick { color: #0B0D12; }
+.sp-grid.kinds .k-open .sp-tick { color: var(--kind-lime); }
+
+/* A new memory's name, place and password */
+.sp-place { gap: 4px; }
+.sp-field { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; max-width: 520px; }
+.sp-input { height: 40px; padding: 0 12px; border: 0; border-radius: var(--r-s); background: var(--bg-surface); color: var(--text);
+  font: 15px var(--font-body); box-shadow: inset 0 0 0 1px var(--border); }
+.sp-input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--accent); }
+.sp-where-row { display: flex; align-items: center; gap: 10px; }
+.sp-where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px var(--font-mono); color: var(--text-2); }
+.sp-field .sp-sub { margin: 0; }

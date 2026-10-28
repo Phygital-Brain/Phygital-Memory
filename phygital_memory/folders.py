@@ -1,6 +1,6 @@
-"""The locked folders the app knows about, like Obsidian's and Baalda's vault switcher.
+"""The memories the app knows about, like Obsidian's and Baalda's vault switcher.
 
-Each folder is its own Cryptomator-format vault with its own password, its own search index (in memory, while
+An Open memory is a plain folder (no password). An Encrypted one is its own Cryptomator-format vault with its own password, its own search index (in memory, while
 open), its own Finder view and its own app passes. The list of folders (names and paths only, never a password or
 key) is kept in folders.json in the app's support folder.
 """
@@ -28,6 +28,29 @@ REGISTRY = STATE / "folders.json"
 
 def is_vault(path: Path) -> bool:
     return (path / "masterkey.cryptomator").is_file() and (path / "vault.cryptomator").is_file()
+
+
+class PlainFinder:
+    """An Open memory is a normal folder already: "Show in Finder" opens it, nothing is mounted."""
+    def __init__(self, memory: Memory):
+        self.memory = memory
+
+    def available(self) -> bool:
+        return True
+
+    def where(self) -> str:
+        return str(self.memory.folder) if self.memory.is_open else ""
+
+    def show(self, open_window: bool = True) -> str:
+        if open_window:
+            subprocess.run(["open", str(self.memory.folder)], timeout=30)
+        return str(self.memory.folder)
+
+    def renamed(self, name: str) -> None:
+        pass
+
+    def hide(self) -> None:
+        pass
 
 
 # Plain files next to the encrypted ones: a guide for AI tools that land in this folder (they can't read anything
@@ -81,7 +104,9 @@ CLOUDS = STATE / "clouds"   # where cloud-only memories show up while unlocked (
 
 class Folder:
     def __init__(self, fid: str, name: str, path: Path, github: str | None = None, cloud_at: dict | None = None,
-                 mirror_at: dict | None = None, s3_at: dict | None = None):
+                 mirror_at: dict | None = None, s3_at: dict | None = None, plain: bool = False):
+        # plain: an Open memory (a folder of readable files, no password); the cloud and sharing parts are for
+        # Encrypted ones, so an Open memory never gets them
         # cloud_at: {kind, url, user, path} for a memory that lives only in the cloud; its files appear at
         # path (a hidden drive) only while it's unlocked
         self.cloud_at = cloud_at
@@ -90,10 +115,13 @@ class Folder:
             path = CLOUDS / fid
             self.drive = cloud.Drive({k: cloud_at[k] for k in ("kind", "url", "user")}, cloud_at["path"], path,
                                      CLOUDS / f"{fid}.cache")
+        self.plain = plain
+        if plain:
+            github = cloud_at = mirror_at = s3_at = None
         self.id, self.name, self.path = fid, name, Path(path)
-        self.memory = Memory(self.path)
+        self.memory = Memory(self.path, plain=plain)
         self.memory.tasks_file = TASKS / f"{fid}.bin"   # AI tasks stay on this Mac (see Memory.todo)
-        self.finder = Finder(self.memory, volume=name)
+        self.finder = PlainFinder(self.memory) if plain else Finder(self.memory, volume=name)
         self.passes: set[str] = set()
         self.fails = {"n": 0, "until": 0.0}
         self.github, self.sync = github, None   # "owner/repo" when backed up to a private GitHub repo
@@ -160,7 +188,9 @@ class Folder:
     def info(self) -> dict:
         place = cloud.where(self.cloud_at, self.cloud_at["path"]) if self.cloud_at else str(self.path)
         return {"id": self.id, "name": self.name, "path": place, "open": self.memory.is_open,
-                "exists": True if self.cloud_at else is_vault(self.path), "finder": bool(self.finder.where()),
+                "kind": "open" if self.plain else "encrypted",
+                "exists": True if self.cloud_at else self.path.is_dir() if self.plain else is_vault(self.path),
+                "finder": bool(self.finder.where()),
                 "github": self.github, "cloudOnly": cloud.label(self.cloud_at) if self.cloud_at else None,
                 "webdav": cloud.where(self.mirror_at, self.mirror_at["path"]) if self.mirror_at else None,
                 "s3": cloud.where(self.s3_at, self.s3_at["path"]) if self.s3_at else None,
@@ -212,7 +242,8 @@ class Folders:
         for e in entries:
             if isinstance(e, dict) and e.get("id") and e.get("path"):
                 self.items[e["id"]] = Folder(e["id"], e.get("name") or Path(e["path"]).name, Path(e["path"]),
-                                             e.get("github"), e.get("cloud"), e.get("mirror"), e.get("s3"))
+                                             e.get("github"), e.get("cloud"), e.get("mirror"), e.get("s3"),
+                                             bool(e.get("open")))
                 self.items[e["id"]].ai_hidden = bool(e.get("aiHidden"))
                 self.items[e["id"]].joined = bool(e.get("joined"))
                 self.items[e["id"]].syncthing = e.get("syncthing")
@@ -228,7 +259,7 @@ class Folders:
         STATE.mkdir(parents=True, exist_ok=True)
         data = {"folders": [{"id": f.id, "name": f.name, "path": str(f.path), **({"github": f.github} if f.github else {}),
                              **({"cloud": f.cloud_at} if f.cloud_at else {}), **({"mirror": f.mirror_at} if f.mirror_at else {}),
-                             **({"s3": f.s3_at} if f.s3_at else {}),
+                             **({"s3": f.s3_at} if f.s3_at else {}), **({"open": True} if f.plain else {}),
                              **({"aiHidden": True} if f.ai_hidden else {}), **({"joined": True} if f.joined else {}),
                              **({"syncthing": f.syncthing} if f.syncthing else {})}
                             for f in self.items.values()]}
@@ -236,8 +267,8 @@ class Folders:
         tmp.write_text(json.dumps(data, indent=1))
         os.replace(tmp, REGISTRY)
 
-    def _add(self, path: Path, name: str, first: bool = False) -> Folder:
-        f = Folder(secrets.token_hex(4), name, path)
+    def _add(self, path: Path, name: str, first: bool = False, plain: bool = False) -> Folder:
+        f = Folder(secrets.token_hex(4), name, path, plain=plain)
         self.items = ({f.id: f} | self.items) if first else (self.items | {f.id: f})
         self._save()
         return f
@@ -259,19 +290,25 @@ class Folders:
             return [f for f in self.items.values() if f.memory.is_open]
 
     def add_existing(self, path: str) -> dict:
+        """An Encrypted memory, or any other folder, which opens as an Open memory (like Obsidian opens a folder)."""
         p = Path(path).expanduser().resolve()
-        if not is_vault(p):
-            raise ValueError("That folder isn't a locked Phygital Memory folder.")
+        plain = not is_vault(p)
+        if plain:
+            open_ok(p)
         with self._lock:
             for f in self.items.values():
                 if not f.cloud_at and Path(f.path).resolve() == p:
                     return f.info()
+                if not f.cloud_at and (p.is_relative_to(Path(f.path).resolve()) or Path(f.path).resolve().is_relative_to(p)):
+                    raise ValueError(f'That folder is inside "{f.name}", or holds it. Pick another one.')
+            if plain:
+                return self._add(p, p.name, plain=True).info()
             same = self._same(p)   # a copy of a memory already here (two would fight over one backup)
             if same:
                 raise ValueError(f'That\'s a copy of "{same.name}", which is already here. Open that one instead.')
             return self._add(p, p.name).info()
 
-    def create(self, parent: str, name: str, password: str) -> dict:
+    def create(self, parent: str, name: str, password: str | None) -> dict:
         name = name.strip()
         if not name or re.search(r'[/\\:*?"<>|]', name) or name.startswith("."):
             raise ValueError("Pick a simple name for the folder.")
@@ -279,6 +316,13 @@ class Folders:
         if not base.is_dir():
             raise ValueError("The place for the new folder doesn't exist.")
         target = base / name
+        if password is None:   # an Open memory: a plain folder
+            if target.exists():
+                raise ValueError(f'"{name}" is already there. Pick another name, or open that folder instead.')
+            open_ok(target)
+            Memory.create_open(target)
+            with self._lock:
+                return self._add(target, name, plain=True).info()
         Memory.create(target, password)
         write_guides(target)
         with self._lock:
@@ -711,7 +755,7 @@ class Folders:
             f.pause_mirror()
             f.pause_s3()
             new_path = move_folder_on_disk(f.path, Path(parent))
-            moved = Folder(f.id, f.name, new_path, f.github, None, f.mirror_at, f.s3_at)
+            moved = Folder(f.id, f.name, new_path, f.github, None, f.mirror_at, f.s3_at, f.plain)
             moved.ai_hidden = f.ai_hidden
             moved.joined = f.joined
             moved.syncthing = f.syncthing
@@ -750,6 +794,16 @@ CLOUD_HOME_FOLDERS = (("Nextcloud", "Nextcloud"), ("Dropbox", "Dropbox"), ("ownC
 CLOUD_STORAGE_NAMES = {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "Dropbox": "Dropbox", "Box": "Box",
                        "ProtonDrive": "Proton Drive", "pCloudDrive": "pCloud", "pCloud": "pCloud", "MEGA": "MEGA",
                        "SynologyDrive": "Synology Drive", "Nextcloud": "Nextcloud", "Filen": "Filen", "Egnyte": "Egnyte"}
+
+
+def open_ok(p: Path) -> None:
+    """An Open memory can be any folder, but not the whole Mac or a whole home folder: the app would read it all."""
+    p = Path(p).resolve()
+    if p.exists() and not p.is_dir():
+        raise ValueError("Pick a folder, not a file.")
+    if p == Path(p.anchor) or p in (Path.home().resolve(), Path.home().resolve().parent) or p.name.startswith(".") \
+            or (p.is_dir() and p.is_relative_to(STATE.resolve())):
+        raise ValueError("Pick a folder of notes, not a whole drive or home folder.")
 
 
 def cloud_places() -> list[dict]:

@@ -1,4 +1,4 @@
-// The folder switcher menu and the "create a locked folder" form. Names and paths from the server are only ever
+// The folder switcher menu. Names and paths from the server are only ever
 // put in as text.
 import { t } from "./i18n.js";
 import { el, icon } from "./dom.js";
@@ -9,9 +9,11 @@ import { closeMenu } from "./menu.js";
 export const shortPath = (p) => (p || "").replace(/^\/Users\/[^/]+/, "~");
 
 // A small square with the folder's colour and a lock that shows whether it's open.
+// Open memories are purple with lime, Encrypted ones lime with purple.
 export function folderTile(f, open, size = 30) {
-  return el("span", { class: "fo-tile" + (open ? " open" : ""), style: `width:${size}px;height:${size}px` },
-    icon(open ? "unlock" : "lock", Math.round(size * 0.52), 1.8));
+  const plain = f?.kind === "open";
+  return el("span", { class: "fo-tile" + (open ? " open" : "") + (plain ? " k-open" : " k-encrypted"), style: `width:${size}px;height:${size}px` },
+    icon(plain ? "folder" : open ? "unlock" : "lock", Math.round(size * 0.52), 1.8));
 }
 
 // One menu row with an icon, a label, and an optional quiet action or shortcut on the right (like Baalda's).
@@ -34,7 +36,7 @@ function actionRow(iconName, label, onClick, right) {
 export function switcherItems(ctx) {
   const rows = ctx.list.map((f, i) => {
     const on = f.id === ctx.currentId, open = ctx.unlocked(f.id);
-    const sub = !f.exists ? "Not found" : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : "");
+    const sub = !f.exists ? "Not found" : f.kind === "open" ? t("Open · a normal folder") : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : "");
     return {
       node: el("button", {
         class: "fo-row" + (on ? " on" : ""), role: "menuitem", title: f.path,
@@ -88,7 +90,7 @@ export function manageFolders(list, actions) {
           el("div", { class: "mf-name" }, f.name),
           el("div", { class: "mf-path", title: f.path }, shortPath(f.path)),
           el("div", { class: "mf-state" + (f.finder ? " warn" : "") },
-            !f.exists ? "Not found at this place" : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : ""))),
+            !f.exists ? "Not found at this place" : f.kind === "open" ? t("Open · a normal folder") : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : ""))),
         el("div", { class: "mf-actions" },
           btn(open ? "Open" : "Unlock", actions.switchTo),
           btn(t("Rename"), actions.rename),
@@ -104,43 +106,5 @@ export function manageFolders(list, actions) {
         el("button", { class: "btn", onclick: () => { done(null); actions.openOther(); } }, t("Open memory")),
         el("button", { class: "btn primary", onclick: () => { done(null); actions.createNew(); } }, t("New memory"))));
     return { card };
-  });
-}
-
-// A form for a brand new locked folder. `pick()` asks the server to open the Mac's folder chooser and gives
-// back a path (or null). Resolves {parent, name, password} or null.
-export function createFolderForm(pick) {
-  return modal((done) => {
-    let parent = "";
-    const name = el("input", { class: "dlg-input", spellcheck: "false", placeholder: t("Folder name"), "aria-label": t("Folder name") });
-    const pw = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password (8 or more characters)"), "aria-label": t("Password") });
-    const pw2 = el("input", { class: "dlg-input", type: "password", autocomplete: "off", placeholder: t("Password again"), "aria-label": t("Password again") });
-    const where = el("span", { class: "dlg-where" }, t("Choose where to make it"));
-    const err = el("div", { class: "dlg-err" });
-    const choose = el("button", { class: "btn small", type: "button", onclick: async () => {
-      choose.disabled = true;
-      try { const p = await pick(); if (p) { parent = p; where.textContent = p; where.title = p; } }
-      catch (e) { err.textContent = e.message; }
-      choose.disabled = false;
-    } }, icon("folder", 13), "Choose");
-    const submit = () => {
-      const n = name.value.trim();
-      if (!n || /[\/\\:*?"<>|]/.test(n) || n.startsWith(".")) { err.textContent = t("Pick a simple name (no / \\ : * ? \" < > |)."); return; }
-      if (!parent) { err.textContent = t("Choose where to make the folder."); return; }
-      if (pw.value.length < 8) { err.textContent = t("The password needs at least 8 characters."); return; }
-      if (pw.value !== pw2.value) { err.textContent = t("The two passwords differ."); return; }
-      const out = { parent, name: n, password: pw.value };
-      pw.value = pw2.value = "";
-      done(out);
-    };
-    const card = el("div", { class: "dlg", role: "dialog" },
-      el("div", { class: "dlg-title" }, t("New folder")),
-      name, pw, pw2,
-      el("div", { class: "dlg-where-row" }, where, choose),
-      err,
-      el("div", { class: "dlg-actions" },
-        el("button", { class: "btn", onclick: () => { pw.value = pw2.value = ""; done(null); } }, t("Cancel")),
-        el("button", { class: "btn primary", onclick: submit }, t("Create"))));
-    return { card, focus: name, submit };
   });
 }

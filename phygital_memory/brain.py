@@ -188,14 +188,18 @@ def build(memory, picks: dict, lang: str, name: str, tz: str, today: time.struct
 GUIDE = "https://raw.githubusercontent.com/Phygital-Brain/phygital-brain/main/skills/brain-setup/SKILL.md"
 
 
-def finish_ask(picks: dict, lang_name: str, memory: str = "", name: str = "") -> str:
+def finish_ask(picks: dict, lang_name: str, memory: str = "", name: str = "", folder: str = "") -> str:
     """The message the person pastes in their AI (and the AI task on Home): finish the setup with Phygital Brain's own
-    setup guide, always the latest from GitHub, through the memory's tools. The app already built the base."""
+    setup guide, always the latest from GitHub. The app already built the base. An Encrypted memory is reached only
+    through the memory's tools; an Open one (folder: its path) is a plain folder the AI works in directly."""
+    where = (f"1. My notes are a normal folder: {folder}. Work in it directly with your file tools; that is the "
+             f"folder the guide means. If you can't reach it, use the phygital-memory tools instead.\n") if folder else (
+             f"1. My notes live in the Phygital Memory app, not in a folder. Read and write them only with the "
+             f"phygital-memory tools. If you don't have those tools, stop and tell me to connect you in the app first "
+             f"(AI window, AI apps).\n")
     use = " and ".join(x for x, on in (("work", picks.get("work")), ("personal life", picks.get("personal"))) if on) or "personal life"
     return (f"Set up my Phygital Memory{f' \"{memory}\"' if memory else ''} with the Phygital Brain setup guide.\n\n"
-            f"1. My notes live in the Phygital Memory app, not in a folder. Read and write them only with the "
-            f"phygital-memory tools. If you don't have those tools, stop and tell me to connect you in the app first "
-            f"(AI window, AI apps).\n"
+            f"{where}"
             f"2. Read the guide: {GUIDE} and, in the same GitHub folder, the files it points to (forms/questions.md "
             f"and templates/).\n"
             f"3. The app already built the base: the folders, the rules (CLAUDE.md) and basic About notes. Read "

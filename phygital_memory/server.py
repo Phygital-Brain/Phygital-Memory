@@ -244,6 +244,7 @@ def status(ctx: Context) -> str:
         s = f.memory.status()
         priv = ", ".join(f.memory.ai_private()) if s["open"] else ""
         lines.append(f'Memory "{f.name}" (folder="{f.name}"): ' + (f"unlocked, {s['notes']} notes" if s["open"] else "locked")
+                     + (f". Open memory: a plain folder at {f.path}, which you may also read directly" if f.plain else "")
                      + (f". Private, ask first: {priv}" if priv else ""))
     may = "read and edit" if _app()["write"] else "only read"
     return ("\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE}). "
@@ -723,7 +724,8 @@ def _unlock(f, password: str, how: str = "password"):
         raise
     f.fails["n"] = 0
     approvals.add("Unlocked", f.name, how)
-    write_guides(f.path)   # folders made before the guide and opener existed get them now
+    if not f.plain:
+        write_guides(f.path)   # folders made before the guide and opener existed get them now
     p = secrets.token_urlsafe(32)
     f.passes.add(p)
     return _ok({**s, "pass": p, "folder": f.id})
@@ -1701,7 +1703,8 @@ async def api(request: Request) -> Response:
         if action == "addfolder":
             return _ok({"folder": folders.add_existing(body["path"])})
         if action == "createfolder":
-            return _ok({"folder": await asyncio.to_thread(folders.create, body["parent"], body["name"], body["password"])})
+            pw = None if body.get("kind") == "open" else body["password"]   # an Open memory has no password
+            return _ok({"folder": await asyncio.to_thread(folders.create, body["parent"], body["name"], pw)})
         if action == "aiactivity":   # what AI apps did, for the folders this page has unlocked
             mine = {f.id: f.name for f in folders.items.values() if _has_pass(request, f)}
             now = time.time()
@@ -1847,6 +1850,9 @@ async def api(request: Request) -> Response:
             return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
 
         m = f.memory
+        if f.plain and action in ("togithub", "towebdav", "tos3", "tocloud", "savebackup", "recoverykey", "touchid"):
+            return _ok({"error": "That's for Encrypted memories. An Open memory is a normal folder: keep it in iCloud Drive, "
+                        "Dropbox or another cloud folder to have it everywhere.", "plain": True}, 400)
         if action == "lock":
             await asyncio.to_thread(f.lock)   # a cloud memory waits here until its saves reached the cloud
             if f.drive and f.drive.left:
@@ -1956,6 +1962,10 @@ async def api(request: Request) -> Response:
             approvals.add("Touch ID unlock on", f.name, "password")
             return _ok({"on": True})
         # ---- working together (the owner's side; the memory is open, so its key is at hand) ----
+        if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop",
+                      "sharepeople", "shareadd", "sharehistory", "shareforget") and f.plain:
+            return _ok({"error": "Sharing works with Encrypted memories. Share an Open memory's folder the way you share any folder.",
+                        "plain": True}, 400)
         if action in ("shareinfo", "sharerequests", "shareinvite", "shareanswer", "sharerole", "shareremove", "sharestop",
                       "sharepeople", "shareadd", "sharehistory", "shareforget"):
             try:   # the personal key comes from the Keychain, which macOS may hold up: never on the app's main loop
@@ -2218,7 +2228,7 @@ async def api(request: Request) -> Response:
             name = re.sub(r"[\x00-\x1f{}\[\]<>`|#]", "", str(body.get("name") or "")).strip()[:60] \
                 or (pwd.getpwuid(os.getuid()).pw_gecos or "").split(",")[0].split(" ")[0]   # the name they confirmed, or the Mac's
             res = await asyncio.to_thread(brain.build, m, picks, lang, name, str(body.get("tz") or "")[:60])
-            ask = brain.finish_ask(picks, res["language"], f.info()["name"], name)
+            ask = brain.finish_ask(picks, res["language"], f.info()["name"], name, str(f.path) if f.plain else "")
             item = await asyncio.to_thread(m.todo_add, res["me"], ask)
             return _ok({**res, "task": item["id"], "ask": ask, "folders": brain.plan(picks, lang)})
         if action == "handtoai":   # the person gives this note to their AI, with what to do
@@ -2495,7 +2505,7 @@ async def shell(request: Request) -> Response:
             quitting = bool((await request.json()).get("quit"))
         except Exception:
             quitting = False
-        if folders.open() or any(f.finder.where() for f in folders.items.values()):
+        if any(not f.plain for f in folders.open()) or any(f.finder.where() for f in folders.items.values() if not f.plain):
             if not quitting and _keep_remembered():   # closing, with "Keep open" chosen in the last 72 hours
                 closing.update(answer={"keep": 1}, exit=False)
                 return JSONResponse({"ask": False, "keep": True})
