@@ -16,7 +16,8 @@ os.environ["PHYGITAL_MEMORY_TOUCHID"] = "/nonexistent"
 os.environ["PHYGITAL_MEMORY_IDENTITY_KEYCHAIN"] = "Phygital Memory identity TEST pka"
 from phygital_memory import pka   # noqa: E402
 
-CHECKER = Path.home() / "Nextcloud/Shared Artworks/Workspace/vault/Projects/GitHub-Projects/Phygital-Key/base/repo/verifier-js/src/index.js"
+# Phygital Key's own checker (verifier-js/src/index.js in the Phygital Key repo). The cross-check runs only when it's set.
+CHECKER = Path(os.environ["PHYGITAL_KEY_VERIFIER"]) if os.environ.get("PHYGITAL_KEY_VERIFIER") else None
 ok = []
 
 
@@ -63,30 +64,33 @@ try:
     obj["signatures"][0]["signature"] = pka._b64(bytes(sig))
     check(refused(lambda: pka.verify(pka._b64(json.dumps(obj).encode()), REQ)), "a changed signature is refused")
 
-    # Phygital Key's own checker (JavaScript, independent of this app) accepts the app's approvals as they are
-    c = pka.approve(REQ, "let Ana in", "a long test approval phrase")
-    pka._seen.clear()
-    (tmp / "in.json").write_text(json.dumps({"approval": c, "request": REQ, "keyring": pka.keyring(), "aud": pka.aud(),
-                                             "origins": [pka.ORIGIN], "rp_ids": [pka.RP_ID]}))
-    (tmp / "check.mjs").write_text(f"""
-import {{ verify, MemorySeenStore, keyringFrom }} from {json.dumps(CHECKER.as_uri())};
-import {{ readFileSync }} from "node:fs";
-const x = JSON.parse(readFileSync(process.argv[2], "utf8"));
-const now = Math.floor(Date.now() / 1000);
-const ring = keyringFrom(x.keyring);
-const cfg = {{ origins: x.origins, rp_ids: x.rp_ids }};
-const seen = new MemorySeenStore();
-const out = [];
-for (const [req, aud] of [[x.request, x.aud], [{{...x.request, params: {{...x.request.params, role: "view"}}}}, x.aud], [x.request, "someone-else"]]) {{
-  const r = await verify(x.approval, {{ aud, request: req, level: "high" }}, ring, seen, cfg, now);
-  out.push(r.ok ? "ok:" + r.verified.approver : r.error);
-}}
-console.log(JSON.stringify(out));
-""")
-    r = subprocess.run(["node", str(tmp / "check.mjs"), str(tmp / "in.json")], capture_output=True, text=True, timeout=60)
-    res = json.loads(r.stdout or "[]") if r.returncode == 0 else [r.stderr[-300:]]
-    check(res[:1] == ["ok:Password"], "Phygital Key's own checker accepts the app's signed yes", res)
-    check(res[1:] == ["REQUEST_MISMATCH", "WRONG_AUDIENCE"], "and refuses it for another request or audience", res)
+    if CHECKER is None or not CHECKER.exists():
+        print("SKIP Phygital Key's own checker: set PHYGITAL_KEY_VERIFIER to its verifier-js/src/index.js")
+    else:
+        # Phygital Key's own checker (JavaScript, independent of this app) accepts the app's approvals as they are
+        c = pka.approve(REQ, "let Ana in", "a long test approval phrase")
+        pka._seen.clear()
+        (tmp / "in.json").write_text(json.dumps({"approval": c, "request": REQ, "keyring": pka.keyring(), "aud": pka.aud(),
+                                                 "origins": [pka.ORIGIN], "rp_ids": [pka.RP_ID]}))
+        (tmp / "check.mjs").write_text(f"""
+    import {{ verify, MemorySeenStore, keyringFrom }} from {json.dumps(CHECKER.as_uri())};
+    import {{ readFileSync }} from "node:fs";
+    const x = JSON.parse(readFileSync(process.argv[2], "utf8"));
+    const now = Math.floor(Date.now() / 1000);
+    const ring = keyringFrom(x.keyring);
+    const cfg = {{ origins: x.origins, rp_ids: x.rp_ids }};
+    const seen = new MemorySeenStore();
+    const out = [];
+    for (const [req, aud] of [[x.request, x.aud], [{{...x.request, params: {{...x.request.params, role: "view"}}}}, x.aud], [x.request, "someone-else"]]) {{
+      const r = await verify(x.approval, {{ aud, request: req, level: "high" }}, ring, seen, cfg, now);
+      out.push(r.ok ? "ok:" + r.verified.approver : r.error);
+    }}
+    console.log(JSON.stringify(out));
+    """)
+        r = subprocess.run(["node", str(tmp / "check.mjs"), str(tmp / "in.json")], capture_output=True, text=True, timeout=60)
+        res = json.loads(r.stdout or "[]") if r.returncode == 0 else [r.stderr[-300:]]
+        check(res[:1] == ["ok:Password"], "Phygital Key's own checker accepts the app's signed yes", res)
+        check(res[1:] == ["REQUEST_MISMATCH", "WRONG_AUDIENCE"], "and refuses it for another request or audience", res)
 finally:
     shutil.rmtree(tmp, ignore_errors=True)
     subprocess.run(["security", "delete-generic-password", "-s", "Phygital Memory identity TEST pka", "-a", "x25519"], capture_output=True)

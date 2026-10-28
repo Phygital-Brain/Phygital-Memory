@@ -1,0 +1,13 @@
+# Never in the repo
+
+# this Mac's own signing key for the Touch ID helper (private)
+.signing/
+# the built .dmg: it goes to GitHub Releases, not into the code
+release/
+# Mac clutter and local settings
+.DS_Store
+.env
+.env.*
+
+# Made by the build every time, with this Mac's paths in it
+core/packaging/*.spec

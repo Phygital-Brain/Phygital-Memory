@@ -1,0 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@100..150,500..900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+:root{--ground:#0B0D12;--surface:#161A22;--rec:#07080C;--text:#F1EDE4;--muted:#A7A39A;--line:#2A303C;--lime:#C8F031;--ultra:#4D5BFF;--ultra-ui:#8A94FF;--lime-tint:#2A3308;--ultra-tint:#171B45}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--text);font-family:'Hanken Grotesk',sans-serif}
+.disp{font-family:Anybody;font-weight:800;font-stretch:150%;text-transform:uppercase;letter-spacing:0}
+.card-t{font-family:Anybody;font-weight:700;font-stretch:150%}
+.mono{font-family:'JetBrains Mono',monospace}
+.muted{color:var(--muted)}
+.lime{color:var(--lime)}
+.ultra{color:var(--ultra-ui)}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
