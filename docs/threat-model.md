@@ -41,7 +41,7 @@ For anyone deciding where to use Phygital Memory. It says what the app protects 
 
 [Phygital Memory Server](server.md) puts the page and the AI door on the internet, so the protection changes:
 
-- **The passphrase is the lock.** Anyone with it can open the page. Ten wrong tries close the door for 15 minutes. The login is a cookie that only the server's own page can use.
+- **The passphrase is the lock.** Anyone with it can open the page. Ten wrong tries close the door for 15 minutes. It is chosen on the first visit with a one-time setup code from the server's log, and the server keeps only a fingerprint of it. The login is a cookie that only the server's own page can use.
 - **Other sites can't act for you.** Changes are accepted only from the server's own address, and only with the login.
 - **Whoever controls the server can read open memories.** An Encrypted memory is readable on the server from the moment you unlock it until you lock it or the server restarts. Use a server you trust.
 - **Secrets sit in one file on the server's disk**, readable only by the server, not in a keychain. Keep the server's disk private.

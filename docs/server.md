@@ -21,24 +21,34 @@ Things that need a computer are not on the server: Touch ID, Finder, and choosin
 
 - A server with Docker (any Linux server, a home server, or a host like Coolify).
 - A domain or subdomain pointing at it, like `memory.example.com`. The page and the AI door need HTTPS.
-- A long passphrase, 12 characters or more, that you use nowhere else.
+- A long passphrase, 12 characters or more, that you use nowhere else. You choose it on the first visit.
 
 ## Set it up with Docker Compose
 
 1. Copy the [`server`](../server) folder from this repository to your server.
-2. Copy `.env.example` to `.env` and fill in `DOMAIN` and `PASSPHRASE`.
+2. Copy `.env.example` to `.env` and fill in `DOMAIN`.
 3. Start it:
 
 ```bash
 docker compose up -d
 ```
 
-Caddy gets the HTTPS certificate on its own. Open `https://your-domain` and type your passphrase.
+Caddy gets the HTTPS certificate on its own.
+
+## The first visit
+
+Open `https://your-domain`. The server asks you to choose its passphrase. First it wants the **setup code** it printed in its log, so nobody who finds the address before you can claim it. To see the code:
+
+```bash
+docker compose logs memory
+```
+
+On Coolify, Render and Railway, the code is in the service's logs. After that, the page asks for your passphrase.
 
 ## Other ways
 
-- **Coolify:** make a new resource from Docker Compose and paste [`server/compose.yaml`](../server/compose.yaml). Set `DOMAIN` and `PASSPHRASE`. If Coolify already does HTTPS for you, remove the `caddy` part and point your domain at port 8790.
-- **Render:** New, Blueprint, this repository, Blueprint path `server/render.yaml`. After the first deploy, set `PHYGITAL_MEMORY_URL` to the address Render gives you.
+- **Coolify:** make a new resource from Docker Compose and paste [`server/compose.yaml`](../server/compose.yaml). Set `DOMAIN`. If Coolify already does HTTPS for you, remove the `caddy` part and point your domain at port 8790.
+- **Render:** New, Blueprint, this repository, Blueprint path `server/render.yaml`. After the first deploy, set `PHYGITAL_MEMORY_URL` to the address Render gives you, then open it for the first visit.
 - **Railway or any host that runs images:** use the image `ghcr.io/phygital-brain/phygital-memory:latest`, a disk at `/data`, port 8790, and the settings below.
 
 On Render and Railway there is no WebDAV drive (they don't allow it), and syncing with your computer goes through relays, which is slower.
@@ -48,11 +58,11 @@ On Render and Railway there is no WebDAV drive (they don't allow it), and syncin
 | Setting | What it is |
 |---|---|
 | `PHYGITAL_MEMORY_URL` | The address people open, like `https://memory.example.com`. Required |
-| `PHYGITAL_MEMORY_PASSPHRASE` | What you type to open the page. 12 characters or more. Required |
+| `PHYGITAL_MEMORY_PASSPHRASE` | Optional. Sets the passphrase as a setting instead of on the first visit. 12 characters or more |
 | `PHYGITAL_MEMORY_DATA` | Where memories and settings live. `/data` in the image: keep it on a disk that survives restarts |
 | `PHYGITAL_MEMORY_SYNC_PORT` | The port for syncing with your computers. `22000` in the image |
 
-Keep the passphrase in your host's secret settings or in `.env`, never in a file you share.
+The passphrase chosen on the first visit is never written down: the server keeps only a fingerprint of it. To choose a new one, delete `state/passphrase.json` on the `/data` disk and restart: the first visit comes back, with a new setup code. If you set `PHYGITAL_MEMORY_PASSPHRASE`, keep it in your host's secret settings or in `.env`, never in a file you share.
 
 ## Connect your AI apps
 

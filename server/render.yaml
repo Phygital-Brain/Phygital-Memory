@@ -10,8 +10,6 @@ services:
     envVars:
       - key: PHYGITAL_MEMORY_URL
         sync: false
-      - key: PHYGITAL_MEMORY_PASSPHRASE
-        sync: false
       - key: PORT
         value: "8790"
     disk:

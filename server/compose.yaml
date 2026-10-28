@@ -9,7 +9,6 @@ services:
     init: true
     environment:
       PHYGITAL_MEMORY_URL: https://${DOMAIN}
-      PHYGITAL_MEMORY_PASSPHRASE: ${PASSPHRASE}
     volumes:
       - memory-data:/data
     ports:

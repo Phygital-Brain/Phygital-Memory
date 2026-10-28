@@ -1,4 +1,5 @@
-"""Server mode (docs/server.md), from the outside: the page needs the passphrase, other sites and other addresses are
+"""Server mode (docs/server.md), from the outside: the first visit chooses the passphrase (with the setup code from
+the log), then the page needs it, other sites and other addresses are
 refused, a new memory goes in the server's memories folder, and an AI app with a key searches it through Engram,
 reads, and can't write until edits are allowed. Then the AI sign-in page asks for the login before it shows Allow.
 Throwaway folders, its own port, secrets in the server's own file (never the Keychain).
@@ -76,11 +77,12 @@ async def ai(token, steps):
 
 
 tmp = Path(tempfile.mkdtemp(prefix="pm-server-"))
-env = {**os.environ, "PHYGITAL_MEMORY_SERVER": "1", "PHYGITAL_MEMORY_URL": BASE, "PHYGITAL_MEMORY_PASSPHRASE": PASSPHRASE,
+env = {**os.environ, "PHYGITAL_MEMORY_SERVER": "1", "PHYGITAL_MEMORY_URL": BASE,
        "PHYGITAL_MEMORY_DATA": str(tmp / "data"), "PHYGITAL_MEMORY_STATE": str(tmp / "state"),
        "PHYGITAL_MEMORY_PORT": str(PORT), "PHYGITAL_MEMORY_OFFLINE": "1", "PHYGITAL_MEMORY_SYNCTHING_LOCAL": "1",
        "PHYGITAL_MEMORY_TRASH": str(tmp / "trash"), "PHYGITAL_MEMORY_VERSION": "0.0.0-test"}
 env.pop("PHYGITAL_MEMORY_SHELL_TOKEN", None)
+env.pop("PHYGITAL_MEMORY_PASSPHRASE", None)
 core = Path(__file__).resolve().parent.parent
 log = open(tmp / "engine.log", "wb")
 proc = subprocess.Popen([sys.executable, "-m", "phygital_memory.server"], env=env, cwd=core, stdout=log, stderr=subprocess.STDOUT)
@@ -101,6 +103,26 @@ try:
     check(up, "the server starts and shows its login page", said() if not up else "")
     if not up:
         raise SystemExit(1)
+
+    # ---- the first visit: choose the passphrase ----
+    code, _, raw = http("GET", "/login", signed_in=False)
+    check(b"Setup code" in raw, "the first visit asks for the setup code and a new passphrase")
+    import re
+    found = re.search(r"Setup code: ([0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4})", said())
+    check(bool(found), "the setup code is in the server's log", said()[-300:])
+    code, _, raw = http("POST", "/setup", {"code": "0000-0000-0000", "passphrase": PASSPHRASE}, signed_in=False)
+    check(code == 400 and b"setup code" in raw, "a wrong setup code is refused", raw)
+    code, _, raw = http("POST", "/setup", {"code": found.group(1) if found else "", "passphrase": "short"}, signed_in=False)
+    check(code == 400 and b"12 characters" in raw, "a short passphrase is refused", raw)
+    code, _, raw = http("POST", "/setup", {"code": found.group(1) if found else "", "passphrase": PASSPHRASE}, signed_in=False)
+    check(code == 200, "the right code sets the passphrase", raw)
+    saved = (tmp / "state" / "passphrase.json")
+    check(saved.exists() and PASSPHRASE not in saved.read_text() and oct(saved.stat().st_mode)[-3:] == "600",
+          "only its fingerprint is kept, readable by the server only")
+    code, _, raw = http("POST", "/setup", {"code": found.group(1) if found else "", "passphrase": "another passphrase 2"}, signed_in=False)
+    check(code == 400, "nobody can set it a second time", raw)
+    code, _, raw = http("GET", "/login", signed_in=False)
+    check(b"Setup code" not in raw and b"Passphrase" in raw, "from then on the page asks for the passphrase")
 
     # ---- the door ----
     code, hdrs, _ = http("GET", "/", signed_in=False)

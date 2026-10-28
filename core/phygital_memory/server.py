@@ -659,6 +659,33 @@ document.getElementById("f").addEventListener("submit", async (e) => {
 });
 </script>"""
 
+SETUP_PAGE = SERVER_HEAD + """
+<div class="unlock"><div class="unlock-wrap"><form class="unlock-card" id="f">""" + KNOT_SVG + """
+<div class="wordmark">Phygital Memory</div><div class="unlock-folder">Choose this server's passphrase</div>
+<div class="unlock-sub">You type it to open your memories here, 12 or more characters. First, the setup code from the
+server's log, so only you can do this.</div>
+<input id="code" autocomplete="off" placeholder="Setup code" aria-label="Setup code" autofocus>
+<input id="pw" type="password" autocomplete="new-password" placeholder="New passphrase" aria-label="New passphrase">
+<input id="again" type="password" autocomplete="new-password" placeholder="Passphrase again" aria-label="Passphrase again">
+<button class="btn primary" id="go" type="submit">Set passphrase</button><div class="unlock-err" id="m" role="status"></div>
+</form></div></div>
+<script>
+const $ = (i) => document.getElementById(i), m = $("m"), go = $("go");
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if ($("pw").value !== $("again").value) { m.textContent = "The two passphrases differ."; return; }
+  go.disabled = true; m.textContent = "";
+  try {
+    const r = await fetch("/setup", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: $("code").value, passphrase: $("pw").value }) });
+    const j = await r.json();
+    if (r.ok) { location.replace("/"); return; }
+    m.textContent = j.error || "That didn't work.";
+  } catch (x) { m.textContent = "The server didn't answer. Try again."; }
+  go.disabled = false;
+});
+</script>"""
+
 SERVER_ALLOW_PAGE = SERVER_HEAD + """
 <div class="unlock"><div class="unlock-wrap"><div class="unlock-card">""" + KNOT_SVG + """
 <div class="wordmark">Phygital Memory</div><div class="unlock-folder">Let {NAME} in?</div>
@@ -695,7 +722,7 @@ async def login(request: Request) -> Response:
     if not hosted.ON or not _local(request):
         return Response("Not found.", status_code=404)
     if request.method == "GET":
-        return _html(LOGIN_PAGE)
+        return _html(LOGIN_PAGE if hosted.configured() else SETUP_PAGE)
     if not hosted.same_site(request) or request.headers.get("content-type", "").split(";")[0] != "application/json":
         return _ok({"error": "Not allowed."}, 403)
     try:
@@ -711,6 +738,25 @@ async def login(request: Request) -> Response:
     nxt = str(body.get("next") or "/")
     nxt = nxt if nxt.startswith("/") and not nxt.startswith("//") and "\\" not in nxt else "/"
     r = _ok({"next": nxt})
+    r.headers["Set-Cookie"] = hosted.cookie_header(token, hosted.SESSION_DAYS * 86400)
+    return r
+
+
+@mcp.custom_route("/setup", methods=["POST"])
+async def setup(request: Request) -> Response:
+    """Server mode, first visit only: the setup code from the log, then the server's passphrase."""
+    if not hosted.ON or not _local(request) or not hosted.same_site(request) \
+            or request.headers.get("content-type", "").split(";")[0] != "application/json":
+        return _ok({"error": "Not allowed."}, 403)
+    try:
+        body = await request.json()
+        token = await asyncio.to_thread(hosted.choose, str(body.get("code", "")), str(body.get("passphrase", "")))
+    except ValueError as e:
+        await asyncio.sleep(0.5)
+        return _ok({"error": str(e)}, 400)
+    except Exception:
+        return _ok({"error": "Not allowed."}, 400)
+    r = _ok({"next": "/"})
     r.headers["Set-Cookie"] = hosted.cookie_header(token, hosted.SESSION_DAYS * 86400)
     return r
 
@@ -2831,6 +2877,8 @@ def main() -> None:
         if bad := hosted.problems():
             sys.exit("Phygital Memory server can't start:\n- " + "\n- ".join(bad))
         print(f"Phygital Memory server {VERSION}: open {PAGE}  ·  AI apps connect to {PAGE}mcp", file=sys.stderr)
+        if code := hosted.setup_code():
+            print(f"\n  First visit: open {PAGE} and choose the passphrase. Setup code: {code}\n", file=sys.stderr, flush=True)
         mcp.run("streamable-http", host="0.0.0.0", port=PORT,
                 transport_security=TransportSecuritySettings(
                     enable_dns_rebinding_protection=True, allowed_hosts=[hosted.HOST], allowed_origins=[hosted.URL]))

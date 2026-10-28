@@ -2,8 +2,11 @@
 
 Turned on by PHYGITAL_MEMORY_SERVER=1. Then:
 - The page and the AI door answer at PHYGITAL_MEMORY_URL (https://memory.example.com) instead of 127.0.0.1.
-- The page needs a login: the passphrase in PHYGITAL_MEMORY_PASSPHRASE. A login gives a cookie that lasts 30 days
-  or until the server restarts. Too many wrong tries close the door for 15 minutes.
+- The page needs a login with the server's passphrase. The first visit chooses it, after typing the one-time setup
+  code the server prints in its log (so whoever opens the address first can't claim the server). Only its scrypt
+  fingerprint is kept (passphrase.json in the state folder). PHYGITAL_MEMORY_PASSPHRASE sets it instead, for hosts
+  that prefer settings. A login gives a cookie that lasts 30 days or until the server restarts. Too many wrong tries
+  close the door for 15 minutes.
 - Memories live under PHYGITAL_MEMORY_DATA (/data in Docker). Encrypted ones are unlocked on the page and stay
   open in memory until locked or the server restarts; their passwords are never written down.
 - Secrets the desktop app keeps in the Keychain (cloud passwords, the GitHub key, the sharing key) go in one file
@@ -12,6 +15,7 @@ Turned on by PHYGITAL_MEMORY_SERVER=1. Then:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import secrets
@@ -47,9 +51,74 @@ def problems() -> list[str]:
         out.append("PHYGITAL_MEMORY_URL must be the server's address, like https://memory.example.com")
     elif u.scheme == "http" and u.hostname not in ("localhost", "127.0.0.1"):
         out.append("PHYGITAL_MEMORY_URL must start with https:// (http is only for trying it on this computer)")
-    if len(PASSPHRASE) < 12:
-        out.append("PHYGITAL_MEMORY_PASSPHRASE must be at least 12 characters")
+    if PASSPHRASE and len(PASSPHRASE) < 12:
+        out.append("PHYGITAL_MEMORY_PASSPHRASE must be at least 12 characters (or leave it out and choose one on the first visit)")
     return out
+
+
+MIN = 12
+SETUP_CODE = ""   # made at start while no passphrase is set; printed in the server's log
+
+
+def _pass_file() -> Path:
+    from .system import state_dir
+    return state_dir() / "passphrase.json"
+
+
+def _fingerprint(text: str, salt: bytes) -> bytes:
+    return hashlib.scrypt(text.encode(), salt=salt, n=2 ** 15, r=8, p=1, maxmem=64 * 1024 * 1024, dklen=32)
+
+
+def configured() -> bool:
+    return bool(PASSPHRASE) or _pass_file().exists()
+
+
+def setup_code() -> str:
+    """The one-time code for the first visit, made once per start while there's no passphrase."""
+    global SETUP_CODE
+    if not configured() and not SETUP_CODE:
+        SETUP_CODE = "-".join(secrets.token_hex(2) for _ in range(3))
+    return SETUP_CODE
+
+
+def _new_session() -> str:
+    token = secrets.token_urlsafe(32)
+    _sessions[token] = time.time() + SESSION_DAYS * 86400
+    return token
+
+
+def choose(code: str, new: str) -> str:
+    """The first visit: the setup code, then the server's passphrase. Returns a session cookie, or raises with words
+    for the page."""
+    now = time.time()
+    with _lock:
+        _fails[:] = [t for t in _fails if now - t < WINDOW]
+        if configured():
+            raise ValueError("This server already has a passphrase. Sign in instead.")
+        if len(_fails) >= TRIES:
+            raise ValueError("Too many wrong tries. Wait 15 minutes, then try again.")
+        if not SETUP_CODE or not secrets.compare_digest(code.strip().lower().encode(), SETUP_CODE.encode()):
+            _fails.append(now)
+            raise ValueError("That setup code isn't right. It's in the server's log.")
+        if len(new) < MIN:
+            raise ValueError("Make it at least 12 characters.")
+        salt = secrets.token_bytes(16)
+        p = _pass_file()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as fh:
+            json.dump({"salt": salt.hex(), "fp": _fingerprint(new, salt).hex(), "kind": "scrypt-32768-8-1"}, fh)
+        return _new_session()
+
+
+def _right(given: str) -> bool:
+    if PASSPHRASE:
+        return secrets.compare_digest(given.encode(), PASSPHRASE.encode())
+    try:
+        d = json.loads(_pass_file().read_text())
+        return secrets.compare_digest(_fingerprint(given, bytes.fromhex(d["salt"])), bytes.fromhex(d["fp"]))
+    except (OSError, ValueError, KeyError):
+        return False
 
 
 def secure() -> bool:
@@ -63,12 +132,10 @@ def login(given: str) -> str | None:
         _fails[:] = [t for t in _fails if now - t < WINDOW]
         if len(_fails) >= TRIES:
             return None
-        if not PASSPHRASE or not secrets.compare_digest(given.encode(), PASSPHRASE.encode()):
+        if not _right(given):
             _fails.append(now)
             return None
-        token = secrets.token_urlsafe(32)
-        _sessions[token] = now + SESSION_DAYS * 86400
-        return token
+        return _new_session()
 
 
 def closed() -> bool:
