@@ -86,7 +86,7 @@ export function openSettings(folderOpts, me) {
     row(t("Font size"), null, el("div", { class: "set-range" }, size, sizeVal), t("Text size in the editor.")),
     row(t("Show properties"), t("Fields under a note's title."), sw(props), t("The info block at the top of a note, like tags and dates.")),
     row(t("Language"), t("The app's words. Note and folder names stay as you wrote them."),
-      languagePicker(() => toast(t("Language changed. Reopen the app to see it everywhere.")))),
+      languagePicker(() => (me && me.restart ? me.restart() : toast(t("Language changed. Reopen the app to see it everywhere."))))),
     section(t("Finder"))];
   if (f && f.plain) general.push(row(t("Show in Finder"), t("This memory is a normal folder."), btn(t("Show"), f.toggleFinder)));
   else if (f && f.finderAvailable) general.push(row(t("Show in Finder"), t("Your notes as a normal folder."), toggle(t("Show in Finder"), f.finderShown, f.toggleFinder),

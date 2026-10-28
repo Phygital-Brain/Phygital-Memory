@@ -77,7 +77,7 @@ class CsvWidget extends WidgetType {
       });
       const scroller = document.createElement("div"); scroller.className = "md-table-wrap"; scroller.append(table);
       const cap = document.createElement("div"); cap.className = "md-media-caption";
-      cap.textContent = t("{0} · {1} rows{2}", this.name.split("/").pop(), rows.length, rows.length > 200 ? " (first 200 shown)" : "");
+      cap.textContent = (rows.length > 200 ? t("{0} · {1} rows (first 200 shown)", this.name.split("/").pop(), rows.length) : t("{0} · {1} rows", this.name.split("/").pop(), rows.length));
       wrap.append(scroller, cap);
     }).catch(() => missing(wrap, `Can't open ${this.name}`));
     return wrap;
@@ -97,7 +97,7 @@ export function csvTable(text, path) {
   });
   const wrap = document.createElement("div"); wrap.className = "md-table-wrap"; wrap.append(table);
   const cap = document.createElement("div"); cap.className = "md-media-caption";
-  cap.textContent = t("{0} rows{1}", rows.length, rows.length > 5000 ? " (first 5,000 shown)" : "");
+  cap.textContent = (rows.length > 5000 ? t("{0} rows (first 5,000 shown)", rows.length) : t("{0} rows", rows.length));
   const out = document.createElement("div"); out.append(wrap, cap);
   return out;
 }

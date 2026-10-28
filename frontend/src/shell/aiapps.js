@@ -2,13 +2,14 @@
 // paste), changing or removing one, and the Allow window when an AI app signs in. Everything from the server is
 // put in as text only.
 import { t } from "./i18n.js";
+const tr = t;   // (inside ago, "t" is the time)
 import { el, icon } from "./dom.js";
 import { modal } from "./dialogs.js";
 
 const ago = (t) => {
-  if (!t) return "never used";
+  if (!t) return tr("never used");
   const s = Date.now() / 1000 - t;
-  return s < 90 ? "used just now" : s < 3600 ? `used ${Math.round(s / 60)} min ago` : s < 86400 ? `used ${Math.round(s / 3600)} h ago` : `used ${Math.round(s / 86400)} days ago`;
+  return s < 90 ? tr("used just now") : s < 3600 ? tr("used {0} min ago", Math.round(s / 60)) : s < 86400 ? tr("used {0} h ago", Math.round(s / 3600)) : tr("used {0} days ago", Math.round(s / 86400));
 };
 const reach = (app, folders) => {
   const names = app.folders === "all" ? "All memories" : folders.filter((f) => app.folders.includes(f.id)).map((f) => f.name).join(", ") || t("No memories");

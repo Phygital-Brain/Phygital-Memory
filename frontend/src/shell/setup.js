@@ -36,7 +36,7 @@ const QUESTIONS = () => [
 
 // A new memory: one kind or the other, never both
 const KINDS = () => ({ key: "kind", one: true, q: t("What kind of memory?"), options: [
-  ["open", t("Open"), t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
+  ["open", t("Open@@kind"), t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
   ["encrypted", t("Encrypted"), t("Locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.")]] });
 
 // A backup now, or later from Storage and backup. The text follows the kind picked before

@@ -1,4 +1,4 @@
-import { t, useLanguage, currentLanguage } from "./shell/i18n.js";
+import { t, agoText, useLanguage, currentLanguage } from "./shell/i18n.js";
 import { renderSetup } from "./shell/setup.js";
 import { openAddFiles } from "./shell/addfiles.js";
 import { openShare, joinDialog } from "./shell/share.js";
@@ -552,7 +552,7 @@ function drawUnlock() {
           return el("button", { class: "ul-mem" + (f.id === info.id ? " on" : "") + (f.kind === "open" ? " k-open" : " k-encrypted"), type: "button", role: "listitem", "aria-current": f.id === info.id ? "true" : null,
             onclick: () => { if (f.id !== info.id) switchTo(f.id); } },
             icon(f.kind === "open" ? "folder" : open ? "unlock" : "lock", 15), el("span", { class: "ul-text" }, el("span", { class: "ul-name" }, f.name), el("span", { class: "ul-path" }, shortPath(f.path))),
-            el("span", { class: "ul-state" + (open ? " open" : "") }, f.kind === "open" ? t("Open") : open ? t("Unlocked") : t("Locked")));
+            el("span", { class: "ul-state" + (open ? " open" : "") }, f.kind === "open" ? t("Open@@kind") : open ? t("Unlocked") : t("Locked")));
         }));
     }
     if (info.kind === "open" && !info.joined) {   // a plain folder: no password, it just opens
@@ -909,7 +909,12 @@ async function openSettingsHere() {
   let me = null;
   try {
     let n = (await api("myname")).name;
-    me = { name: n, set: async (v) => { try { n = (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); } return n; } };
+    me = { name: n, set: async (v) => { try { n = (await api("myname", { name: v })).name; } catch (e) { toastErr(e.message); } return n; },
+      restart: async () => {   // a new language: save what's open, then the app starts again in it
+        await Promise.all(state.tabs.map((t) => saveNow(t)));
+        await flushPrefs();
+        location.reload();
+      } };
     const ap = await api("approverinfo");
     me.approver = { label: !ap.set ? "Not set up yet" : ap.kind === "chip" ? "Touch ID (security chip)" : t("Approval password"),
       signed: ap.signed, setUp: ap.set ? null : () => setUpApprover(ap.chip) };
@@ -1035,7 +1040,7 @@ function drawAI() {
   const recent = aiApps.filter((a) => a.ago < 120);
   barEls.ai.replaceChildren(icon("pulse", 16, 1.8), ...(openTasks ? [el("span", { class: "ai-count" }, String(openTasks))] : []));
   barEls.ai.classList.toggle("on", recent.length > 0);
-  const ago = (s) => (s < 60 ? "just now" : `${Math.round(s / 60)} min ago`);
+  const ago = (s) => agoText(s);
   barEls.ai.title = "AI: tasks and activity\n"
     + (openTasks ? `${openTasks} task${openTasks === 1 ? "" : "s"} waiting\n` : "No tasks waiting\n")
     + (aiApps.length ? t("Using your notes: ") + aiApps.map((a) => `${a.name}, ${ago(a.ago)}`).join("; ") : t("No AI app is using your notes right now."));
@@ -1153,7 +1158,7 @@ async function openStoragePanel() {
       if (!j.cancelled) toastOk(plain ? t("Saved \"{0}\" ({1} MB).", j.name, (j.size / 1e6).toFixed(1)) : t("Saved \"{0}\" ({1} MB), encrypted.", j.name, (j.size / 1e6).toFixed(1)));
       return false;   // the window stays open
     },
-    download: async () => { const j = await api("download"); toastOk(t("Downloading {0} file{1}.", j.asked, j.asked === 1 ? "" : "s")); },
+    download: async () => { const j = await api("download"); toastOk(j.asked === 1 ? t("Downloading 1 file.") : t("Downloading {0} files.", j.asked)); },
     reveal: () => api("finder", { do: "revealvault" }).catch((e) => toastErr(e.message)),
   });
   if (result === "tocloud") {   // the panel closes first, then the cloud steps
@@ -2527,7 +2532,7 @@ async function homeExtras(status, ai, leaving) {
   const get = (a) => api(a).catch(() => ({}));
   const [bar, store, todo, act, trash, reqs, offers] = await Promise.all([get("bar"), get("storage"), get("aitodo"), get("aiactivity"), get("trashlist"), get("sharerequests"), get("shareoffers")]);
   if (!status.isConnected) return;
-  const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : sec < 86400 ? `${Math.round(sec / 3600)} h ago` : `${Math.round(sec / 86400)} days ago`;
+  const ago = (sec) => agoText(sec);
   const bits = [curInfo()?.kind === "open" ? el("span", { class: "hs-open" }, t("Open folder")) : el("span", { class: "hs-ok" }, t("Locked on disk")),
     el("span", {}, bar.cloudOnly ? `In ${bar.cloud} only` : bar.cloud ? `This Mac and ${bar.cloud}` : t("This Mac only"))];
   const problems = [];
@@ -2558,7 +2563,7 @@ async function homeExtras(status, ai, leaving) {
     ai.replaceChildren(el("h2", { class: "home-h" }, t("Your AI")),
       el("div", { class: "home-list" },
         ...open.slice(0, 3).map((k) => el("button", { class: "home-item", onclick: () => openPath(k.path || TASKS_NOTE) }, icon("sparkle", 15),
-          el("span", { class: "hi-name" }, label(k.path || TASKS_NOTE)), el("span", { class: "hi-dir" }, k.ask || t("Read it")), el("span", { class: "hi-time hi-wait" }, "waiting"))),
+          el("span", { class: "hi-name" }, label(k.path || TASKS_NOTE)), el("span", { class: "hi-dir" }, k.ask || t("Read it")), el("span", { class: "hi-time hi-wait" }, t("waiting")))),
         ...finished.map((k) => el("button", { class: "home-item", onclick: () => openPath(k.path || TASKS_NOTE) }, icon("check", 15),
           el("span", { class: "hi-name" }, label(k.path || TASKS_NOTE)), el("span", { class: "hi-dir" }, k.result ? `${k.by ? k.by + ": " : ""}${k.result}` : k.ask || t("Read it")),
           el("span", { class: "hi-time hi-done" }, "done"))),

@@ -1,11 +1,11 @@
 // Panels from the sidebar's status icons: where this folder is stored, the AI panel (tasks and activity), the trash.
 // Everything from the server is put in as text only.
-import { t } from "./i18n.js";
+import { t, agoText } from "./i18n.js";
 import { el, icon, tabbed } from "./dom.js";
 import { modal } from "./dialogs.js";
 import { shortPath } from "./folders.js";
 
-const ago = (s) => (s < 45 ? "just now" : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`);
+const ago = (s) => agoText(s);
 const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 // Where a memory is stored: this Mac only, or this Mac + cloud (a synced folder, Mac + WebDAV, WebDAV only), and a
@@ -24,7 +24,7 @@ export function openStorage(ctx) {
     };
     const btn = (label, fn, cls = "") => el("button", { class: "btn small " + cls, type: "button", onclick: fn }, label);
     const now = (on) => on ? el("span", { class: "st-opt-now" }, t("Now")) : null;
-    const ago = (sec) => sec == null ? "not yet" : sec < 60 ? "just now" : sec < 3600 ? `${Math.round(sec / 60)} min ago` : `${Math.round(sec / 3600)} h ago`;
+    const ago = (sec) => agoText(sec);
     const option = (ic, title, tip, on, ...body) => el("div", { class: "st-opt" + (on ? " on" : "") },
       el("div", { class: "st-opt-head" }, el("span", { class: "st-opt-icon" }, icon(ic, 16)),
         el("div", { class: "st-opt-title" }, title, info(tip)), now(on)),
@@ -56,7 +56,7 @@ export function openStorage(ctx) {
     const github = s.github
       ? el("div", { class: "st-gh" },
           el("div", {}, el("b", {}, s.github), gs && gs.error ? el("span", { class: "st-gh-err" }, ` · ${gs.error}`) : ` · saved ${ago(gs && gs.ago)}`),
-          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, t("{0} file{1} over 95 MB and stay{2} out of the backup.", gs.too_big.length, gs.too_big.length === 1 ? " is" : "s are", gs.too_big.length === 1 ? "s" : "")) : null,
+          gs && gs.too_big && gs.too_big.length ? el("div", { class: "st-gh-note" }, (gs.too_big.length === 1 ? t("1 file is over 95 MB and stays out of the backup.") : t("{0} files are over 95 MB and stay out of the backup.", gs.too_big.length))) : null,
           el("div", {}, btn(t("Stop backup"), () => run(() => ctx.stopGithub(s.github), "changed"), "st-stop")))
       : el("div", {}, el("button", { class: "btn gh-btn", type: "button", onclick: () => run(ctx.toGithub, "changed") }, githubMark(), t("Turn on backup")));
 
@@ -76,7 +76,7 @@ export function openStorage(ctx) {
       el("div", { class: "st-where" }, icon(s.cloudOnly || s.cloud || s.webdav ? "cloud" : "laptop", 14), el("span", { title: s.path }, shortPath(s.path)),
         s.cloudOnly ? null : btn(plain ? t("Show in Finder") : t("Show encrypted files"), () => ctx.reveal())),
       s.offline ? el("div", { class: "st-warn" },
-        el("span", {}, t("{0} file{1} only in the cloud and can't open yet.", s.offline, s.offline === 1 ? " is" : "s are")),
+        el("span", {}, s.offline === 1 ? t("1 file is only in the cloud and can't open yet.") : t("{0} files are only in the cloud and can't open yet.", s.offline)),
         btn(t("Download now"), () => ctx.download())) : null,
       plain ? el("div", { class: "st-e2e st-plain" }, icon("folder", 14), el("span", {}, t("An Open memory is a normal folder. Every copy, in a cloud folder or a backup, is readable, so your AI can use it anywhere. Keep backups private.")))
         : el("div", { class: "st-e2e" }, icon("lock", 14), el("span", {}, t("Every copy, on the cloud or a backup, is encrypted end to end. Only you can read it, with your password."))),

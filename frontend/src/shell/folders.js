@@ -36,7 +36,7 @@ function actionRow(iconName, label, onClick, right) {
 export function switcherItems(ctx) {
   const rows = ctx.list.map((f, i) => {
     const on = f.id === ctx.currentId, open = ctx.unlocked(f.id);
-    const sub = !f.exists ? "Not found" : f.kind === "open" ? t("Open · a normal folder") : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : "");
+    const sub = !f.exists ? t("Not found") : f.kind === "open" ? t("Open · a normal folder") : f.finder ? (open ? t("Unlocked · open in Finder") : t("Locked · open in Finder")) : open ? t("Unlocked") : t("Locked");
     return {
       node: el("button", {
         class: "fo-row" + (on ? " on" : ""), role: "menuitem", title: f.path,
@@ -90,7 +90,7 @@ export function manageFolders(list, actions) {
           el("div", { class: "mf-name" }, f.name),
           el("div", { class: "mf-path", title: f.path }, shortPath(f.path)),
           el("div", { class: "mf-state" + (f.finder ? " warn" : "") },
-            !f.exists ? "Not found at this place" : f.kind === "open" ? t("Open · a normal folder") : (open ? "Unlocked" : "Locked") + (f.finder ? " · open in Finder" : ""))),
+            !f.exists ? t("Not found at this place") : f.kind === "open" ? t("Open · a normal folder") : f.finder ? (open ? t("Unlocked · open in Finder") : t("Locked · open in Finder")) : open ? t("Unlocked") : t("Locked"))),
         el("div", { class: "mf-actions" },
           btn(open || f.kind === "open" ? t("Open") : t("Unlock"), actions.switchTo),
           btn(t("Rename"), actions.rename),
