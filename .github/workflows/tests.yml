@@ -116,8 +116,9 @@ jobs:
           OFFLINE: "1"
           PYTHONPATH: .
           PYTHONUTF8: "1"
-          PYTHON_KEYRING_BACKEND: ${{ runner.os == 'Linux' && 'keyrings.alt.file.PlaintextKeyring' || '' }}   # a CI Linux has no keyring
-        run: uv run --with keyrings.alt python tests/test_webdav_open.py
+        run: |
+          [ "$RUNNER_OS" = Linux ] && export PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring   # a CI Linux has no keyring
+          uv run --with keyrings.alt python tests/test_webdav_open.py
 
   window:
     name: app window (${{ matrix.os }})
