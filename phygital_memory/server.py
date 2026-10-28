@@ -2105,6 +2105,8 @@ async def api(request: Request) -> Response:
             return _ok({"size": size, "name": Path(dest).name})
         if action == "approvals":   # the sealed list of yeses, for Activity
             return _ok({"approvals": approvals.listing(20)})   # the last 20; every older one is still checked
+        if action == "claudedesktopext":   # a Claude Desktop extension file in Downloads; the key is asked for on install
+            return _ok({"path": await asyncio.to_thread(_claude_desktop_ext)})
         if action == "claudecodeadd":   # one button: add the door, with its key, to Claude Code
             return _ok(await asyncio.to_thread(_claude_code_add, str(body.get("key", ""))))
         if action == "forgetfolder":
@@ -2287,6 +2289,38 @@ async def api(request: Request) -> Response:
     except Exception as e:
         return _ok({"error": str(e)}, 400)
     return _ok({"error": "Unknown action."}, 404)
+
+
+def _claude_desktop_ext() -> str:
+    """Write "Phygital Memory.mcpb" to Downloads and show it in Finder. Inside: the bridge (claude_ext/index.js, run
+    by Claude Desktop's own Node), its icon, and a manifest that asks for the key on install (kept by Claude Desktop
+    as a secret), with this app's door as the address. Holds no key itself."""
+    import zipfile
+    ext = HERE / "claude_ext"
+    manifest = {
+        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.0",
+        "description": "Your locked notes in Phygital Memory, through the app on this Mac. Only unlocked memories, "
+                       "only what you allowed in its Settings › AI apps.",
+        "author": {"name": "Phygital Memory"}, "icon": "icon.png",
+        "server": {"type": "node", "entry_point": "server/index.js",
+                   "mcp_config": {"command": "node", "args": ["${__dirname}/server/index.js"],
+                                  "env": {"PM_URL": "${user_config.address}", "PM_KEY": "${user_config.key}"}}},
+        "user_config": {
+            "key": {"type": "string", "title": "Key from Phygital Memory", "sensitive": True, "required": True,
+                    "description": "Phygital Memory › Settings › AI apps › Connect an AI app › Claude Desktop shows it once."},
+            "address": {"type": "string", "title": "Address", "required": True, "default": f"{PAGE}mcp",
+                        "description": "The app's door on this Mac. Leave it as it is."}},
+        "compatibility": {"platforms": ["darwin"], "runtimes": {"node": ">=18.0.0"}},
+    }
+    out = Path.home() / "Downloads" / "Phygital Memory.mcpb"
+    out.parent.mkdir(exist_ok=True)
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("manifest.json", json.dumps(manifest, indent=2))
+        z.write(ext / "index.js", "server/index.js")
+        z.write(ext / "icon.png", "icon.png")
+    if not os.environ.get("PHYGITAL_MEMORY_OFFLINE"):   # tests: no Finder window
+        subprocess.run(["open", "-R", str(out)], check=False)
+    return str(out)
 
 
 def _claude_code_add(key: str) -> dict:

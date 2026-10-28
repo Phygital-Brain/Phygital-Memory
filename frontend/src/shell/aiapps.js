@@ -42,9 +42,8 @@ function setupFor(kind, door, key) {
       return { where: "Run this in Terminal:", text: `claude mcp add --scope user --transport http ${name} ${door} --header "Authorization: Bearer ${key}"` };
     case "cursor":
       return { where: "Add this to ~/.cursor/mcp.json:", text: JSON.stringify({ mcpServers: { [name]: { url: door, headers: { Authorization: `Bearer ${key}` } } } }, null, 2) };
-    case "claude-desktop":
-      return { where: "Add this to Claude Desktop's config (Settings › Developer › Edit Config), then restart it:",
-               text: JSON.stringify({ mcpServers: { [name]: { command: "npx", args: ["-y", "mcp-remote", door, "--header", `Authorization: Bearer ${key}`] } } }, null, 2) };
+    case "claude-desktop":   // the extension asks for the key itself; this is all there is to paste
+      return { where: "Your key. Paste it when Claude Desktop asks:", text: key };
     case "codex":
       return { where: "Add this to ~/.codex/config.toml:", text: `[mcp_servers.${name.replace("-", "_")}]\nurl = "${door}"\nhttp_headers = { Authorization = "Bearer ${key}" }` };
     default:
@@ -118,11 +117,17 @@ export function openAIApps(ctx) {
         catch (e) { err.textContent = e.message; }
         busy(false);
       }, "small primary") : null;
+      const ext = kind === "claude-desktop" ? btn("Download for Claude Desktop", async () => {
+        busy(true);
+        try { await ctx.claudeDesktop(); ext.textContent = "Saved in Downloads"; } catch (e) { err.textContent = e.message; }
+        busy(false);
+      }, "small primary") : null;
       body.replaceChildren(
         el("div", { class: "st-warn" }, el("span", {}, "This key shows only once. Paste it into the AI app now.")),
+        ...(ext ? [el("div", { class: "set-hint" }, "1. Download the extension. 2. Double-click it in Downloads: Claude Desktop opens and installs it. 3. Paste the key when it asks.")] : []),
         el("div", { class: "set-title" }, s.where),
         el("pre", { class: "ai-setup" }, s.text),
-        el("div", { class: "set-btns" }, copy, auto));
+        el("div", { class: "set-btns" }, ext, copy, auto));
       actions.replaceChildren(btn("Done", list, "primary"));
     };
 

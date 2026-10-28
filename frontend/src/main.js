@@ -883,6 +883,7 @@ async function openSettingsHere() {
     aiApps: () => openAIApps({
       load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
       remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
+      claudeDesktop: () => api("claudedesktopext"),
     }),
   } : null, me);
 }
