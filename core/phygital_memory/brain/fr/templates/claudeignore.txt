@@ -1,0 +1,20 @@
+# Votre agent ne lit jamais ce qui est listé ici,
+# sauf si vous lui demandez ce fichier précis dans la discussion.
+
+# Mots de passe et clés
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Sauvegardes faites avant les gros changements (lues seulement pour annuler)
+.backups/
+
+# Argent : factures, impôts, coordonnées bancaires
+Mémoire/finances/
+
+# Dossiers privés (enlevez le # pour les activer)
+# santé/
+# journal-intime/

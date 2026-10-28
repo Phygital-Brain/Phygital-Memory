@@ -1,0 +1,20 @@
+# Tvůj agent nikdy nečte nic z toho, co je tady uvedené,
+# leda když o přesně ten soubor požádáš v chatu.
+
+# Hesla a klíče
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Zálohy před velkými změnami (čtou se jen kvůli vrácení změn)
+.backups/
+
+# Peníze: faktury, daně, bankovní údaje
+Paměť/finance/
+
+# Soukromé složky (zapneš je smazáním #)
+# zdraví/
+# osobní-deník/

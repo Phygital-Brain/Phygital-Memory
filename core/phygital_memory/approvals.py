@@ -1,0 +1,105 @@
+"""The sealed list of the person's yeses: unlocks, AI apps let in, what each may reach. Each line is chained to the one
+before and sealed with a key kept in the Keychain, so a line changed or taken out later shows up as broken.
+
+shortcut: a program running as this Mac user could read the seal key and forge lines. This catches later edits to the
+file, not a program that knows how; signed Phygital Key receipts (a key behind Touch ID) are the upgrade."""
+import hashlib
+import hmac
+import json
+import os
+import secrets
+import subprocess
+import threading
+import time
+
+from . import keychain
+from .folders import STATE
+
+FILE = STATE / "approvals.jsonl"
+KEYCHAIN = os.environ.get("PHYGITAL_MEMORY_SEAL_KEYCHAIN", "Phygital Memory seal")
+_lock = threading.Lock()
+_key: bytes | None = None
+
+
+_key_lock = threading.Lock()
+
+
+def _seal_key(wait: bool = True) -> bytes:
+    """Made only when the Keychain truly has none (a refused read raises, and nothing is replaced). wait=False:
+    while another thread is still reading it (macOS may be asking), don't hold up the caller."""
+    if _key is not None:
+        return _key
+    if not _key_lock.acquire(blocking=wait):
+        raise keychain.Refused(keychain.MESSAGE)
+    try:
+        return _seal_key_locked()
+    finally:
+        _key_lock.release()
+
+
+def _quiet(fn):
+    try:
+        fn()
+    except Exception:
+        pass
+
+
+
+def _seal_key_locked() -> bytes:
+    global _key
+    if _key is None:
+        k = (keychain.read(KEYCHAIN, "seal") or "").strip()
+        if not k:
+            k = secrets.token_hex(32)
+            keychain.save(KEYCHAIN, "seal", k)
+        _key = bytes.fromhex(k)
+    return _key
+
+
+def _seal(prev: str, line: dict) -> str:
+    body = json.dumps({k: v for k, v in line.items() if k != "seal"}, sort_keys=True, ensure_ascii=False)
+    return hmac.new(_seal_key(), (prev + body).encode(), hashlib.sha256).hexdigest()
+
+
+def _read() -> list[dict]:
+    try:
+        return [json.loads(x) for x in FILE.read_text().splitlines() if x.strip()]
+    except FileNotFoundError:
+        return []
+    except ValueError:
+        return [{"t": 0, "what": "This list was damaged.", "detail": "", "how": "", "prev": "", "seal": ""}]
+
+
+def add(what: str, detail: str = "", how: str = "") -> None:
+    """One yes: what was allowed, the detail (which memory, which app), and how it was confirmed."""
+    with _lock:
+        lines = _read()
+        line = {"t": time.time(), "what": what[:120], "detail": detail[:200], "how": how,
+                "prev": lines[-1]["seal"] if lines else ""}
+        try:
+            _seal_key(wait=False)
+            line["seal"] = _seal(line["prev"], line)
+        except keychain.Refused:   # macOS hasn't let the app read its seal key yet: kept, shown as unsealed
+            line["seal"] = ""
+        STATE.mkdir(parents=True, exist_ok=True)
+        with FILE.open("a") as fh:
+            fh.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+def listing(limit: int = 200) -> list[dict]:
+    """Newest first, each with sealed: True when it and its link to the line before are untouched."""
+    with _lock:
+        lines = _read()
+    out, prev = [], ""
+    for x in lines:
+        try:
+            ok = bool(x.get("seal")) and x.get("prev") == prev and hmac.compare_digest(_seal(prev, x), x["seal"])
+        except keychain.Refused:
+            ok = False
+        out.append({"t": x.get("t", 0), "what": x.get("what", ""), "detail": x.get("detail", ""),
+                    "how": x.get("how", ""), "sealed": ok})
+        prev = x.get("seal", "")
+    return out[::-1][:limit]
+
+
+threading.Thread(target=lambda: _quiet(_seal_key), name="seal key", daemon=True).start()   # read once, off the main loop

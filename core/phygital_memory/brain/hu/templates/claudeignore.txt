@@ -1,0 +1,20 @@
+# Az ügynököd soha nem olvassa el, ami itt szerepel,
+# hacsak a chatben nem pont azt a fájlt kéred.
+
+# Jelszavak és kulcsok
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Mentések nagy változtatások előtt (csak visszavonáshoz olvassa)
+.backups/
+
+# Pénz: számlák, adók, bankadatok
+Emlékezet/pénzügyek/
+
+# Privát mappák (töröld a # jelet, hogy bekapcsold)
+# health/
+# journal/

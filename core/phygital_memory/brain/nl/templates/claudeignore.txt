@@ -1,0 +1,20 @@
+# Je agent leest nooit iets wat hier staat,
+# tenzij je in de chat om precies dat bestand vraagt.
+
+# Wachtwoorden en sleutels
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Back-ups van voor grote wijzigingen (alleen lezen om iets ongedaan te maken)
+.backups/
+
+# Geld: facturen, belastingen, bankgegevens
+Geheugen/financiën/
+
+# Privémappen (haal het # weg om ze aan te zetten)
+# health/
+# journal/

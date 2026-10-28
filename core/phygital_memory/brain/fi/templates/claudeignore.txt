@@ -1,0 +1,20 @@
+# Agenttisi ei koskaan lue mitään, mikä on listattu tähän,
+# ellet pyydä juuri sitä tiedostoa keskustelussa.
+
+# Salasanat ja avaimet
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Varmuuskopiot ennen isoja muutoksia (luetaan vain perumista varten)
+.backups/
+
+# Raha: laskut, verot, pankkitiedot
+Muisti/raha-asiat/
+
+# Yksityiset kansiot (poista # ottaaksesi käyttöön)
+# health/
+# journal/

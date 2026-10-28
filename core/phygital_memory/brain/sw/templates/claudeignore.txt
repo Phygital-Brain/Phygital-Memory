@@ -1,0 +1,20 @@
+# Wakala wako hasomi kitu chochote kilichoorodheshwa hapa,
+# isipokuwa ukiomba faili hiyo hasa kwenye chat.
+
+# Nenosiri na funguo
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Nakala za akiba zinazotengenezwa kabla ya mabadiliko makubwa (zinasomwa tu kutendua)
+.backups/
+
+# Pesa: ankara, kodi, taarifa za benki
+Kumbukumbu/fedha/
+
+# Folda binafsi (ondoa alama # ili ziwe hai)
+# afya/
+# shajara-binafsi/

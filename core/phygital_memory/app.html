@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phygital Memory</title>
+<style>
+:root {
+  --bg: #14151a; --panel: #1b1d24; --panel2: #20232c; --line: #2b2f3a;
+  --text: #e6e8ee; --muted: #8b91a0; --magenta: #d63fa0; --sky: #3fb6e8;
+  --danger: #ff7a8a; --ok: #6fd29a; --code: #262a35;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f6f9; --panel: #ffffff; --panel2: #eeeff4; --line: #dcdee6;
+    --text: #1d2029; --muted: #6a7080; --danger: #c62f45; --ok: #1f8f55; --code: #eceef4;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.5 var(--sans); }
+[hidden] { display: none !important; }
+button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button:hover { border-color: var(--sky); }
+button.primary { background: var(--magenta); border-color: var(--magenta); color: #fff; }
+button.primary:hover { filter: brightness(1.1); }
+input, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 10px; }
+input:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--sky); outline-offset: 0; border-color: transparent; }
+
+/* unlock */
+#unlock { height: 100%; display: flex; align-items: center; justify-content: center; }
+#unlock form { width: 320px; display: flex; flex-direction: column; gap: 12px; }
+#unlock h1 { margin: 0 0 4px; font-size: 24px; font-weight: 650; letter-spacing: .2px; }
+#unlock h1 span { color: var(--magenta); }
+#unlock p { margin: 0 0 6px; color: var(--muted); }
+#unlock .err { color: var(--danger); min-height: 1.4em; margin: 0; }
+
+/* main */
+#main { height: 100%; display: flex; flex-direction: column; }
+header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--panel);
+  border-bottom: 1px solid var(--line); }
+header .name { font-weight: 650; }
+header .name span { color: var(--magenta); }
+header .tag { color: var(--muted); font-size: 12px; }
+header .tag i { color: var(--sky); font-style: normal; }
+header .sp { flex: 1; }
+#layout { flex: 1; display: flex; min-height: 0; }
+aside { width: 290px; min-width: 220px; background: var(--panel); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; min-height: 0; }
+aside .top { padding: 10px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
+#q { width: 100%; }
+#results, #tree { overflow: auto; padding: 6px; }
+#results { border-bottom: 1px solid var(--line); max-height: 40%; }
+#tree { flex: 1; }
+.res { padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.res:hover, .file:hover, .dir:hover { background: var(--panel2); }
+.res .p { font-size: 12px; color: var(--sky); overflow-wrap: anywhere; }
+.res .h { font-weight: 600; }
+.res .s { font-size: 12px; color: var(--muted); }
+.res mark { background: none; color: var(--magenta); font-weight: 600; }
+.dir, .file { padding: 2px 8px; border-radius: 5px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dir { color: var(--muted); user-select: none; }
+.dir::before { content: "\25B8 "; }
+.dir.open::before { content: "\25BE "; }
+.kids { margin-left: 14px; border-left: 1px solid var(--line); padding-left: 4px; }
+.file.cur { background: var(--panel2); color: var(--magenta); font-weight: 600; }
+.empty { color: var(--muted); padding: 6px 8px; font-size: 13px; }
+section.ed { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.bar .path { flex: 1; color: var(--muted); font-family: var(--mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .dirty { color: var(--magenta); }
+#saved { color: var(--ok); font-size: 13px; opacity: 0; transition: opacity .3s; }
+#saved.on { opacity: 1; }
+#text { flex: 1; resize: none; border: 0; border-radius: 0; padding: 18px 24px; background: var(--bg);
+  font: 14.5px/1.7 var(--mono); tab-size: 2; }
+#text:focus { outline: none; }
+#preview { flex: 1; overflow: auto; padding: 18px 28px; }
+#preview .md { max-width: 760px; margin: 0 auto; }
+#blank { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.md h1, .md h2, .md h3, .md h4 { line-height: 1.3; margin: 1.2em 0 .4em; }
+.md h1 { font-size: 1.7em; } .md h2 { font-size: 1.4em; } .md h3 { font-size: 1.15em; }
+.md p { margin: .6em 0; }
+.md ul, .md ol { padding-left: 1.5em; margin: .5em 0; }
+.md a { color: var(--sky); }
+.md a.wiki { color: var(--magenta); text-decoration: none; border-bottom: 1px dashed var(--magenta); cursor: pointer; }
+.md a.wiki.missing { opacity: .55; }
+.md code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: .92em; }
+.md pre { background: var(--code); padding: 10px 14px; border-radius: 8px; overflow: auto; }
+.md pre code { padding: 0; background: none; }
+.md blockquote { margin: .6em 0; padding: 2px 14px; border-left: 3px solid var(--sky); color: var(--muted); }
+.md hr { border: 0; border-top: 1px solid var(--line); }
+#toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel2);
+  border: 1px solid var(--danger); color: var(--danger); padding: 8px 14px; border-radius: 8px; }
+@media (max-width: 700px) { aside { width: 200px; min-width: 160px; } header .tag { display: none; } }
+.askback { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.ask { background: var(--panel, #1c1d22); color: inherit; border: 1px solid var(--line, #333); border-radius: 10px; padding: 18px; width: min(420px, 90vw); box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.ask p { margin: 0 0 12px; }
+.ask input { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+.askrow { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div id="unlock">
+  <form id="uform" autocomplete="off">
+    <h1>Phygital <span>Memory</span></h1>
+    <p>Your notes folder is encrypted. Type the password to open it.</p>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password" autofocus>
+    <button class="primary" type="submit">Unlock</button>
+    <p class="err" id="uerr" role="alert"></p>
+  </form>
+</div>
+
+<div id="main" hidden>
+  <header>
+    <div class="name">Phygital <span>Memory</span></div>
+    <div class="tag">Locked folder &middot; <i>AI reads through Engram</i></div>
+    <div class="sp"></div>
+    <button id="newbtn">New note</button>
+    <button id="lockbtn">Lock</button>
+  </header>
+  <div id="layout">
+    <aside>
+      <div class="top"><input id="q" type="search" placeholder="Search notes"></div>
+      <div id="results" hidden></div>
+      <div id="tree"></div>
+    </aside>
+    <section class="ed">
+      <div id="blank">Pick a note on the left.</div>
+      <div class="bar" id="bar" hidden>
+        <div class="path"><span id="curpath"></span><span class="dirty" id="dirty" hidden> &bull; unsaved</span></div>
+        <span id="saved">Saved</span>
+        <button id="pvbtn">Preview</button>
+        <button id="savebtn" class="primary">Save</button>
+      </div>
+      <textarea id="text" spellcheck="false" hidden></textarea>
+      <div id="preview" hidden><div class="md" id="md"></div></div>
+    </section>
+  </div>
+</div>
+<div id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var pass = null;            // lives only in this variable
+  var notes = [];
+  var cur = null;             // open note path
+  var loaded = "";            // text as last saved/loaded
+  var previewing = false;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(function () { t.hidden = true; }, 3500);
+  }
+
+  function api(action, body) {
+    var h = { "Content-Type": "application/json" };
+    if (window.__PM_SHELL) h["X-Shell-Token"] = window.__PM_SHELL;
+    if (pass) h["X-App-Pass"] = pass;
+    return fetch("/api/" + action, { method: "POST", headers: h, body: JSON.stringify(body || {}) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (r.status === 423 && action !== "unlock") { showUnlock("Locked. Type the password again."); throw new Error("locked"); }
+          if (!r.ok) throw new Error(j.error || ("Error " + r.status));
+          return j;
+        });
+      });
+  }
+
+  /* ---------- screens ---------- */
+  function showUnlock(msg) {
+    pass = null; notes = []; cur = null; loaded = ""; previewing = false;
+    $("text").value = ""; $("md").textContent = ""; $("q").value = "";
+    $("results").textContent = ""; $("results").hidden = true; $("tree").textContent = "";
+    $("main").hidden = true; $("unlock").hidden = false;
+    $("uerr").textContent = msg || ""; $("pw").value = ""; $("pw").focus();
+    showNote(false);
+  }
+  function showMain() { $("unlock").hidden = true; $("main").hidden = false; }
+
+  $("uform").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var pw = $("pw").value; if (!pw) return;
+    $("uerr").textContent = "";
+    api("unlock", { password: pw }).then(function (j) {
+      pass = j.pass; $("pw").value = ""; showMain(); return loadNotes();
+    }).catch(function (err) { pass = null; $("uerr").textContent = err.message; });
+  });
+
+  $("lockbtn").addEventListener("click", function () {
+    guard().then(function (ok) {
+      if (ok) api("lock").catch(function () {}).then(function () { showUnlock(""); });
+    });
+  });
+
+  // shortcut: test-only auto unlock; the server answers it only when started with a dev password file. Remove before release.
+  api("devunlock").then(function (j) { pass = j.pass; showMain(); return loadNotes(); }).catch(function () {});
+
+  /* ---------- tree ---------- */
+  function loadNotes() {
+    return api("notes").then(function (j) { notes = (j.notes || []).slice().sort(); renderTree(); });
+  }
+  function renderTree() {
+    var root = {}, tree = $("tree");
+    tree.textContent = "";
+    notes.forEach(function (p) {
+      var parts = p.split("/"), node = root;
+      parts.forEach(function (part, i) {
+        if (i === parts.length - 1) node[part] = p;
+        else { if (typeof node[part] !== "object") node[part] = {}; node = node[part]; }
+      });
+    });
+    if (!notes.length) { var e = document.createElement("div"); e.className = "empty"; e.textContent = "No notes yet."; tree.appendChild(e); return; }
+    build(root, tree, 0);
+  }
+  function build(node, parent, depth) {
+    Object.keys(node).sort(function (a, b) {
+      var da = typeof node[a] === "object", db = typeof node[b] === "object";
+      return da !== db ? (da ? -1 : 1) : a.localeCompare(b);
+    }).forEach(function (k) {
+      var v = node[k], el = document.createElement("div");
+      if (typeof v === "object") {
+        el.className = "dir open"; el.textContent = k;
+        var kids = document.createElement("div"); kids.className = "kids";
+        el.addEventListener("click", function () { el.classList.toggle("open"); kids.hidden = !el.classList.contains("open"); });
+        parent.appendChild(el); parent.appendChild(kids); build(v, kids, depth + 1);
+      } else {
+        el.className = "file" + (v === cur ? " cur" : ""); el.textContent = k; el.title = v; el.dataset.path = v;
+        el.addEventListener("click", function () { openNote(v); });
+        parent.appendChild(el);
+      }
+    });
+  }
+  function markCurrent() {
+    var fs = document.querySelectorAll("#tree .file");
+    for (var i = 0; i < fs.length; i++) fs[i].classList.toggle("cur", fs[i].dataset.path === cur);
+  }
+
+  /* ---------- search ---------- */
+  var st;
+  $("q").addEventListener("input", function () { clearTimeout(st); st = setTimeout(doSearch, 250); });
+  function doSearch() {
+    var q = $("q").value.trim(), box = $("results");
+    if (!q) { box.hidden = true; box.textContent = ""; return; }
+    api("search", { q: q }).then(function (j) {
+      if ($("q").value.trim() !== q) return;
+      box.textContent = ""; box.hidden = false;
+      var rs = j.results || [];
+      if (!rs.length) { var e = document.createElement("div"); e.className = "empty"; e.textContent = "No matches."; box.appendChild(e); return; }
+      rs.forEach(function (r) {
+        var d = document.createElement("div"); d.className = "res";
+        [["p", r.path], ["h", r.heading], ["s", r.snippet]].forEach(function (x) {
+          if (!x[1]) return; var s = document.createElement("div"); s.className = x[0];
+          String(x[1]).split("\u0002").forEach(function (seg, n) {   // \u0002 ... \u0003 mark a match
+            var cut = seg.split("\u0003");
+            if (n > 0 && cut.length > 1) { var mk = document.createElement("mark"); mk.textContent = cut.shift(); s.appendChild(mk); }
+            s.appendChild(document.createTextNode(cut.join("")));
+          });
+          d.appendChild(s);
+        });
+        d.addEventListener("click", function () { openNote(r.path); });
+        box.appendChild(d);
+      });
+    }).catch(function (e) { if (e.message !== "locked") toast(e.message); });
+  }
+
+  /* ---------- editor ---------- */
+  function dirty() { return cur !== null && $("text").value !== loaded; }
+  // The Mac app's window has no prompt()/confirm(), so questions are asked in a box on the page. Resolves to the
+  // typed text (input) or true (yes), and null when cancelled.
+  function ask(message, input, okLabel) {
+    return new Promise(function (resolve) {
+      var back = document.createElement("div"); back.className = "askback";
+      var box = document.createElement("form"); box.className = "ask";
+      var p = document.createElement("p"); p.textContent = message; box.appendChild(p);
+      var field = null;
+      if (input) { field = document.createElement("input"); field.type = "text"; field.placeholder = input; box.appendChild(field); }
+      var row = document.createElement("div"); row.className = "askrow";
+      var no = document.createElement("button"); no.type = "button"; no.textContent = "Cancel";
+      var yes = document.createElement("button"); yes.type = "submit"; yes.className = "primary"; yes.textContent = okLabel || "OK";
+      row.appendChild(no); row.appendChild(yes); box.appendChild(row); back.appendChild(box); document.body.appendChild(back);
+      function done(v) { back.remove(); document.removeEventListener("keydown", esc, true); resolve(v); }
+      function esc(e) { if (e.key === "Escape") { e.preventDefault(); done(null); } }
+      document.addEventListener("keydown", esc, true);
+      no.addEventListener("click", function () { done(null); });
+      box.addEventListener("submit", function (e) { e.preventDefault(); done(field ? (field.value.trim() || null) : true); });
+      (field || yes).focus();
+    });
+  }
+  function guard() {
+    return dirty() ? ask("This note has unsaved changes. Leave without saving?", null, "Leave").then(Boolean)
+                   : Promise.resolve(true);
+  }
+  function showNote(on) {
+    $("blank").hidden = on; $("bar").hidden = !on;
+    $("text").hidden = !on || previewing; $("preview").hidden = !on || !previewing;
+  }
+  function updDirty() { $("dirty").hidden = !dirty(); }
+  $("text").addEventListener("input", updDirty);
+
+  function openNote(path) {
+    if (path === cur) return;
+    guard().then(function (ok) { if (ok) readNote(path); });
+  }
+  function readNote(path) {
+    api("read", { path: path }).then(function (j) {
+      cur = j.path; loaded = j.text || ""; $("text").value = loaded; $("curpath").textContent = cur;
+      previewing = false; $("pvbtn").textContent = "Preview"; showNote(true); updDirty(); markCurrent();
+    }).catch(function (e) { if (e.message !== "locked") toast(e.message); });
+  }
+
+  function flashSaved() {
+    var s = $("saved"); s.classList.add("on"); clearTimeout(flashSaved.t);
+    flashSaved.t = setTimeout(function () { s.classList.remove("on"); }, 1800);
+  }
+  function save() {
+    if (cur === null) return Promise.resolve();
+    var text = $("text").value, path = cur;
+    return api("save", { path: path, text: text }).then(function () {
+      if (cur === path) loaded = text; updDirty(); flashSaved();
+    }).catch(function (e) { if (e.message !== "locked") toast(e.message); });
+  }
+  $("savebtn").addEventListener("click", save);
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") { e.preventDefault(); if (!$("main").hidden) save(); }
+  });
+  window.addEventListener("beforeunload", function (e) { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
+
+  $("newbtn").addEventListener("click", function () {
+    guard().then(function (ok) {
+      return ok && ask("New note. Where does it go?", "Ideas/name.md", "Create");
+    }).then(function (p) {
+      if (!p) return;
+      p = p.trim().replace(/^\/+/, ""); if (!/\.md$/i.test(p)) p += ".md";
+      return api("save", { path: p, text: "", new: true }).then(function (j) {
+        cur = null; loaded = ""; return loadNotes().then(function () { readNote(j.path || p); });
+      });
+    }).catch(function (e) { if (e.message !== "locked") toast(e.message); });
+  });
+
+  /* ---------- preview (DOM only, never innerHTML) ---------- */
+  $("pvbtn").addEventListener("click", function () {
+    previewing = !previewing;
+    $("pvbtn").textContent = previewing ? "Edit" : "Preview";
+    if (previewing) renderMd($("text").value, $("md"));
+    $("text").hidden = previewing; $("preview").hidden = !previewing;
+    if (!previewing) $("text").focus();
+  });
+
+  function findNote(name) {
+    var n = name.replace(/\.md$/i, "").toLowerCase();
+    for (var i = 0; i < notes.length; i++) {
+      var base = notes[i].split("/").pop().replace(/\.md$/i, "").toLowerCase();
+      if (base === n || notes[i].replace(/\.md$/i, "").toLowerCase() === n) return notes[i];
+    }
+    return null;
+  }
+  var INLINE = /\[\[([^\]\n]+?)\]\]|\[([^\]\n]+?)\]\((https?:\/\/[^)\s]+)\)|`([^`\n]+)`|\*\*([^*\n]+?)\*\*|\*([^*\n]+?)\*|_([^_\n]+?)_/g;
+  function inline(text, parent) {
+    var last = 0, m; INLINE.lastIndex = 0;
+    while ((m = INLINE.exec(text))) {
+      if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+      var el;
+      if (m[1] !== undefined) {
+        var target = m[1].split("|")[0].split("#")[0].trim(), label = m[1].indexOf("|") > -1 ? m[1].split("|").slice(1).join("|") : m[1];
+        el = document.createElement("a"); el.className = "wiki"; el.textContent = label;
+        var hit = findNote(target);
+        if (hit) el.addEventListener("click", (function (h) { return function () { openNote(h); }; })(hit));
+        else { el.className += " missing"; el.title = "No note with that name"; }
+      } else if (m[2] !== undefined) {
+        el = document.createElement("a"); el.textContent = m[2];
+        // notes can be written by an AI: only plain web and mail links, never javascript: or data:
+        if (/^(https?:|mailto:)/i.test(m[3].trim())) { el.href = m[3].trim(); el.target = "_blank"; el.rel = "noopener noreferrer"; }
+      } else if (m[4] !== undefined) { el = document.createElement("code"); el.textContent = m[4]; }
+      else if (m[5] !== undefined) { el = document.createElement("strong"); inline(m[5], el); }
+      else { el = document.createElement("em"); inline(m[6] !== undefined ? m[6] : m[7], el); }
+      parent.appendChild(el); last = m.index + m[0].length;
+    }
+    if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+  }
+  function renderMd(src, out) {
+    out.textContent = "";
+    var lines = src.replace(/\r/g, "").replace(/^---\n[\s\S]*?\n---\n?/, "").split("\n"), i = 0, m;
+    while (i < lines.length) {
+      var l = lines[i];
+      if (/^```/.test(l)) {
+        var buf = []; i++;
+        while (i < lines.length && !/^```/.test(lines[i])) buf.push(lines[i++]);
+        i++; var pre = document.createElement("pre"), c = document.createElement("code");
+        c.textContent = buf.join("\n"); pre.appendChild(c); out.appendChild(pre); continue;
+      }
+      if (!l.trim()) { i++; continue; }
+      if ((m = /^(#{1,4})\s+(.*)$/.exec(l))) {
+        var h = document.createElement("h" + m[1].length); inline(m[2], h); out.appendChild(h); i++; continue;
+      }
+      if (/^(-{3,}|\*{3,})\s*$/.test(l)) { out.appendChild(document.createElement("hr")); i++; continue; }
+      if (/^\s*([-*+]|\d+\.)\s+/.test(l)) {
+        var ord = /^\s*\d+\./.test(l), list = document.createElement(ord ? "ol" : "ul");
+        while (i < lines.length && (m = /^\s*(?:[-*+]|\d+\.)\s+(.*)$/.exec(lines[i]))) {
+          var li = document.createElement("li"); inline(m[1], li); list.appendChild(li); i++;
+        }
+        out.appendChild(list); continue;
+      }
+      if (/^>\s?/.test(l)) {
+        var q = document.createElement("blockquote"), parts = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) parts.push(lines[i++].replace(/^>\s?/, ""));
+        inline(parts.join(" "), q); out.appendChild(q); continue;
+      }
+      var para = [];
+      while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|```|>\s?|\s*([-*+]|\d+\.)\s)/.test(lines[i])) para.push(lines[i++]);
+      var p = document.createElement("p"); inline(para.join(" "), p); out.appendChild(p);
+    }
+  }
+
+  /* ---------- start ---------- */
+  showUnlock("");
+})();
+</script>
+</body>
+</html>

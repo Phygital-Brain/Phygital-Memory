@@ -1,0 +1,20 @@
+# Hindi kailanman binabasa ng agent mo ang anumang nakalista rito,
+# maliban kung hingin mo ang eksaktong file na iyon sa chat.
+
+# Mga password at key
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Mga backup bago ang malalaking pagbabago (binabasa lang para mag-undo)
+.backups/
+
+# Pera: mga invoice, buwis, detalye ng bangko
+Alaala/pera/
+
+# Mga pribadong folder (tanggalin ang # para gumana)
+# kalusugan/
+# personal-na-journal/

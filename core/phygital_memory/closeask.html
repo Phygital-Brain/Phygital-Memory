@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phygital Memory</title>
+<!-- The closing question, in its own small window. The Mac app keeps this window ready (hidden) so it shows the
+     moment the main window closes, then calls startAsk(). No answer in 30 seconds locks everything. -->
+<style>
+  :root { color-scheme: dark; --bg: #1c1c20; --text: #ececf1; --dim: #9d9da7; --accent: #a69cff; --subtle: #2a2a30;
+          --border: rgba(255, 255, 255, .09); }
+  @media (prefers-color-scheme: light) {
+    :root { color-scheme: light; --bg: #ffffff; --text: #1d1d22; --dim: #6b6b75; --accent: #6f5ef5; --subtle: #f1f0f4;
+            --border: rgba(0, 0, 0, .1); }
+  }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+               font: 13px/1.5 -apple-system, "SF Pro Text", system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
+  main { box-sizing: border-box; height: 100%; padding: 34px 24px 20px; display: flex; flex-direction: column; gap: 10px; }
+  h1 { margin: 0; font: 600 15px/1.3 -apple-system, "SF Pro Display", system-ui, sans-serif; }
+  p { margin: 0; color: var(--dim); }
+  .buttons { display: flex; gap: 8px; margin-top: auto; }
+  button { flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--subtle);
+           color: var(--text); font: inherit; font-weight: 500; cursor: default; }
+  button.primary { background: var(--accent); border-color: transparent; color: #fff; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .count { text-align: center; font-size: 12px; color: var(--dim); }
+</style>
+</head>
+<body>
+<main data-tauri-drag-region>
+  <h1 id="title">Lock your notes before closing?</h1>
+  <p><b>Lock all</b>: everything locks and the app quits. <b>Keep open</b>: your AI apps can still reach your notes,
+     and the app stays in the Dock. The app remembers Keep open for 3 days.</p>
+  <div class="buttons">
+    <button type="button" id="keep">Keep open</button>
+    <button type="button" id="lock" class="primary">Lock all and close</button>
+  </div>
+  <div class="count" id="count"></div>
+</main>
+<script>
+  const WAIT = 30;
+  let left = WAIT, timer = null;
+  const count = document.getElementById("count");
+  const draw = () => { count.textContent = `No answer? Everything locks in ${left} s.`; };
+  async function answer(keep) {
+    clearInterval(timer);
+    try {
+      await fetch("/api/closeanswer", { method: "POST", headers: { "Content-Type": "application/json", ...(window.__PM_SHELL ? { "X-Shell-Token": window.__PM_SHELL } : {}) }, body: JSON.stringify({ keep }) });
+    } catch {}
+  }
+  window.startAsk = (mode) => {   // mode "quit": Keep open cancels the quit
+    const quit = mode === "quit";
+    document.getElementById("title").textContent = quit ? "Quit Phygital Memory?" : "Lock your notes before closing?";
+    document.getElementById("lock").textContent = quit ? "Lock all and quit" : "Lock all and close";
+    left = WAIT; draw(); clearInterval(timer);
+    timer = setInterval(() => { left -= 1; if (left <= 0) answer(false); else draw(); }, 1000);
+    document.getElementById("lock").focus();
+  };
+  document.getElementById("lock").addEventListener("click", () => answer(false));
+  document.getElementById("keep").addEventListener("click", () => answer(true));
+  draw();
+</script>
+</body>
+</html>

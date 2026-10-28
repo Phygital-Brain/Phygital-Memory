@@ -1,0 +1,20 @@
+# Agentul tău nu citește niciodată nimic din ce e trecut aici,
+# decât dacă îi ceri în chat exact fișierul acela.
+
+# Parole și chei
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Copii de siguranță făcute înainte de schimbările mari (se citesc doar ca să anulezi ceva)
+.backups/
+
+# Bani: facturi, taxe, date bancare
+Memorie/finanțe/
+
+# Foldere private (scoate # ca să le activezi)
+# sănătate/
+# jurnal-personal/
