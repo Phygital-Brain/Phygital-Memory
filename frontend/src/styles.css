@@ -842,3 +842,5 @@ body { font-family: var(--font-body); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .ul-mem, .tab-page { animation: none; } .tab-body { transition: none; } }
 .overlay.modal:has(> .settings), .overlay.modal:has(> .storage) { align-items: flex-start; padding-top: 10vh; }   /* the top stays put while the height eases */
 .st-e2e { background: var(--bg-rec); color: var(--text-3); font-size: 12px; }
+.ai-row { grid-template-columns: 20px minmax(0, 1fr) auto; }   /* room for Change and Remove */
+.dlg.ai-apps { width: min(560px, 94vw); }
