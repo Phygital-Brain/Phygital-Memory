@@ -32,10 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.only && format('["{0}"]', inputs.only) || '["macos-14", "windows-latest", "ubuntu-22.04", "ubuntu-22.04-arm"]') }}
-        include:
-          - os: macos-14
-            args: --target universal-apple-darwin   # one Mac download for Apple and Intel chips
-        # ubuntu-22.04-arm: Linux on ARM computers
+        # ubuntu-22.04-arm: Linux on ARM computers. (No "include" here: it would add a Mac job to a one-system run.)
     env:
       PYTHONUTF8: "1"   # Windows' Python otherwise writes the licence files in its old code page
     steps:
@@ -121,4 +118,4 @@ jobs:
           releaseDraft: true
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
-          args: ${{ matrix.args }}
+          args: ${{ matrix.os == 'macos-14' && '--target universal-apple-darwin' || '' }}   # one Mac download for Apple and Intel chips
