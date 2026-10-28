@@ -69,7 +69,7 @@ Read [TRANSLATING.md](TRANSLATING.md), then, from the `core` folder:
 ```bash
 python3 scripts/i18n.py extract
 python3 scripts/i18n.py check
-python3 scripts/i18n.py translate th
+python3 scripts/i18n.py translate ca
 ```
 
 `extract` refreshes `languages/en.json` from the code. `check` lists what each language is missing or has wrong. `translate` fills what is missing with Claude and needs `ANTHROPIC_API_KEY` in your environment (it is never stored). Add `--dry` to only count.

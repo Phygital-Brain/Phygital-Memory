@@ -51,9 +51,9 @@ A second person (or agent) who did not translate it reads everything as a native
 
 Give an AI coding agent this request, in a copy of the repository:
 
-> *"Add Thai: add `["th", "ไทย"]` to core/languages/languages.json, run `python3 scripts/i18n.py translate th` from core, then run `python3 scripts/i18n.py check` until Thai passes. Follow core/languages/TRANSLATING.md."*
+> *"Add Catalan: add `["ca", "Català"]` to core/languages/languages.json, run `python3 scripts/i18n.py translate ca` from core, then run `python3 scripts/i18n.py check` until Catalan passes. Follow core/languages/TRANSLATING.md."*
 
-Thai already exists. Use a language that is not in the list.
+Catalan is not in the list yet. Pick any language that is not.
 
 ## Fix a translation
 
