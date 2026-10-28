@@ -1926,7 +1926,7 @@ async def api(request: Request) -> Response:
                         "places": cloud_places(), "home": str(Path.home()), "offline": 0,
                         "github": f.github, "githubStatus": f.sync.status() if f.sync else None})
         if action == "storage":   # where this folder lives, and the cloud folders it could move into
-            return _ok({"path": str(f.path), "kind": "open" if f.plain else "encrypted", "noCloudOnly": not system.MAC,
+            return _ok({"path": str(f.path), "kind": "open" if f.plain else "encrypted", 
                         "cloud": cloud_place(f.path), "places": cloud_places(),
                         "webdav": f.info()["webdav"], "webdavStatus": f.mirror.status() if f.mirror else None,
                         "s3": f.info()["s3"], "s3Status": f.s3.status() if f.s3 else None,

@@ -77,6 +77,38 @@ jobs:
           PYTHONUTF8: "1"
         run: uv run python tests/test_smoke_server.py packaging/dist/phygital-memory-server/phygital-memory-server
 
+  webdav:
+    name: WebDAV, with WebDAV only (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]   # the Mac runs it at home (its drive needs no install)
+    defaults:
+      run:
+        working-directory: core
+        shell: bash
+    env:
+      RCLONE: "1.75.2"   # the same version the app ships (core/packaging/bundle_server.py)
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - name: rclone, and what the hidden drive needs (FUSE on Linux, WinFsp on Windows)
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then os=windows; choco install winfsp -y --no-progress; else os=linux; sudo apt-get update && sudo apt-get install -y fuse3; fi
+          curl -sSfLo "$RUNNER_TEMP/rc.zip" "https://downloads.rclone.org/v$RCLONE/rclone-v$RCLONE-$os-amd64.zip"
+          unzip -q "$RUNNER_TEMP/rc.zip" -d "$RUNNER_TEMP/rc" && echo "$(cd "$RUNNER_TEMP"/rc/rclone-* && pwd)" >> "$GITHUB_PATH"
+      - run: uv sync --frozen
+      - name: Test
+        env:
+          OFFLINE: "1"
+          PYTHONPATH: .
+          PYTHONUTF8: "1"
+          PYTHON_KEYRING_BACKEND: ${{ runner.os == 'Linux' && 'keyrings.alt.file.PlaintextKeyring' || '' }}   # a CI Linux has no keyring
+        run: uv run --with keyrings.alt python tests/test_webdav_open.py
+
   window:
     name: app window (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

@@ -845,10 +845,11 @@ CLOUD_STORAGE_NAMES = {"GoogleDrive": "Google Drive", "OneDrive": "OneDrive", "D
 
 
 def cloud_only_here() -> None:
-    """WebDAV only shows the server as a hidden drive, which needs macOS for now (Windows needs WinFsp, Linux FUSE)."""
-    if not system.MAC:
-        raise ValueError("WebDAV only works on a Mac for now. Keep a copy on this computer that stays in step with "
-                         "WebDAV instead.")
+    """WebDAV only shows the server as a hidden drive: say what this computer needs for that, if it's missing."""
+    try:
+        cloud.drive_check()
+    except cloud.CloudError as e:
+        raise ValueError(str(e)) from None
 
 
 def open_ok(p: Path) -> None:

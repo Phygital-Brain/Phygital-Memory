@@ -172,13 +172,13 @@ def _env(conn: dict, password: str | None = None) -> dict:
         provider = "Cloudflare" if conn["kind"] == "r2" else "AWS" if conn["url"].endswith(".amazonaws.com") else "Other"
         return {**os.environ, p + "TYPE": "s3", p + "PROVIDER": provider, p + "ACCESS_KEY_ID": conn["user"],
                 p + "SECRET_ACCESS_KEY": secret, p + "ENDPOINT": conn["url"], p + "REGION": conn.get("region") or "auto",
-                p + "NO_CHECK_BUCKET": "true", p + "FORCE_PATH_STYLE": "true", "RCLONE_CONFIG": "/dev/null"}
+                p + "NO_CHECK_BUCKET": "true", p + "FORCE_PATH_STYLE": "true", "RCLONE_CONFIG": os.devnull}
     obscured = _obscure(password) if password is not None else _password(conn)
     if obscured is None:
         raise CloudError(f"Connect to {label(conn)} again: its password isn't on this Mac any more.")
     return {**os.environ, p + "TYPE": "webdav", p + "URL": conn["url"], p + "USER": conn["user"], p + "PASS": obscured,
             p + "VENDOR": "nextcloud" if conn["kind"] == "nextcloud" else "other",
-            "RCLONE_CONFIG": "/dev/null"}   # never read or write a config file
+            "RCLONE_CONFIG": os.devnull}   # never read or write a config file
 
 
 def _remote(path: str) -> str:
@@ -306,7 +306,28 @@ def _free_port() -> int:
 
 
 def is_mounted(point: Path) -> bool:
+    if sys.platform == "win32":   # a WinFsp drive folder isn't a mount point to Python: it appears when mounted
+        return Path(point).is_dir()
     return os.path.ismount(point)
+
+
+def drive_check() -> None:
+    """The hidden drive uses the system's own way to show a folder from a program: built into macOS, FUSE on Linux,
+    WinFsp on Windows. Say what to install when it's missing."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"))
+        if not any((Path(d) / "WinFsp" / "bin").is_dir() for d in (base, os.environ.get("ProgramFiles", ""))):
+            raise CloudError("WebDAV only needs WinFsp, a free helper from winfsp.dev. Install it, then try again.")
+    elif sys.platform != "darwin" and not (shutil.which("fusermount3") or shutil.which("fusermount")):
+        raise CloudError("WebDAV only needs FUSE. Install the fuse3 package, then try again.")
+
+
+def _mount_args() -> list[str]:
+    if sys.platform == "darwin":
+        return ["nfsmount", "-o", "nobrowse"]   # macOS's own NFS: no extra install
+    if sys.platform == "win32":
+        return ["mount", "--network-mode"]
+    return ["mount"]
 
 
 class Drive:
@@ -331,13 +352,21 @@ class Drive:
     def start(self, timeout: float = 45) -> None:
         if self.proc and self.proc.poll() is None and is_mounted(self.point):
             return
+        drive_check()
         unmount(self.point)   # a leftover from a crash
-        self.point.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "win32":
+            self.point.parent.mkdir(parents=True, exist_ok=True)   # WinFsp makes the folder itself, so it can't be there
+            try:
+                self.point.rmdir()
+            except OSError:
+                pass
+        else:
+            self.point.mkdir(parents=True, exist_ok=True)
         self.cache.mkdir(parents=True, exist_ok=True)
         port, secret = _free_port(), secrets.token_urlsafe(24)
         log = open(self.cache.parent / f"{self.cache.name}.log", "ab")
         self.proc = subprocess.Popen(
-            [rclone(), "nfsmount", _remote(self.path), str(self.point), "-o", "nobrowse",
+            [rclone(), _mount_args()[0], _remote(self.path), str(self.point), *_mount_args()[1:],
              "--vfs-cache-mode", "writes", "--vfs-write-back", "1s", "--dir-cache-time", "20s",
              "--cache-dir", str(self.cache), "--rc", "--rc-addr", f"127.0.0.1:{port}", "--rc-user", "app"],
             env={**_env(self.conn), "RCLONE_RC_PASS": secret},   # not on the command line: ps shows that to everyone
@@ -389,6 +418,11 @@ class Drive:
             if not left or time.time() - start > (20 if h["problem"] else wait):
                 break
             time.sleep(0.5)
+        if sys.platform == "win32" and self.rc:
+            try:
+                self._ask("core/quit")   # Windows has no umount: rclone removes its own drive as it quits
+            except (OSError, ValueError):
+                pass
         unmount(self.point)
         if self.proc:
             try:
@@ -401,10 +435,17 @@ class Drive:
 
 
 def unmount(point: Path) -> None:
-    if is_mounted(point):
-        r = subprocess.run(["umount", str(point)], capture_output=True, timeout=60)
+    if sys.platform == "win32" or not is_mounted(point):
+        return   # on Windows the drive goes when its rclone quits (see Drive.stop)
+    if sys.platform != "darwin":
+        fuse = shutil.which("fusermount3") or shutil.which("fusermount") or "fusermount"
+        r = subprocess.run([fuse, "-u", str(point)], capture_output=True, timeout=60)
         if r.returncode != 0:
-            subprocess.run(["diskutil", "unmount", "force", str(point)], capture_output=True, timeout=60)
+            subprocess.run([fuse, "-uz", str(point)], capture_output=True, timeout=60)   # busy: let go when free
+        return
+    r = subprocess.run(["umount", str(point)], capture_output=True, timeout=60)
+    if r.returncode != 0:
+        subprocess.run(["diskutil", "unmount", "force", str(point)], capture_output=True, timeout=60)
 
 
 def make_key(conn: dict) -> str:
