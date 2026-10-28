@@ -1001,3 +1001,6 @@ body { font-family: var(--font-body); font-size: 14px; }
 .sp-places .sp-lang svg { color: var(--text-3); }
 .sp-places .sp-lang.on svg { color: var(--accent); }
 .st-s3-link { align-self: flex-start; margin: -2px 0 6px; font-size: 12px; color: var(--text-3); }
+.sp-s3 { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin-top: 12px; font-size: 13px; color: var(--text-3); }
+.sp-s3.on { color: var(--text); }
+.sp-s3.on svg { color: var(--accent); }

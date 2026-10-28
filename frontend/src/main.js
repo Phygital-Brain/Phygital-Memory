@@ -450,6 +450,22 @@ function createNewFolder() {
         toastOk(t("Created \"{0}\".", j.folder.name));
       } finally { creating = false; }
     },
+    webdav: async () => {   // picked on the setup page: the server and the place on it, then Mac + WebDAV
+      let clouds = [];
+      try { clouds = (await api("clouds")).clouds || []; } catch {}
+      const info = curInfo();
+      const v = await openCloud({ clouds, plain: info?.kind === "open", move: { name: info?.name || "", keepMac: true }, connect: (x) => api("cloudconnect", x), test: (x) => api("cloudtest", x), memories: (conn) => api("cloudmemories", { conn }) });
+      if (!v) return false;
+      await api("towebdav", { conn: v.conn, parent: v.move.parent });
+      await refreshFolders(); refreshBar();
+      return true;
+    },
+    s3: async () => {   // picked on the setup page: the bucket, then the backup
+      const v = await openS3({ test: (f) => api("s3test", f), connect: (f) => api("s3connect", f) });
+      if (!v) return false;
+      await api("tos3", { conn: v.conn, bucket: v.bucket });
+      return true;
+    },
     backup: async () => {   // picked on the setup page: sign in to GitHub if needed, then the private repo
       let account = (await api("githubaccount")).account;
       if (!account) account = await openGithubSignIn({ start: () => api("githubsignin"), poll: () => api("githubpoll") });
@@ -653,6 +669,7 @@ function drawSwitcher() {
   sbPath.title = info ? info.path : "";
   sbTile.replaceChildren(knot(28));
   lockBtn?.classList.toggle("hidden", info?.kind === "open");
+  if (info) try { localStorage.setItem(LAST_MEMORY, info.id); } catch {}   // the app starts with it next time
   refreshBar();
   sbBadge.classList.toggle("hidden", !folderList.some((f) => f.finder && f.id !== currentFolder()));
 }
@@ -2945,12 +2962,15 @@ window.phygitalOpenFolder = async (id) => {
   await switchTo(id);
 };
 
+const LAST_MEMORY = "phygital-memory-last";   // the memory last open on screen (an id, nothing private)
+
 (async function start() {
   await useLanguage(settings().lang);   // the app's words, before anything draws
   sealAnimation(true);   // the splash screen, while the app gets ready behind it
   await refreshFolders();
   if (folderList.length) {
     let first = folderList[0].id;
+    try { const l = localStorage.getItem(LAST_MEMORY); if (folderList.some((f) => f.id === l)) first = l; } catch {}   // the last one used
     try { const w = await api("wanted"); if (w.id && folderList.some((f) => f.id === w.id)) first = w.id; } catch {}
     setFolder(first);
   }

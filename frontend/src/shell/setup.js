@@ -2,8 +2,9 @@
 // name, place and password, then Work or Personal (or both). The app builds the same simple skeleton for everyone
 // (folders, rules, basic About notes), adds the work parts for work, and hands the rest to your AI: one message to
 // paste that has it follow Phygital Brain's own setup guide, always up to date.
-// ctx: {api, language(), openAI(tab), done(), files(), create?({kind, parent, name, password}), pick?(), backup?()}.
-// With create, the memory is made right before the build, then backed up to GitHub if that was picked.
+// ctx: {api, language(), openAI(tab), done(), files(), create?({kind, parent, name, password}), pick?(), backup?(),
+// webdav?(), s3?()}. With create, the memory is made right before the build, then put in step with WebDAV and backed
+// up (GitHub, or S3 / R2) if those were picked: each of those asks for its own sign-in then.
 import { el, icon, knot } from "./dom.js";
 import { t } from "./i18n.js";
 import { toastOk, toastErr } from "./toast.js";
@@ -103,7 +104,7 @@ export function renderSetup(body, ctx) {
       at = i; drawBar(i);
       const sc = screens[i];
       stage.replaceChildren(sc === "name" ? nameView() : sc === "place" ? placeView()
-        : sc === "backup" ? questionView(BACKUP(!encrypted())) : questionView(sc));
+        : sc === "backup" ? backupView() : questionView(sc));
       if (dir) stage.firstElementChild.classList.add(dir > 0 ? "in-up" : "in-down");
       back.hidden = i === 0;
       foot.querySelector(".sp-count").textContent = t("{0} of {1}", i + 1, total);
@@ -170,11 +171,12 @@ export function renderSetup(body, ctx) {
     // Stored in: this Mac, a synced cloud folder (one click puts it at its top), or any other folder
     const where = el("span", { class: "sp-where" }, mem.parent ? shortPath(mem.parent) : "");
     const home = places?.home ? `${places.home}/Documents` : "";
-    const opts = [["mac", t("This Mac"), home, "laptop"], ...(places?.places || []).map((p) => [p.path, p.name, p.path, "cloud"])];
+    const opts = [["mac", t("This Mac"), home, "laptop"], ...(places?.places || []).map((p) => [p.path, p.name, p.path, "cloud"]),
+      ["webdav", t("WebDAV"), home, "cloud"]];   // made on this Mac, then kept in step with the server
     const chips = el("div", { class: "sp-langs sp-places", role: "radiogroup", "aria-label": t("Where to keep it") });
     const draw = () => chips.replaceChildren(...opts.map(([k, label, path, ic]) => el("button", {
       class: "sp-lang" + (mem.parent === path && mem.picked === k ? " on" : ""), type: "button", role: "radio", "aria-checked": String(mem.parent === path && mem.picked === k),
-      onclick: () => { mem.parent = path; mem.picked = k; where.textContent = shortPath(path); draw(); refreshNext(); } }, icon(ic, 13), label)),
+      onclick: () => { mem.parent = path; mem.picked = k; where.textContent = k === "webdav" ? t("This Mac and your WebDAV server. You pick the server once it's made.") : shortPath(path); draw(); refreshNext(); } }, icon(ic, 13), label)),
       el("button", { class: "sp-lang" + (mem.picked === "other" ? " on" : ""), type: "button", onclick: async () => {
         try { const p = await ctx.pick(); if (p) { mem.parent = p; mem.picked = "other"; where.textContent = shortPath(p); draw(); refreshNext(); } }
         catch (e) { toastErr(e.message); }
@@ -191,6 +193,25 @@ export function renderSetup(body, ctx) {
       field(t("Password again"), inp("again", { type: "password", "aria-label": t("Password again") })),
       el("p", { class: "sp-hint" }, t("There's no way back in without it. You get a recovery key in Settings.")));
     return el("section", { class: "sp-screen sp-place" }, ...kids);
+  };
+
+  // Backup: GitHub or later, and a small way in for people who run their own storage
+  const backupView = () => {
+    const v = questionView(BACKUP(!encrypted()));
+    const link = el("button", { class: "link-btn sp-s3", type: "button", onclick: () => {
+      answers.backup.splice(0, answers.backup.length, "s3");
+      v.querySelectorAll(".sp-card").forEach((c) => { c.classList.remove("on"); c.setAttribute("aria-checked", "false"); });
+      mark(); refreshNext();
+    } });
+    const mark = () => {
+      const on = answers.backup[0] === "s3";
+      link.classList.toggle("on", on);
+      link.replaceChildren(...(on ? [icon("check", 12, 2.4)] : []), on ? t("Amazon S3 or Cloudflare R2. You add the bucket once it's made.") : t("Use Amazon S3 or Cloudflare R2 instead"));
+    };
+    v.addEventListener("click", (e) => { if (e.target.closest(".sp-card")) setTimeout(mark); });
+    mark();
+    v.append(link);
+    return v;
   };
 
   // A question: cards with a drawing, a name and a line. Click or press its number to pick; many are fine
@@ -261,12 +282,19 @@ export function renderSetup(body, ctx) {
         if (j.error) throw new Error(j.error);
         ask = j.ask || "";
         list.append(el("li", { class: "sp-row sp-done" }, icon("check", 14, 2.4), el("span", {}, t("Rules, today's note and your About notes"))));
-        if (ctx.create && answers.backup[0] === "github") {   // after the build, so the first upload has it all
-          const row = el("li", { class: "sp-row sp-done" }, icon("clock", 14), el("span", {}, t("Backing up to GitHub")));
+        // after the build, so the first upload has it all. Each asks for its own sign-in; skipping one is fine
+        const step = async (doing, done, skipped, failed, fn) => {
+          const row = el("li", { class: "sp-row sp-done" }, icon("clock", 14), el("span", {}, doing));
           list.append(row);
-          try { row.lastChild.textContent = (await ctx.backup()) ? t("Backed up to GitHub") : t("GitHub backup: not now. Turn it on in Storage and backup."); }
-          catch (e) { row.lastChild.textContent = t("GitHub backup didn't start: {0}", e.message); }
-        }
+          try { row.lastChild.textContent = (await fn()) ? done : skipped; }
+          catch (e) { row.lastChild.textContent = failed(e.message); }
+        };
+        if (ctx.create && mem.picked === "webdav") await step(t("Syncing with WebDAV"), t("In step with WebDAV"),
+          t("WebDAV: not now. Turn it on in Storage and backup."), (m) => t("WebDAV didn't start: {0}", m), ctx.webdav);
+        if (ctx.create && answers.backup[0] === "github") await step(t("Backing up to GitHub"), t("Backed up to GitHub"),
+          t("GitHub backup: not now. Turn it on in Storage and backup."), (m) => t("GitHub backup didn't start: {0}", m), ctx.backup);
+        if (ctx.create && answers.backup[0] === "s3") await step(t("Backing up to S3 or R2"), t("Backed up to S3 or R2"),
+          t("S3 or R2 backup: not now. Turn it on in Storage and backup."), (m) => t("The S3 or R2 backup didn't start: {0}", m), ctx.s3);
         status.textContent = t("Your memory is ready: {0} folders and notes.", (j.made || []).length + plan.length);
         nextBtn.disabled = false; nextBtn.focus();
         ctx.files();
