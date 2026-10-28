@@ -39,17 +39,18 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      # No caches in a release build: a poisoned cache could slip into the app people download.
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
+          package-manager-cache: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          enable-cache: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
         with:
           toolchain: stable
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-        with:
-          workspaces: app/src-tauri
       - name: Linux libraries for the window
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -104,6 +105,7 @@ jobs:
           cp -p "$RUNNER_TEMP/intel/Phygital Memory" app/src-tauri/server/intel/touchid/
 
       - name: Build the app and upload it to the draft release
+        id: tauri
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -119,3 +121,27 @@ jobs:
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.os == 'macos-14' && '--target universal-apple-darwin' || '' }}   # one Mac download for Apple and Intel chips
+      - name: The same files under names without the version, for one-click download links
+        # README buttons and the install commands point at releases/latest/download/<these names>
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ID: ${{ steps.tauri.outputs.releaseId }}
+          PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: |
+          echo "$PATHS" | python3 -c 'import json,sys; [print(p) for p in json.load(sys.stdin)]' | while read -r f; do
+            case "$f" in
+              *universal.dmg) n=Phygital-Memory-mac.dmg ;;
+              *x64-setup.exe) n=Phygital-Memory-windows-setup.exe ;;
+              *x64_en-US.msi) n=Phygital-Memory-windows.msi ;;
+              *_amd64.deb) n=Phygital-Memory-linux-amd64.deb ;;
+              *_arm64.deb) n=Phygital-Memory-linux-arm64.deb ;;
+              *x86_64.rpm) n=Phygital-Memory-linux-x86_64.rpm ;;
+              *aarch64.rpm) n=Phygital-Memory-linux-aarch64.rpm ;;
+              *_amd64.AppImage) n=Phygital-Memory-linux-amd64.AppImage ;;
+              *_aarch64.AppImage) n=Phygital-Memory-linux-aarch64.AppImage ;;
+              *) continue ;;
+            esac
+            gh api -X POST "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=${n}" \
+              -H "Content-Type: application/octet-stream" --input "$f" > /dev/null && echo "uploaded $n"
+          done

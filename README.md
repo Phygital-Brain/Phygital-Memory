@@ -37,17 +37,43 @@ It's built around four promises:
 
 ## Install
 
-Get the app from the [Releases page](https://github.com/Phygital-Brain/Phygital-Memory/releases). Pick the file for your computer:
+<p align="center">
+<a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-mac.dmg"><img src="https://img.shields.io/badge/Download%20for-Mac-C8F031?style=for-the-badge&labelColor=0B0D12" alt="Download for Mac" height="40"></a>
+<a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-windows-setup.exe"><img src="https://img.shields.io/badge/Download%20for-Windows-8A94FF?style=for-the-badge&labelColor=0B0D12" alt="Download for Windows" height="40"></a>
+<a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-linux-amd64.deb"><img src="https://img.shields.io/badge/Download%20for-Linux-F1EDE4?style=for-the-badge&labelColor=0B0D12" alt="Download for Linux" height="40"></a>
+</p>
 
-| Computer | Download | Then |
-|---|---|---|
-| Mac (Apple chip or Intel) | `..._universal.dmg` | Open it and drag **Phygital Memory** into **Applications**. The first time, right-click the app and choose **Open**. |
-| Windows | `..._x64-setup.exe` | Run it and follow the steps. If Windows asks, choose **More info**, then **Run anyway**. |
-| Linux (Ubuntu, Debian) | `..._amd64.deb` (or `_arm64.deb`) | Open it with your software installer. |
-| Linux (Fedora, openSUSE) | `....rpm` | Open it with your software installer. |
-| Linux (any other) | `....AppImage` | See [Get started](docs/setup-computer.md#1-get-the-app). |
+<p align="center"><sub>Mac: one download for Apple chips and Intel. Linux: Ubuntu and Debian. Other Linux files (.rpm, AppImage, ARM) are on the <a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest">Releases page</a>.</sub></p>
 
-It updates itself after that.
+- **Mac:** open the file and drag **Phygital Memory** into **Applications**. The first time, right-click the app and choose **Open**.
+- **Windows:** run the file. If Windows asks, choose **More info**, then **Run anyway**.
+- **Linux:** open the file with your software installer.
+
+It keeps itself up to date after that.
+
+### Or install from the terminal
+
+One line, for you or your AI agent. Each one gets the latest version and installs it.
+
+**Mac**
+```bash
+curl -fL -o /tmp/pm.dmg https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-mac.dmg && hdiutil attach -nobrowse -quiet -mountpoint /tmp/pm /tmp/pm.dmg && cp -R "/tmp/pm/Phygital Memory.app" /Applications/ && hdiutil detach -quiet /tmp/pm
+```
+
+**Windows** (PowerShell)
+```powershell
+irm https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-windows-setup.exe -OutFile "$env:TEMP\pm-setup.exe"; Start-Process "$env:TEMP\pm-setup.exe" -ArgumentList '/S' -Wait
+```
+
+**Linux** (Ubuntu, Debian)
+```bash
+curl -fL -o /tmp/pm.deb https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-linux-$(dpkg --print-architecture).deb && sudo apt install -y /tmp/pm.deb
+```
+
+**Linux** (Fedora, openSUSE)
+```bash
+sudo dnf install -y https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-linux-$(uname -m).rpm
+```
 
 ## How to use
 
