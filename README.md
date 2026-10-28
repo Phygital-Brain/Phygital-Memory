@@ -139,6 +139,8 @@ The full list of what leaves your computer, and when, is in [Privacy](docs/priva
 
 ## What it can do
 
+<p align="center"><img src="docs/images/storage.png" alt="Where a memory can live: this computer, a synced cloud folder or WebDAV. Where it can be backed up: private GitHub, a WebDAV server, Amazon S3 or Cloudflare R2, or a backup file. It can also be shared straight between computers." width="100%"></p>
+
 - **Write and find.** An editor, search across your memories, a note graph, and **Version history** for every note.
 - **Undo.** A trash that keeps things for 7 days, and **Undo** for every change an AI made.
 - **Let AI apps in, one by one.** 17 tools for search, read, write, move, trash and AI tasks. See [docs/tools.md](docs/tools.md).

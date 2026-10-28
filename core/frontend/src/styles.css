@@ -883,6 +883,11 @@ body { font-family: var(--font-body); font-size: 14px; }
 .hb-text { display: flex; flex-direction: column; gap: 2px; }
 .hb-t { font: 700 15px/1.2 var(--font-display); font-stretch: 118%; }
 .hb-s { font-size: 13px; color: var(--text-2); }
+.home-brain-wrap { margin: 4px 0 2px; }
+.home-brain-wrap .home-brain { margin: 0; }
+.hb-actions { display: flex; justify-content: flex-end; gap: 16px; margin-top: 6px; font-size: 12.5px; }
+.hb-actions .link-btn { color: var(--text-3); }
+.hb-actions .link-btn:hover { color: var(--text); }
 
 /* Set up your Phygital Memory: its own page over the app, one question a screen */
 .setup-page { position: fixed; inset: 0; z-index: 45; overflow-y: auto; background: var(--bg-app); color: var(--text); animation: sp-page 260ms var(--ease); }
