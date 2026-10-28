@@ -39,6 +39,10 @@ class NotFound(VaultError):
     pass
 
 
+def _safe_name(name: str) -> bool:
+    return bool(name) and name not in (".", "..") and not any(c in name for c in "/\\\0")
+
+
 class Tree:
     def __init__(self, root: Path, key: Masterkey, config: VaultConfig):
         self.root = Path(root)
@@ -59,6 +63,12 @@ class Tree:
         return e
 
     def _entry_inner(self, path: Path, dir_id: bytes) -> Entry | None:
+        e = self._entry_raw(path, dir_id)
+        if e is not None and not _safe_name(e.name):   # a name made to step out of its folder ("../x", "a/b"):
+            return None                                 # only a forged entry can hold one, so it's left out
+        return e
+
+    def _entry_raw(self, path: Path, dir_id: bytes) -> Entry | None:
         name = path.name
         if name.startswith(".") or name == "dirid.c9r":
             return None

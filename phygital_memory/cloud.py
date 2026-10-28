@@ -330,9 +330,9 @@ class Drive:
         self.proc = subprocess.Popen(
             [rclone(), "nfsmount", _remote(self.path), str(self.point), "-o", "nobrowse",
              "--vfs-cache-mode", "writes", "--vfs-write-back", "1s", "--dir-cache-time", "20s",
-             "--cache-dir", str(self.cache), "--rc", "--rc-addr", f"127.0.0.1:{port}", "--rc-user", "app",
-             "--rc-pass", secret],
-            env=_env(self.conn), stdout=log, stderr=log, stdin=subprocess.DEVNULL)
+             "--cache-dir", str(self.cache), "--rc", "--rc-addr", f"127.0.0.1:{port}", "--rc-user", "app"],
+            env={**_env(self.conn), "RCLONE_RC_PASS": secret},   # not on the command line: ps shows that to everyone
+            stdout=log, stderr=log, stdin=subprocess.DEVNULL)
         self.rc = (port, secret)
         end = time.time() + timeout
         while time.time() < end:

@@ -101,6 +101,8 @@ async def main():
                 api("aiprivate", {"path": "Ideas", "on": True}, P, fid)
                 t = await call("append_to_note", path="Ideas/Secret-Recipe.md", text="x")
                 check("ERROR" in t or "private" in t.lower(), "an edit by path into a private folder is refused", t[:200])
+                t = await call("append_to_note", path="Ideas/Secret-Recipe", text="x")
+                check("ERROR" in t or "private" in t.lower(), "...also without the .md ending", t[:200])
                 api("aiprivate", {"path": "Ideas", "on": False}, P, fid)
                 t = await call("make_folder", path="Archive/2027")
                 check("ERROR" not in t, "make_folder makes a subfolder", t[:200])

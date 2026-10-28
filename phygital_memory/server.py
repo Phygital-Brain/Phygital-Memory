@@ -216,7 +216,7 @@ def _edit_target(rid: str, path: str, folder: str, private: bool):
     """The note an edit goes to: by its path (stays valid after edits) or by a search or handed id."""
     if path.strip():
         f = _pick(folder)
-        rel = path.strip().lstrip("/")
+        rel = _guard(_clean_path, path)   # the real note name ("Secret" is Secret.md), before the private check
         _private(f, rel, private)
         return f, rel
     if not str(rid).strip():

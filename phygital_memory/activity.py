@@ -15,7 +15,9 @@ undo: dict[str, dict] = {}       # undo id -> {folder, path, before (text or Non
 def add(app: str, folder_id: str, what: str, detail: str = "", path: str = "", undo_id: str = "") -> None:
     log.append({"t": time.time(), "app": app, "folder": folder_id, "what": what, "detail": detail[:200], "path": path,
                 "undo": undo_id})
-    del log[:-MAX]
+    while len(log) > MAX:   # the oldest line without an Undo goes first, so reads never push a change's Undo out
+        i = next((k for k, a in enumerate(log) if not a.get("undo")), 0)
+        del log[i]
     keep = {a["undo"] for a in log if a.get("undo")}
     for k in list(undo):
         if k not in keep:

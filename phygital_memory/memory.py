@@ -795,6 +795,8 @@ class Memory:
                 if not p.startswith(rel + "/"):
                     continue
                 target = out / p[len(rel) + 1:]
+                if not target.resolve().is_relative_to(out.resolve()):   # never write outside the chosen place
+                    continue
                 if e.kind == "dir":
                     target.mkdir(parents=True, exist_ok=True)
                 elif e.kind == "file":
@@ -948,9 +950,11 @@ class Memory:
         self._last_version[rel] = now
         folder = f"{VERSIONS}/{rel}"
         parent, _ = self._make_parents(f"{folder}/x")
-        name = f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(now))}.md"
-        same = next((e for e in self._tree.list_dir(parent.dir_id) if e.name == name), None)
-        self._writer.write_file(parent, name, old, replace=same)
+        taken = {e.name for e in self._tree.list_dir(parent.dir_id)}
+        t = int(now)
+        while (name := f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(t))}.md") in taken:
+            t += 1   # never write over a version (two changes in one second keep both)
+        self._writer.write_file(parent, name, old)
         kept = sorted((e for e in self._tree.list_dir(parent.dir_id) if e.kind == "file"), key=lambda e: e.name)
         for e in kept[:-VERSION_KEEP]:
             self._writer.remove(e)
