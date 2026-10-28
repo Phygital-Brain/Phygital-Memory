@@ -634,7 +634,13 @@ KNOT_SVG = ('<svg class="knot" viewBox="0 0 64 64" width="56" height="56" aria-h
 # laid out like the unlock screen.
 SERVER_HEAD = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Phygital Memory</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/app.css">
-<style>.unlock-card .knot{align-self:center;margin-bottom:4px}.unlock-card .btn{width:100%}</style>"""
+<style>.unlock-card .knot{align-self:center;margin-bottom:4px}.unlock-card>.btn{width:100%}
+.sc-help{text-align:left;font-size:12.5px;color:var(--text-3);border:1px solid var(--border);border-radius:var(--r-s);padding:8px 12px}
+.sc-help summary{cursor:pointer;color:var(--text)}.sc-help p{margin:8px 0}.sc-help ul{margin:8px 0;padding-left:18px}
+.sc-help li{margin:4px 0}.sc-help b{color:var(--text);font-weight:600}
+.sc-help code{font-family:var(--font-mono,monospace);font-size:12px;color:var(--text)}
+.sc-cmd{display:flex;align-items:center;gap:8px;margin-top:4px;padding:6px 8px;background:var(--bg-app);border-radius:var(--r-s)}
+.sc-cmd code{flex:1;overflow-wrap:anywhere}.sc-cmd .btn{padding:3px 10px}</style>"""
 
 LOGIN_PAGE = SERVER_HEAD + """
 <div class="unlock"><div class="unlock-wrap"><form class="unlock-card" id="f">""" + KNOT_SVG + """
@@ -664,13 +670,29 @@ SETUP_PAGE = SERVER_HEAD + """
 <div class="wordmark">Phygital Memory</div><div class="unlock-folder">Choose this server's passphrase</div>
 <div class="unlock-sub">You type it to open your memories here, 12 or more characters. First, the setup code from the
 server's log, so only you can do this.</div>
-<input id="code" autocomplete="off" placeholder="Setup code" aria-label="Setup code" autofocus>
+<input id="code" autocomplete="off" placeholder="Setup code, like 1a2b-3c4d-5e6f" aria-label="Setup code" autofocus>
+<details class="sc-help"><summary>Where do I find the setup code?</summary>
+<p>The server writes it in its log when it starts, on a line that begins with <b>First visit</b>. Open the log where
+you set up the server:</p>
+<ul>
+<li><b>Docker Compose:</b> on the server, run this in the folder with <code>compose.yaml</code>:
+<span class="sc-cmd"><code id="cmd">docker compose logs memory</code><button class="btn" type="button" id="copy">Copy</button></span></li>
+<li><b>Docker:</b> <code>docker logs</code> and the container's name.</li>
+<li><b>Coolify:</b> open the service, then <b>Logs</b>.</li>
+<li><b>Railway or Render:</b> open the service, then <b>Logs</b>.</li>
+</ul>
+<p>Only someone who can open the server's logs can see it. That is how the server knows it's you. A restart makes a new
+code.</p></details>
 <input id="pw" type="password" autocomplete="new-password" placeholder="New passphrase" aria-label="New passphrase">
 <input id="again" type="password" autocomplete="new-password" placeholder="Passphrase again" aria-label="Passphrase again">
 <button class="btn primary" id="go" type="submit">Set passphrase</button><div class="unlock-err" id="m" role="status"></div>
 </form></div></div>
 <script>
 const $ = (i) => document.getElementById(i), m = $("m"), go = $("go");
+$("copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("cmd").textContent); $("copy").textContent = "Copied"; }
+  catch (x) { getSelection().selectAllChildren($("cmd")); }
+});
 $("f").addEventListener("submit", async (e) => {
   e.preventDefault();
   if ($("pw").value !== $("again").value) { m.textContent = "The two passphrases differ."; return; }
@@ -2878,7 +2900,9 @@ def main() -> None:
             sys.exit("Phygital Memory server can't start:\n- " + "\n- ".join(bad))
         print(f"Phygital Memory server {VERSION}: open {PAGE}  ·  AI apps connect to {PAGE}mcp", file=sys.stderr)
         if code := hosted.setup_code():
-            print(f"\n  First visit: open {PAGE} and choose the passphrase. Setup code: {code}\n", file=sys.stderr, flush=True)
+            line = "  " + "=" * 60
+            print(f"\n{line}\n  First visit: open {PAGE}\n  and choose the passphrase. Setup code: {code}\n{line}\n",
+                  file=sys.stderr, flush=True)
         mcp.run("streamable-http", host="0.0.0.0", port=PORT,
                 transport_security=TransportSecuritySettings(
                     enable_dns_rebinding_protection=True, allowed_hosts=[hosted.HOST], allowed_origins=[hosted.URL]))
