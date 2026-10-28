@@ -33,68 +33,76 @@ IGNORE = ".DS_Store\n._*\n.encryptor-*\n*.tmp\n"
 # Every file is scrambled: git must never merge inside one (a small one can look like text to it and get spliced).
 ATTRIBUTES = "* binary\n"
 LOST = "phygital-lost-folders.json"   # in .git: folder IDs that lost a clash, for the app to fold back in
-README_MARK = "<!-- phygital-memory-readme 6 -->"   # the app updates its own README when this goes up
+README_MARK = "<!-- phygital-memory-readme 7 -->"   # the app updates its own README when this goes up
 README = README_MARK + """
-# {name} · Phygital Memory
+<p><img src="phygital-memory-mark.svg" width="56" alt="Phygital Memory"></p>
 
-For you, if this repo holds your notes. It explains what the files are and how to keep them safe.
+# {name}
 
-This repo is a copy of a Phygital Memory folder: encrypted notes that live on your Mac and are kept in step here.
-Your notes, their names and the folders are encrypted. They can only be read with the folder's password, in the
-Phygital Memory app.
+This private repo is the GitHub backup of **{name}**, a memory in Phygital Memory. Your Mac encrypts every note
+before it comes here. Only the memory's password or its recovery key can open it.
 
 > [!IMPORTANT]
-> Keep this repo private. The app checks before every upload and stops syncing if the repo ever becomes
-> public. Please don't change that on GitHub.
+> Keep this repo private. The app checks before every upload and stops the backup if the repo becomes public.
 
-## What is in this repo
+## How it's saved
+
+- A few seconds after you change a note, the app encrypts the change and uploads it here.
+- Every 30 seconds it checks for changes from your other Macs and brings them down.
+- Each upload is a new commit, so GitHub keeps every past state of the encrypted files.
+- Earlier versions of each note are inside the memory too. In the app, open the note and press Version history.
+- Files over 95 MB stay on your Mac, because GitHub doesn't take files that big. The app lists them.
+
+## Use the backup
+
+**On a new Mac, or after losing this one**
+
+1. Install Phygital Memory.
+2. Click the memory name at the top of the sidebar, then **Open memory › From GitHub**.
+3. Sign in to GitHub if the app asks, type `{repo}` and choose where to keep it.
+4. Unlock it with the password. If you forget it, use the recovery key on the lock screen.
+
+To check or stop the backup, open **Storage and backup › Backup** in the app. It shows when the last upload
+happened and any problem. **Stop backup** keeps your notes on your Mac and sends nothing more here. The app never
+deletes this repo.
+
+## What's in the repo
 
 | What | What it is |
 |---|---|
-| `d/` | Your notes, files and folders, encrypted. Names and contents are unreadable without the password. |
-| `masterkey.cryptomator` | The folder's key, locked with your password. Without the password it is useless. |
+| `d/` | Your notes, files and folders, encrypted. Names and contents can't be read without the password. |
+| `masterkey.cryptomator` | The memory's key, locked with your password. |
 | `vault.cryptomator` | Settings for the encryption. |
 | `AGENTS.md`, `CLAUDE.md` | Short notes for AI apps: use Phygital Memory, don't open these files directly. |
-| `Open in Phygital Memory.phygitalmemory` | Double-click it on a Mac to open the folder in the app. |
-| `.github/README.md`, `.gitignore`, `.gitattributes` | This page, and two small files that tell git how to handle the encrypted files. Your Mac hides them in Finder. |
+| `Open in Phygital Memory.phygitalmemory` | Double-click it on a Mac to open the memory in the app. |
+| `.github/`, `.gitignore`, `.gitattributes` | This page, its logo, and two small files that tell git how to treat encrypted files. Finder hides them. |
 
 ## What GitHub can see
 
-GitHub never sees your note names or what you wrote. It can see how many files there are, how big they are, how
-the folders nest, and when things change. Keep the repo private for that reason.
+GitHub can't read your note names or what you wrote. It can see how many files there are, their sizes, how the
+folders nest and when things change.
 
 > [!WARNING]
-> Don't edit, move, rename or delete files here by hand, on GitHub or in a copy of the repo. The app keeps them in
-> step by itself. A change made by hand can break notes.
-
-## Open your notes on another Mac
-
-1. Install Phygital Memory on that Mac.
-2. Open the folder menu at the top of the sidebar and choose **Open from GitHub**.
-3. Sign in with GitHub if the app asks, type `{repo}` and choose where to keep it.
-4. Unlock it with the folder's password.
-
-## Stop the backup, or delete this repo
-
-In the app, open **Storage and backup** and press **Stop backup**. Your notes stay on your Mac and nothing more
-is sent here. The app never deletes this repo. To delete it, open **Settings** on this repo's GitHub page and press
-**Delete this repository** at the bottom.
-
-> [!CAUTION]
-> Deleting this repo removes this copy for good. Make sure your Mac still has the folder first.
+> Don't edit, move, rename or delete files here by hand. A change made outside the app can break notes.
 
 ## If something goes wrong
 
-- **The same note was changed on two Macs:** both versions are kept. The other one appears next to the note as
+- **The same note changed on two Macs:** both versions are kept. The second shows next to the note as
   "name (conflict date)", and your AI apps get a task to merge them.
-- **A file is over 95 MB:** GitHub doesn't take files that big, so it stays on your Mac only. The app lists it.
-- **The backup stopped:** open **Storage and backup** in the app. It says why, for example when the repo became public.
+- **The backup stopped:** open Storage and backup in the app. It says why.
+- **You want this repo gone:** first make sure your Mac still has the memory. Then on GitHub, open Settings and
+  press Delete this repository.
 
 > [!CAUTION]
-> If the password is lost, nobody can open these notes, including you, GitHub and the app's makers. There is no
-> reset. Keep the password somewhere safe, like a password manager.
-
+> If both the password and the recovery key are lost, nobody can open these notes. There is no reset. Keep both in
+> a safe place, like a password manager.
 """
+# The Knot (brand/phygital-memory-mark.svg), shown at the top of the README.
+LOGO = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><circle cx="32" cy="32" r="30" '
+        'fill="#C8F031"/><path d="M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 '
+        'C45 29 46 36 46 42 H52" fill="none" stroke="#0B0D12" stroke-width="3" stroke-linecap="round" '
+        'stroke-linejoin="round"/><circle cx="12" cy="42" r="3.2" fill="#4D5BFF"/><circle cx="52" cy="42" r="3.2" '
+        'fill="#4D5BFF"/></svg>\n')
 EXTRA_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"   # an app from the Dock has a short PATH
 
 
@@ -350,6 +358,7 @@ class GitSync:
         if old is None or (ours(old) and (force or not old.startswith(README_MARK))):
             p.parent.mkdir(exist_ok=True)
             p.write_text(README.format(name=name, repo=self.repo))
+            (p.parent / "phygital-memory-mark.svg").write_text(LOGO)
 
     @staticmethod
     def clone(repo: str, dest: Path, branch: str = "main", git_dir: Path | None = None) -> "GitSync":
