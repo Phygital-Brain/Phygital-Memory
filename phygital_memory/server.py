@@ -212,6 +212,24 @@ def _note(rid: str, private: bool = False):
     return f, rel
 
 
+def _edit_target(rid: str, path: str, folder: str, private: bool):
+    """The note an edit goes to: by its path (stays valid after edits) or by a search or handed id."""
+    if path.strip():
+        f = _pick(folder)
+        rel = path.strip().lstrip("/")
+        _private(f, rel, private)
+        return f, rel
+    if not str(rid).strip():
+        raise ToolError("Give the note's path, or an id from search_notes or handed_notes.")
+    return _note(rid, private)
+
+
+SAVED = "Saved {rel} (encrypted). To change it again, use path=\"{rel}\"."
+EditId = Annotated[str, Field(description="A search_notes or handed note id. Or leave empty and give path.")]
+EditPath = Annotated[str, Field(description="The note's path, like 'Projects/plan.md'. It stays valid after edits, "
+                                            "unlike a search id.")]
+
+
 @mcp.tool(annotations=READ)
 def status(ctx: Context) -> str:
     """Which locked folders exist, which are unlocked, how many notes each holds."""
@@ -350,14 +368,16 @@ def finish_handed_note(ctx: Context, id: Annotated[str, Field(description="The h
 
 
 @mcp.tool(annotations=WRITE)
-def replace_in_note(ctx: Context, id: ResultId,
+def replace_in_note(ctx: Context,
                     old_text: Annotated[str, Field(description="Exact text now in the note (from read_note).")],
                     new_text: Annotated[str, Field(description="What to put in its place.")],
+                    id: EditId = "", path: EditPath = "", folder: FolderName = "",
                     private: Private = False) -> str:
-    """Change part of a note: replaces old_text, which must appear exactly once."""
+    """Change part of a note: replaces old_text, which must appear exactly once. Name the note by path (best for
+    several edits in a row) or by a search or handed id."""
     _need_write()
     _seen(ctx)
-    f, rel = _note(id, private)
+    f, rel = _edit_target(id, path, folder, private)
     def change(text):
         count = text.count(old_text)
         if count != 1:
@@ -366,19 +386,20 @@ def replace_in_note(ctx: Context, id: ResultId,
         return text.replace(old_text, new_text)
     uid = _ai_write(f, rel, *_guard(f.memory.update, rel, change))
     _log(_seen(ctx), f, "changed", f'"{old_text[:60]}" → "{new_text[:60]}"', rel, uid)
-    return f"Saved {rel} (encrypted)."
+    return SAVED.format(rel=rel)
 
 
 @mcp.tool(annotations=WRITE)
-def append_to_note(ctx: Context, id: ResultId, text: Annotated[str, Field(description="Text to add at the end of the note.")],
+def append_to_note(ctx: Context, text: Annotated[str, Field(description="Text to add at the end of the note.")],
+                   id: EditId = "", path: EditPath = "", folder: FolderName = "",
                    private: Private = False) -> str:
-    """Add text at the end of the note behind a result."""
+    """Add text at the end of a note. Name it by path or by a search or handed id."""
     _need_write()
     _seen(ctx)
-    f, rel = _note(id, private)
+    f, rel = _edit_target(id, path, folder, private)
     uid = _ai_write(f, rel, *_guard(f.memory.update, rel, lambda old: old.rstrip("\n") + "\n\n" + text.strip("\n") + "\n"))
     _log(_seen(ctx), f, "added to", f'"{text.strip()[:80]}"', rel, uid)
-    return f"Saved {rel} (encrypted)."
+    return SAVED.format(rel=rel)
 
 
 @mcp.tool(annotations=WRITE)
