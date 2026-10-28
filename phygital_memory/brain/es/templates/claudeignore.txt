@@ -1,0 +1,20 @@
+# Tu agente nunca lee nada de lo que aparece aquí,
+# a menos que le pidas ese archivo exacto en el chat.
+
+# Contraseñas y claves
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Copias de seguridad hechas antes de cambios grandes (solo se leen para deshacer)
+.backups/
+
+# Dinero: facturas, impuestos, datos bancarios
+Memoria/finanzas/
+
+# Carpetas privadas (quita el # para activarlas)
+# salud/
+# diario-personal/

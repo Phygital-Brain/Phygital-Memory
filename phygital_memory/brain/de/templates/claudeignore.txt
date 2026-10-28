@@ -1,0 +1,20 @@
+# Dein Agent liest nichts, was hier steht,
+# außer du fragst im Chat genau nach dieser Datei.
+
+# Passwörter und Schlüssel
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Sicherungen vor großen Änderungen (nur zum Rückgängigmachen lesen)
+.backups/
+
+# Geld: Rechnungen, Steuern, Bankdaten
+Gedächtnis/finanzen/
+
+# Private Ordner (entferne das #, um sie einzuschalten)
+# health/
+# journal/

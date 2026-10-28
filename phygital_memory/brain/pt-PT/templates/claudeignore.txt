@@ -1,0 +1,20 @@
+# O teu agente nunca lê nada do que está nesta lista,
+# a não ser que lhe peças esse ficheiro exato na conversa.
+
+# Palavras-passe e chaves
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Cópias de segurança feitas antes de grandes alterações (só se leem para desfazer)
+.backups/
+
+# Dinheiro: faturas, impostos, dados bancários
+Memória/finanças/
+
+# Pastas privadas (tira o # para ativar)
+# saúde/
+# diário-pessoal/

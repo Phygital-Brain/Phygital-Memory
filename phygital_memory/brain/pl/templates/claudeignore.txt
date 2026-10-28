@@ -1,0 +1,20 @@
+# Twój agent nigdy nie czyta niczego, co jest tu wpisane,
+# chyba że w czacie poprosisz o dokładnie ten plik.
+
+# Hasła i klucze
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Kopie zapasowe robione przed dużymi zmianami (czytane tylko do cofania)
+.backups/
+
+# Pieniądze: faktury, podatki, dane bankowe
+Pamięć/finanse/
+
+# Prywatne foldery (usuń #, żeby włączyć)
+# zdrowie/
+# pamiętnik/

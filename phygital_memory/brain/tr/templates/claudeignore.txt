@@ -1,0 +1,20 @@
+# Asistanın burada listelenen hiçbir şeyi okumaz,
+# sen sohbette tam olarak o dosyayı istemedikçe.
+
+# Şifreler ve anahtarlar
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Büyük değişikliklerden önce alınan yedekler (sadece geri almak için okunur)
+.backups/
+
+# Para: faturalar, vergiler, banka bilgileri
+Hafıza/finans/
+
+# Özel klasörler (açmak için baştaki # işaretini sil)
+# health/
+# journal/

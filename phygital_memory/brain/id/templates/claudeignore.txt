@@ -1,0 +1,20 @@
+# Agenmu tidak pernah membaca apa pun yang ada di daftar ini,
+# kecuali kamu meminta file itu secara khusus di chat.
+
+# Kata sandi dan kunci
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Cadangan yang dibuat sebelum perubahan besar (hanya dibaca untuk membatalkan)
+.backups/
+
+# Uang: invoice, pajak, data rekening
+Memori/keuangan/
+
+# Folder pribadi (hapus tanda # untuk mengaktifkan)
+# kesehatan/
+# jurnal/

@@ -1,0 +1,20 @@
+# Ejen anda tidak akan membaca apa-apa yang disenaraikan di sini,
+# kecuali anda minta fail itu secara khusus dalam sembang.
+
+# Kata laluan dan kunci
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Sandaran yang dibuat sebelum perubahan besar (dibaca hanya untuk membatalkan perubahan)
+.backups/
+
+# Wang: invois, cukai, butiran bank
+Ingatan/kewangan/
+
+# Folder peribadi (buang tanda # untuk mengaktifkannya)
+# kesihatan/
+# jurnal/

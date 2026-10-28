@@ -1,0 +1,20 @@
+# Agenten din leser aldri noe som står her,
+# med mindre du ber om akkurat den filen i chatten.
+
+# Passord og nøkler
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Sikkerhetskopier laget før store endringer (leses bare for å angre)
+.backups/
+
+# Penger: fakturaer, skatt, bankopplysninger
+Minne/økonomi/
+
+# Private mapper (fjern # for å slå på)
+# health/
+# journal/

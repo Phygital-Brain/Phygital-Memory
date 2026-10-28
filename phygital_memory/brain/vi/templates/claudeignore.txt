@@ -1,0 +1,20 @@
+# Trợ lý AI của bạn không bao giờ đọc những gì có trong danh sách này,
+# trừ khi bạn yêu cầu đúng tệp đó trong cuộc trò chuyện.
+
+# Mật khẩu và khóa
+.env
+.env.*
+*.key
+*.pem
+credentials/
+secrets/
+
+# Bản sao lưu tạo ra trước các thay đổi lớn (chỉ đọc khi cần hoàn tác)
+.backups/
+
+# Tiền bạc: hóa đơn, thuế, thông tin ngân hàng
+Trí nhớ/tài-chính/
+
+# Thư mục riêng tư (bỏ dấu # để bật)
+# sức-khỏe/
+# nhật-ký-riêng/

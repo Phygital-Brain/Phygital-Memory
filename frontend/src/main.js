@@ -1,4 +1,5 @@
-import { t, useLanguage } from "./shell/i18n.js";
+import { t, useLanguage, currentLanguage } from "./shell/i18n.js";
+import { renderSetup } from "./shell/setup.js";
 import { openAddFiles } from "./shell/addfiles.js";
 import { openShare, joinDialog } from "./shell/share.js";
 import { linkMacDialog, joinMacDialog } from "./shell/link.js";
@@ -47,7 +48,7 @@ const baseName = (p) => p.split("/").pop();
 const dirOf = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
 const label = (p) => baseName(p).replace(/\.md$/i, "");
 const tabLabel = (t) => t.title || label(t.path);
-const isSpecial = (t) => t.kind === "graph" || t.kind === "home" || t.kind === "search";
+const isSpecial = (t) => t.kind === "graph" || t.kind === "home" || t.kind === "search" || t.kind === "setup";
 const colorsPref = () => getPref("colors", {});
 function folderColor(path) { return colorsPref()[path] || hashColor(baseName(path)); }
 function nodeColor(path) { const d = dirOf(path); return d ? folderColor(d) : PALETTE[0]; }
@@ -438,12 +439,13 @@ async function createNewFolder() {
   const v = await createFolderForm(() => pickFolder(t("Choose where to put the new folder")));
   if (!v) return;
   try {
-    toast("Making the folder");
+    toast(t("Making the folder"));
     const j = await api("createfolder", v);
     await refreshFolders();
     await switchTo(j.folder.id);
     if (currentFolder() === j.folder.id) await unlockCurrent(v.password);
     toastOk(t("Created \"{0}\".", j.folder.name));
+    openSetupTab();   // a new memory starts with the choice to make it a brain
   } catch (e) { toastErr(e.message); }
 }
 
@@ -2374,6 +2376,25 @@ function openHomeTab() {
   activate(tab);
 }
 
+// "Make it a Phygital Brain": its own tab, opened from Home or right after a new memory is made.
+function openSetupTab() {
+  let tab = state.tabs.find((k) => k.kind === "setup");
+  if (!tab) {
+    const body = el("div", { class: "note-col setup" });
+    const pane = el("div", { class: "pane hidden" }, body);
+    paneHost.append(pane);
+    tab = { path: "::setup", title: t("Set up"), kind: "setup", pane, body, dirty: false };
+    state.tabs.push(tab);
+    renderSetup(body, {
+      api, language: currentLanguage, openAI: (k) => openAI(k),
+      files: async () => { await syncFromDisk(); refreshHome(); },
+      done: () => { closeTab(tab); goHome(); },
+    });
+  }
+  activate(tab);
+}
+const isBrain = () => state.files.some((f) => f.path === "CLAUDE.md");
+
 // A pinned folder on Home: open it (and the folders around it) in the sidebar.
 function showFolder(path) {
   const parts = path.split("/");
@@ -2395,6 +2416,10 @@ function renderHome(tab) {
     el("div", { class: "home-top" }, el("h1", { class: "home-title" }, t("Home")),
       homeClock()),
     status,
+    ...(isBrain() ? [] : [el("button", { class: "home-brain", type: "button", onclick: openSetupTab }, knot(30),
+      el("span", { class: "hb-text" }, el("span", { class: "hb-t" }, t("Make it a Phygital Brain")),
+        el("span", { class: "hb-s" }, t("Folders, rules and notes your AI files into. About a minute, all clicks."))),
+      icon("chevron", 16, 2))]),
     ...(pinned.length ? [el("h2", { class: "home-h" }, t("Pinned")), el("div", { class: "home-list" }, ...pinned.map(item))] : []),
     ai,
     el("h2", { class: "home-h" }, t("Recent notes")),
