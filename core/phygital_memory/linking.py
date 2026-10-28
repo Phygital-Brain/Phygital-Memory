@@ -52,7 +52,7 @@ def folder_id(code: str) -> str:
 def computer_name() -> str:
     if os.environ.get("PHYGITAL_MEMORY_MAC_NAME"):
         return os.environ["PHYGITAL_MEMORY_MAC_NAME"][:40]
-    try:   # the Mac's own name ("Max's MacBook"); elsewhere, the computer's network name
+    try:   # the Mac's own name ("Ana's MacBook"); elsewhere, the computer's network name
         r = subprocess.run(["scutil", "--get", "ComputerName"], capture_output=True, text=True, timeout=5)
         if r.stdout.strip():
             return r.stdout.strip()[:40]

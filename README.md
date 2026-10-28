@@ -290,7 +290,7 @@ A native speaker reading one of the 41 languages helps a lot. See [CONTRIBUTORS.
 
 ## Credits
 
-Phygital Memory was made by Phygital-Brain and the Phygital Memory contributors, under [Phygital-Brain](https://github.com/Phygital-Brain). The vault code and the Finder view come from Encryptor MCP, by the same author, under the same license.
+Phygital Memory is made by [Phygital-Brain](https://github.com/Phygital-Brain) and the Phygital Memory contributors. The vault code and the Finder view come from Encryptor MCP, by the same author, under the same license.
 
 It builds on the work of others:
 
