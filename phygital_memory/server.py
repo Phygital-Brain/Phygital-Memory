@@ -1903,8 +1903,8 @@ async def api(request: Request) -> Response:
             return _ok({"error": "Locked.", "locked": True, "folder": f.id}, 423)
 
         m = f.memory
-        if f.plain and action in ("recoverykey", "touchid"):
-            return _ok({"error": "That's for Encrypted memories. An Open memory has no password or recovery key.",
+        if f.plain and action in ("recoverykey", "touchid", "aihide"):
+            return _ok({"error": "That's only for Encrypted memories.",
                         "plain": True}, 400)
         if action == "lock":
             await asyncio.to_thread(f.lock)   # a cloud memory waits here until its saves reached the cloud

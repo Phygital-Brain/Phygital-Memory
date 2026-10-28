@@ -129,8 +129,8 @@ export function openSettings(folderOpts, me) {
     sharing.push(section(t("AI")));
     if (f.aiApps) sharing.push(row(t("AI apps"), t("Which AI apps can use your notes."), btn(t("Manage"), f.aiApps),
       t("Each app gets its own key and only reaches memories that are open in the app.")));
-    sharing.push(row(t("Hide from AI"), f.plain ? t("No AI app reaches it through this app. An AI that can open files can still read the folder.") : t("No AI app can reach this memory."), toggle(t("Hide from AI"), f.aiHidden, f.setAiHidden),
-      t("Turns off AI access to this memory, whatever each app is allowed.")));
+    if (!f.plain) sharing.push(row(t("Hide from AI"), t("No AI app can reach this memory."), toggle(t("Hide from AI"), f.aiHidden, f.setAiHidden),   // an Open
+      t("Turns off AI access to this memory, whatever each app is allowed.")));   // memory is a normal folder: any AI can read it
   }
   const pages = [{ title: t("General"), rows: general }];
   if (memory.length) pages.push({ title: t("This memory"), rows: memory });
