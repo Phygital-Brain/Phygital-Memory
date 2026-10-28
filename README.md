@@ -1,6 +1,6 @@
 <!-- TODO: demo video link (a GitHub user-attachments link, 30 to 60 seconds). -->
 
-<p align="center"><img src="docs/images/icon.png" alt="" width="88"></p>
+<p align="center"><img src="docs/images/header.png" alt="Phygital Memory. Your notes, your AI, your rules. A notes app that becomes your second brain: open source, private, encrypted, your files. A note about a kite festival goes through the Phygital Memory knot, which lets through only what you allow, and your AI answers from it." width="100%"></p>
 
 <h1 align="center">Phygital Memory</h1>
 
@@ -22,11 +22,6 @@
 <a href="docs/README.md">All guides</a>
 </p>
 
-<table align="center"><tr>
-<td align="center"><img src="docs/images/screenshot-1.png" alt="Making a memory: you pick Open or Encrypted, a name and a place." width="280"></td>
-<td align="center"><img src="docs/images/screenshot-2.png" alt="The main window: your folders on the left, a note open on the right." width="420"></td>
-</tr></table>
-
 ## What it is
 
 Phygital Memory is a notes app for your computer. You write notes, and your AI app (Claude, Codex, Cursor and others) can read them, search them and help you keep them in order. Over time it becomes a second brain: what you know, decided and planned, in one place your AI can use.
@@ -37,6 +32,8 @@ It's built around four promises:
 - **Private.** No account, no tracking, no server of ours. Your notes stay on your computer unless you choose a cloud or a backup.
 - **Encrypted when you want it.** Lock a memory with a password. Without it (or your recovery key), the files are unreadable.
 - **You own your data.** Notes are normal files. Stop using the app and they're still yours, readable by anything.
+
+<p align="center"><img src="docs/images/screenshot-1.png" alt="Home in Phygital Memory: today's note, the tasks waiting for your AI, and the notes you changed lately." width="100%"></p>
 
 ## Install
 
@@ -65,6 +62,8 @@ It updates itself after that.
 
 The full walkthrough is in [Get started](docs/setup-computer.md).
 
+<p align="center"><img src="docs/images/screenshot-2.png" alt="A note open in the editor: properties, tags, headings and a callout, all in a normal Markdown file." width="100%"></p>
+
 ## Two kinds of memory
 
 When you make a memory, you pick one:
@@ -76,6 +75,8 @@ When you make a memory, you pick one:
 | Good for | Notes you're happy for your AI to see anywhere | Clients, money, health, anything private |
 
 You can have both, side by side.
+
+<p align="center"><img src="docs/images/screenshot-3.png" alt="Making a new memory: you choose Open, a normal folder, or Encrypted, locked with your password." width="100%"></p>
 
 ## Your AI, on your terms
 
@@ -122,6 +123,8 @@ The full list of what leaves your computer, and when, is in [Privacy](docs/priva
 - **Make it a Phygital Brain.** One setup page builds folders, rules and first notes, and leaves one AI task for your AI to finish the rest.
 
 Ideas for what to ask are in [docs/examples.md](docs/examples.md).
+
+<p align="center"><img src="docs/images/screenshot-4.png" alt="The Share window: someone waiting to be let in, the people who have the memory, and a button to invite someone new." width="100%"></p>
 
 ## Languages
 
