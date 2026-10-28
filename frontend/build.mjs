@@ -34,17 +34,35 @@ const options = {
   }],
 };
 
+// The libraries in groups by what they do, the same groups as the overview in Settings › General › Licences.
+const GROUPS = [
+  ["Note editor", (n) => /^@(codemirror|lezer|marijn)\//.test(n) || ["style-mod", "w3c-keyname", "crelt"].includes(n)],
+  ["Graph view", (n) => /^(sigma|graphology|events|d3-force)$|^graphology-/.test(n)],
+  ["Safe pasting", (n) => n === "dompurify"],
+  ["Fonts", (n) => n.startsWith("@fontsource")],
+  ["Diagrams in notes", () => true],   // Mermaid and everything it brings
+];
+const ORDER = ["Note editor", "Diagrams in notes", "Graph view", "Safe pasting", "Fonts"];
+const LICENCE_FIX = { khroma: "MIT" };   // its package.json names no licence; its LICENSE file is MIT
+
 function writeLicences(meta) {
-  const seen = new Map();
+  const groups = new Map(ORDER.map((g) => [g, []]));
+  const seen = new Set();
   for (const input of Object.keys(meta.inputs)) {
     const m = input.match(/node_modules\/((?:@[^/]+\/)?[^/]+)/);
     if (!m || seen.has(m[1])) continue;
+    seen.add(m[1]);
     const dir = join("node_modules", m[1]);
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-    const file = ["LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE"].map((f) => join(dir, f)).find(existsSync);
-    seen.set(m[1], `${m[1]} ${pkg.version} (${pkg.license})\n${file ? readFileSync(file, "utf8").trim() : ""}`);
+    const file = ["LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "license", "license.md", "OFL.txt"].map((f) => join(dir, f)).find(existsSync);
+    const lic = LICENCE_FIX[m[1]] || pkg.license || "see the text below";
+    const readme = join(dir, "README.md");   // a few keep the licence only at the end of their README
+    const body = file ? readFileSync(file, "utf8").trim()
+      : existsSync(readme) ? (readFileSync(readme, "utf8").split(/^## Licen[cs]e\s*$/m)[1] || "").trim() : "";
+    groups.get(GROUPS.find(([, has]) => has(m[1]))[0]).push(`${m[1]} ${pkg.version}, ${lic}\n\n${body}`);
   }
-  const text = "Phygital Memory includes these free libraries.\n\n" + [...seen.values()].join("\n\n---\n\n") + "\n";
+  const text = [...groups].filter(([, list]) => list.length)
+    .map(([g, list]) => `${g.toUpperCase()}\n${"=".repeat(g.length)}\n\n` + list.join("\n\n---\n\n")).join("\n\n\n") + "\n";
   writeFileSync(join(OUT, "THIRD-PARTY-LICENSES.txt"), text);
 }
 
