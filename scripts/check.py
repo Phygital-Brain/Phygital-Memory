@@ -5,7 +5,7 @@ It checks:
 - every link between Markdown files points to a file that exists, and every #anchor to a heading that exists
 - no long dashes (em dashes, spaced en dashes) in the docs, workflows, .env.example, scripts and tests
 - no three dots or ellipsis character in text people read (code blocks and `code` are skipped)
-- every docs/*.md page has a row in the README's "All the guides" table (skipped until that heading exists)
+- every docs/*.md page is linked from the guides index, docs/README.md (the README links to that index)
 - every environment variable in docs/settings.md is read by the code, and every one the code reads is in
   docs/settings.md and .env.example
 - docs/tools.md names every MCP tool (@mcp.tool in core/phygital_memory/server.py) and says how many there are
@@ -107,19 +107,15 @@ def check_three_dots() -> list[str]:
     return problems
 
 
-def guides_table() -> str | None:
-    """The README's "All the guides" section, or None while it has no such heading."""
-    m = re.search(r"^#+ *All the guides *$(.*?)(?=^#+ |\Z)", (ROOT / "README.md").read_text("utf-8"), re.M | re.S)
-    return m.group(1) if m else None
+def guides_table() -> str:
+    """The guides index: docs/README.md. The README stays short and links to it."""
+    return (ROOT / "docs" / "README.md").read_text("utf-8")
 
 
 def check_guides_table() -> list[str]:
-    table = guides_table()
-    if table is None:
-        return []
-    listed = {Path(t.split("#")[0]).name for t in re.findall(r"\]\((?:\./)?docs/([^)\s]+)\)", table)}
+    listed = {Path(t.split("#")[0]).name for t in re.findall(r"\]\((?:\./)?([^)\s/]+\.md)(?:#[^)]*)?\)", guides_table())}
     pages = sorted(p.name for p in (ROOT / "docs").glob("*.md") if p.name != "README.md")
-    return [f"README.md: docs/{p} has no row in All the guides" for p in pages if p not in listed]
+    return [f"docs/README.md: {p} is not in the guides index" for p in pages if p not in listed]
 
 
 def code_env_vars() -> set[str]:
@@ -182,8 +178,6 @@ CHECKS = [check_links, check_dashes, check_three_dots, check_guides_table, check
 
 if __name__ == "__main__":
     problems = [p for check in CHECKS for p in check()]
-    if guides_table() is None:
-        print('Skipped: README.md has no "All the guides" heading yet, so the guides table was not checked.')
     if problems:
         print("\n".join(problems))
         print(f"\n{len(problems)} problem(s).")

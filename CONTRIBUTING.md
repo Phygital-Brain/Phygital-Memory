@@ -73,3 +73,32 @@ The screens are in 41 languages. English is the source. Add or fix a language by
 ## Credit and license
 
 AGPL-3.0-only. Before you send a contribution, read "Other licenses, and contributions" in [NOTICE](NOTICE): sending one means you agree to it. Please open an issue before a big change. Add yourself to [CONTRIBUTORS.md](CONTRIBUTORS.md) if you like.
+
+## This repository
+
+| Folder or file | What it is |
+|---|---|
+| [`core/phygital_memory/`](core/phygital_memory) | The engine (Python): memories, encryption, search, sharing, backups, the AI door. |
+| [`core/phygital_memory/vault/`](core/phygital_memory/vault) | How a memory is stored: `plain.py` for Open memories, the rest for Encrypted ones. |
+| [`core/frontend/`](core/frontend) | The app's screens (JavaScript). They build into `core/phygital_memory/web/`. |
+| [`core/languages/`](core/languages) | Every screen text in 41 languages. `en.json` is the source. |
+| [`core/tests/`](core/tests) | Every test, the sample notes they use, and `run.sh` to run one. |
+| [`core/packaging/`](core/packaging) | Turns the engine into one program, plus the Touch ID and Keychain helper (Mac only). |
+| [`core/scripts/`](core/scripts) | Small tools, such as `i18n.py` for the screen texts. |
+| [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
+| [`brand/`](brand) | Logo, colours, icons and the brand guide. |
+| [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
+
+To build the Mac app yourself you need `uv`, `npm`, Rust with `cargo tauri`, `syncthing` and `rclone`. Then run:
+
+```bash
+bash rebuild.sh --install
+```
+
+You should see a `.dmg` in `release/`, and the app replaced in Applications and reopened. The first build takes longer, because it fetches the build tools. The Windows and Linux apps are built on GitHub. To run one test:
+
+```bash
+sh core/tests/run.sh test_open.py
+```
+
+You should see PASS or FAIL for each check. More for developers in [AGENTS.md](AGENTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).

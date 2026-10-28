@@ -29,8 +29,6 @@ def test_no_three_dots():
 
 
 def test_every_guide_is_in_the_readme():
-    if check.guides_table() is None:
-        pytest.skip('README.md has no "All the guides" heading yet. Add it with one row per docs/*.md page.')
     problems = check.check_guides_table()
     assert not problems, "\n".join(problems)
 

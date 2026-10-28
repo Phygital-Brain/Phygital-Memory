@@ -73,3 +73,19 @@ To change the code, read [AGENTS.md](../AGENTS.md).
 ## What next
 
 Pick another page in [the guides](README.md).
+
+## Words you'll see
+
+| Word | What it means here |
+|---|---|
+| **Memory** | One folder of notes the app looks after. You can have several. |
+| **Open memory** | A plain folder of readable notes. No password. Any AI app or program that can open the folder can read it. |
+| **Encrypted memory** | A locked folder (a Cryptomator format 8 vault). You open it with your password, or Touch ID on a Mac. |
+| **Recovery key** | 44 words that let you set a new password for an Encrypted memory. Keep them offline. |
+| **AI app** | Claude Code, Claude Desktop, Codex, Cursor or any app that can use tools through MCP. |
+| **MCP** | Model Context Protocol: the standard way AI apps plug into tools like this one. |
+| **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. |
+| **Allow edits** | The switch that lets one AI app change notes. Off means read only. |
+| **Private for AI** | A folder or note the AI opens only when you ask in the chat. The tools follow this rule. The folder itself stays readable. |
+| **AI tasks** | A hidden note in each memory where you leave work for your AI. It is never shared. |
+| **Phygital Brain** | An optional set of folders, rules and first notes for working with an AI. The app can build it for you. |
