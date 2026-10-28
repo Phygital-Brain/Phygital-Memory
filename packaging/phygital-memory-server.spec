@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/app.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/closeask.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/web', 'phygital_memory/web'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/engram_config.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital-Memory-Test/core/phygital_memory/vault/words_en.txt', 'phygital_memory/vault')]
+datas = [('/Users/you/Desktop/Phygital Memory/core/phygital_memory/app.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/closeask.html', 'phygital_memory'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/web', 'phygital_memory/web'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/engram_config.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/claude_ext', 'phygital_memory/claude_ext'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/brain', 'phygital_memory/brain'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/brain_memory.json', 'phygital_memory'), ('/Users/you/Desktop/Phygital Memory/core/phygital_memory/vault/words_en.txt', 'phygital_memory/vault')]
 binaries = []
 hiddenimports = []
 hiddenimports += collect_submodules('phygital_memory')
