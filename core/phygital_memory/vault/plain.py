@@ -2,8 +2,8 @@
 """An Open memory: the same folder tree as a vault (tree.py, writer.py), over a plain folder of readable files.
 
 Memory works the same over either one. Here a folder's ID is its path inside the memory ("" for the top), and a
-file's contents are the file itself. Anything starting with "." is left out, except the memory's own hidden
-folders (trash, versions, prefs, AI tasks), so .git, .obsidian and the like stay untouched. Links are left out
+file's contents are the file itself. Hidden files and folders (.env, .obsidian) are listed like in an Encrypted
+memory, so "Show hidden files" works; only .git, a Python .venv and the Mac's own clutter are left out, untouched. Links are left out
 too: a link could point anywhere on the Mac.
 """
 
@@ -19,7 +19,9 @@ from .keys import VaultError
 from .tree import Entry, NotFound, _safe_name
 from .writer import Exists, _write_atomic
 
-OWN = (".trash", ".versions", ".phygital", ".ai-tasks")   # the memory's own hidden folders (memory.HIDDEN, and the AI tasks)
+# Never listed, read or written: git's own files, Python's, and what macOS puts in folders
+SKIP = {".git", ".venv", ".DS_Store", ".Trash", ".Trashes", ".Spotlight-V100", ".fseventsd", ".TemporaryItems",
+        ".DocumentRevisions-V100", ".apdisk", ".localized"}
 TEMP = ".phygital"                           # big files arrive here first, then move into place
 
 
@@ -50,8 +52,8 @@ class PlainTree:
         out = []
         for p in location.iterdir():
             name = unicodedata.normalize("NFC", p.name)
-            if not _safe_name(name) or (name.startswith(".") and name not in OWN):   # the app's own at any depth:
-                continue   # their versions and trashed copies sit inside one another
+            if not _safe_name(name) or name in SKIP or name.startswith("._"):
+                continue
             if p.is_symlink():
                 out.append(Entry(name, "link", p, None, dir_id))
             elif p.is_dir():

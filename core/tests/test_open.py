@@ -28,6 +28,10 @@ try:
     (root / ".git").mkdir()
     (root / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
     (root / "Old.md").write_text("# Old\n\nwritten before the app, about a lighthouse\n")
+    (root / ".env").write_text("TOKEN=not-a-real-one\n")
+    (root / ".obsidian").mkdir()
+    (root / ".obsidian" / "app.json").write_text("{}")
+    (root / ".DS_Store").write_bytes(b"mac clutter")
     os.symlink("/etc", root / "outside")
     m = Memory(root, plain=True)
     m.tasks_file = tmp / "tasks.bin"
@@ -39,7 +43,8 @@ try:
     check(m.search("lighthouse") and m.search("kite festival"), "search finds old and new notes")
     files = {f["path"] for f in m.list_files()}
     check("Old.md" in files and "Projects/Plan.md" in files, "the sidebar lists the files")
-    check(not any(p.startswith((".git", "outside", ".phygital")) for p in files), "dot folders and links are left out")
+    check(not any(p.startswith((".git", "outside", ".phygital", ".DS_Store")) for p in files), ".git, the app's own folders, Mac clutter and links are left out")
+    check({".env", ".obsidian/app.json"} <= files, f"hidden files are listed, so Show hidden files works ({sorted(files)})")
 
     m.save("Projects/Plan.md", "# Plan\n\nthe kite festival moved to July\n", keep_version=True)
     check(len(m.versions("Projects/Plan.md")) == 1, "a change keeps the old version")
