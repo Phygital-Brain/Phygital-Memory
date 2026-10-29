@@ -179,7 +179,7 @@ export function connectDialog(ctx) {
       body.replaceChildren(...(k === "here" ? view.body : online()));
     };
     for (const [k, label] of tabs) seg.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
-    const card = el("div", { class: "dlg lk", role: "dialog", "aria-label": t("Connect an AI app") },
+    const card = el("div", { class: "dlg lk ai-connect", role: "dialog", "aria-label": t("Connect an AI app") },
       el("div", { class: "dlg-title" }, t("Connect an AI app")),
       el("p", { class: "lk-intro" }, t("Each AI app gets its own key and reaches only the memories you pick. You can undo every change it makes.")),
       seg, body,

@@ -881,8 +881,11 @@ body { font-family: var(--font-body); font-size: 14px; }
   letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
 .unlock-tag span { padding: 5px 8px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--border); white-space: nowrap; }
 .unlock-tag span:last-child { color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
-.unlock-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-.unlock-actions .btn { justify-content: center; gap: 8px; height: 40px; padding: 0 16px; font-size: 13.5px; font-weight: 600; border-radius: var(--r-s); }
+.ai-connect .lk-body > p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
+.ai-connect .lk-body > p.set-hint { color: var(--text-3); }
+.ai-connect .ai-apps .cl-body > .mf-hint:first-child { display: none; }   /* the window's own intro says it already */
+.unlock-actions { display: flex; flex-direction: column; gap: 7px; margin: 6px 16px 0; }
+.unlock-actions .btn { justify-content: center; gap: 7px; height: 34px; padding: 0 14px; font-size: 12.5px; font-weight: 600; border-radius: var(--r-s); }
 .unlock-actions .btn:not(.primary) { background: var(--bg-surface); border-color: var(--border); }
 .unlock-actions .btn:not(.primary):hover { border-color: var(--text-3); background: var(--bg-subtle); }
 .unlock-actions .btn svg:last-child:not(:first-child) { margin-left: -2px; color: var(--text-3); }
