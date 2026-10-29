@@ -3049,6 +3049,7 @@ function menuSpec() {
   return [
     { title: "Phygital Memory", items: [
       item("settings", t("Settings"), run(openSettingsHere), { key: "CmdOrCtrl+,", enabled: inApp }),
+      item("checkupdate", t("Check for updates"), () => {}),   // the app window handles it (check_now in main.rs)
       ...(enc ? [item("touchid", t("Unlock with Touch ID"), () => menuTouchId(info), { check: !!touchOn[info.id], enabled: open })] : []),
       ...(ON_MAC ? [   // the Mac's own window habits and its Finder desktop icon; Windows and Linux have neither
         item("desktopicon", t("Desktop icon"), () => setSettings({ desktopIcon: !s.desktopIcon }), { check: !!s.desktopIcon }),
@@ -3121,7 +3122,10 @@ async function sendMenu() {
 }
 window.phygitalMenu = (id) => { const fn = menuFns[id]; if (fn) fn(); };
 // The Mac app downloaded an update from GitHub and put it in place: it starts the next time the app opens.
-window.phygitalUpdating = (v) => { if (v) updateScreen(v); };   // the app window found one (see check_update)
+window.phygitalUpdating = (v) => { if (v) updateScreen(v); };
+window.phygitalUpdateSays = (what) => what === "none" ? toastOk(t("You have the latest version."))
+  : what === "ready" ? toastOk(t("The new version is ready. It goes in when you quit."))
+  : toastErr(t("Couldn't check for updates. Try again later."));   // the app window found one (see check_update)
 api("update").then((r) => r.v && r.state !== "failed" && updateScreen(r.v)).catch(() => {});   // found before this page loaded
 onSettings(() => sendMenu());
 

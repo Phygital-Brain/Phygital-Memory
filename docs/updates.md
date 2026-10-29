@@ -17,7 +17,7 @@ Each release has a version tag (`vX.Y.Z`), notes on the [releases page](https://
 
 ## Update by itself
 
-The app checks the latest GitHub Release when it opens, and again every 6 hours while it stays open.
+The app checks the latest GitHub Release when it opens, and again every 6 hours while it stays open. To look right away, choose **Phygital Memory › Check for updates**.
 
 - **Found while the app opens:** it installs right away. The opening screen shows "Updating to version X" with a progress bar. Every memory locks, the update goes in, and the app restarts.
 - **Found later, while you use the app:** it downloads quietly and installs when you quit. You get the new version the next time you open the app.

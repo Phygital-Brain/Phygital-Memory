@@ -249,6 +249,23 @@ async fn update_once(app: &tauri::AppHandle, opening: bool) {
     app.restart();
 }
 
+// Check for updates, from the menu: one found installs now, like one found while opening (every memory locks, the
+// app restarts). Otherwise the page says the app is up to date, or that the check failed.
+async fn check_now(app: &tauri::AppHandle) {
+    use tauri_plugin_updater::UpdaterExt;
+    let say = |what: &str| if let Some(w) = app.get_webview_window("main") {
+        let _ = w.eval(&format!("window.phygitalUpdateSays && window.phygitalUpdateSays('{what}')"));
+    };
+    if cfg!(debug_assertions) { return say("none"); }
+    if READY.lock().unwrap().is_some() { return say("ready"); }
+    let Ok(updater) = app.updater() else { return say("failed") };
+    match updater.check().await {
+        Ok(Some(_)) => update_once(app, true).await,
+        Ok(None) => say("none"),
+        Err(_) => say("failed"),
+    }
+}
+
 fn quit(app: &tauri::AppHandle) {
     let _ = shell(app, "lockall");   // lock every folder and close every Finder view before we go
     if let Some((update, bytes)) = READY.lock().unwrap().take() {
@@ -379,6 +396,11 @@ fn main() {
             let Some(id) = ev.id().0.strip_prefix("pm:") else { return };
             // only plain ids reach the page (they're ours, but nothing odd ever goes into the script)
             let id: String = id.chars().filter(|c| c.is_ascii_alphanumeric() || "-_:.".contains(*c)).collect();
+            if id == "checkupdate" {   // the app window does the looking; the page only says what came of it
+                let h = app.clone();
+                std::thread::spawn(move || tauri::async_runtime::block_on(check_now(&h)));
+                return;
+            }
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.eval(&format!("window.phygitalMenu && window.phygitalMenu('{id}')"));

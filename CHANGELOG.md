@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Check for updates** in the Phygital Memory menu: it looks right away, and installs a new version or says you have the latest.
+
 ## 0.1.3 (2026-10-29)
 
 - Home shows the two latest daily notes side by side, not only the newest.
