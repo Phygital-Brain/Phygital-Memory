@@ -3,15 +3,12 @@
 # On a private repository it fails with "Code scanning is not enabled" unless the account has GitHub Code Security (paid).
 # Languages: python, javascript-typescript, go, java-kotlin, csharp, cpp, ruby, swift, actions. The window (Rust) is not
 # in this list, so it is not scanned here.
-#
-# FOR NOW: by hand only (Actions tab, or: gh workflow run codeql.yml), to save GitHub minutes while the repo is private.
-# When the repo goes public, put back the template triggers in place of "workflow_dispatch:":
-#   push: {branches: [main]}
-#   pull_request: {branches: [main]}
-#   schedule: [{cron: "41 3 * * 3"}]   # Wednesdays, 03:41 UTC
 name: CodeQL
 
 on:
+  push: {branches: [main]}
+  pull_request: {branches: [main]}
+  schedule: [{cron: "41 3 * * 3"}]   # Wednesdays, 03:41 UTC
   workflow_dispatch:
 
 permissions:

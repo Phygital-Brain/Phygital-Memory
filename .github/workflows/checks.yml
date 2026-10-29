@@ -1,14 +1,11 @@
 # Docs checks: runs scripts/check.py and tests/test_docs.py (links and anchors, no long dashes or three dots, every guide
 # listed in the README, settings and AI tools matching the code, version numbers matching), then zizmor on the workflows
 # (leaked tokens, injection, broad permissions). Needs no secrets and changes nothing.
-#
-# FOR NOW: by hand only (Actions tab, or: gh workflow run checks.yml), to save GitHub minutes while the repo is private.
-# When the repo goes public, put back the template triggers in place of "workflow_dispatch:":
-#   push:
-#   pull_request:
 name: checks
 
 on:
+  push:
+  pull_request:
   workflow_dispatch:
 
 permissions:

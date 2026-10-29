@@ -1,14 +1,11 @@
 # OpenSSF Scorecard: scores the repository's security habits (pinned actions, branch protection, tests, signed releases)
 # and publishes the score for the badge. Public repositories only. Runs in the original project, not in forks.
-#
-# FOR NOW: by hand only (Actions tab, or: gh workflow run scorecard.yml), to save GitHub minutes while the repo is
-# private. When the repo goes public, put back the template triggers in place of "workflow_dispatch:":
-#   branch_protection_rule:
-#   schedule: [{cron: "23 5 * * 2"}]   # Tuesdays, 05:23 UTC
-#   push: {branches: [main]}
 name: Scorecard
 
 on:
+  branch_protection_rule:
+  schedule: [{cron: "23 5 * * 2"}]   # Tuesdays, 05:23 UTC
+  push: {branches: [main]}
   workflow_dispatch:
 
 permissions:

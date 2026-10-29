@@ -13,6 +13,7 @@
 <a href="docs/setup-computer.md"><img src="https://img.shields.io/badge/Mac%20%C2%B7%20Windows%20%C2%B7%20Linux-4D5BFF" alt="Mac, Windows and Linux"></a>
 <a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest"><img src="https://img.shields.io/github/v/release/Phygital-Brain/Phygital-Memory" alt="Latest release"></a>
 <a href="https://www.npmjs.com/package/phygital-memory"><img src="https://img.shields.io/npm/v/phygital-memory?label=npx%20phygital-memory&color=C8F031&labelColor=0B0D12" alt="Install with npx phygital-memory"></a>
+<a href="https://scorecard.dev/viewer/?uri=github.com/Phygital-Brain/Phygital-Memory"><img src="https://api.scorecard.dev/projects/github.com/Phygital-Brain/Phygital-Memory/badge" alt="OpenSSF Scorecard"></a>
 </p>
 
 <p align="center">
@@ -22,6 +23,10 @@
 <a href="docs/faq.md">Questions</a> ·
 <a href="docs/README.md">All guides</a>
 </p>
+
+## Contents
+
+[What it is](#what-it-is) · [Install](#install) · [How to use](#how-to-use) · [Two kinds of memory](#two-kinds-of-memory) · [Your AI, on your terms](#your-ai-on-your-terms) · [Privacy](#privacy) · [Words you'll see](#words-youll-see) · [What it can do](#what-it-can-do) · [Languages](#languages) · [All the guides](#all-the-guides) · [This repository](#this-repository) · [Help and feedback](#help-and-feedback) · [Contributors](#contributors) · [Credits](#credits) · [License](#license)
 
 ## What it is
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-29)
 
 - First version of Phygital Memory, for Mac, Windows and Linux. It keeps your notes as a memory your AI can use, in one of two kinds: **Open** (a plain folder any AI app can read, no password) or **Encrypted** (a Cryptomator format 8 vault, opened with your password, or Touch ID on a Mac).
 - The app has an editor, search, version history for every note, a trash that keeps things for 7 days, a note graph, and a Finder view of an unlocked memory (Mac only for now).

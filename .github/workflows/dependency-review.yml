@@ -1,24 +1,10 @@
 # Blocks a change that adds a dependency with a known moderate or worse vulnerability (Python in core/uv.lock,
 # JavaScript in core/frontend, Rust crates in app/src-tauri, GitHub Actions). Needs the dependency graph switched on
 # (on by default for public repositories).
-#
-# FOR NOW: by hand only (Actions tab, or: gh workflow run dependency-review.yml), to save GitHub minutes while the repo
-# is private. Started by hand it has no pull request to compare, so it needs base-ref and head-ref, for example:
-#   gh workflow run dependency-review.yml -f base=main -f head=my-branch
-# When the repo goes public, put back the template trigger in place of "workflow_dispatch:" and its inputs:
-#   pull_request:
-# and remove the base-ref and head-ref lines below.
 name: Dependency review
 
 on:
-  workflow_dispatch:
-    inputs:
-      base:
-        description: "Branch or commit to compare from"
-        default: "main"
-      head:
-        description: "Branch or commit with the change"
-        required: true
+  pull_request:
 
 permissions:
   contents: read
@@ -34,5 +20,3 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294   # v5.0.0, pinned
         with:
           fail-on-severity: moderate
-          base-ref: ${{ inputs.base }}
-          head-ref: ${{ inputs.head }}
