@@ -2580,22 +2580,26 @@ function renderHome(tab) {
   homeExtras(status, ai, leaving);
 }
 
-// The latest daily note (the newest note named like 2026-10-28), shown on Home as plain text; a click opens it.
+// The two latest daily notes (the newest notes named like 2026-10-28), side by side on Home as plain text; a click
+// opens one.
 async function homeDaily(box, notes) {
   const day = (f) => (f.path.split("/").pop().match(/^(\d{4}-\d{2}-\d{2})\.md$/i) || [])[1];
-  const f = notes.filter(day).sort((a, b) => day(b).localeCompare(day(a)))[0];
-  if (!f) return;
-  let body = "";
-  try { body = splitFM((await api("read", { path: f.path })).text || "").body; } catch { return; }
+  const latest = notes.filter(day).sort((a, b) => day(b).localeCompare(day(a))).slice(0, 2);
+  if (!latest.length) return;
+  let bodies;
+  try { bodies = await Promise.all(latest.map(async (f) => splitFM((await api("read", { path: f.path })).text || "").body)); } catch { return; }
   if (!box.isConnected) return;
   const inline = (line) => line.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2").replace(/\[\[([^\]]+)\]\]/g, "$1").replace(/==|`/g, "")
     .split(/(\*\*[^*]+\*\*)/).map((p) => /^\*\*.+\*\*$/.test(p) ? el("strong", {}, p.slice(2, -2)) : p);
-  const lines = body.split("\n").map((l) => l.trim()).filter((l) => l && !/^%%.*%%$/.test(l) && !/^---+$/.test(l));
-  box.replaceChildren(el("h2", { class: "home-h" }, t("Daily")),
-    el("button", { class: "hd-card", type: "button", onclick: () => openPath(f.path) },
+  const card = (f, body) => {
+    const lines = body.split("\n").map((l) => l.trim()).filter((l) => l && !/^%%.*%%$/.test(l) && !/^---+$/.test(l));
+    return el("button", { class: "hd-card", type: "button", onclick: () => openPath(f.path) },
       el("span", { class: "hd-date" }, label(f.path)),
       el("span", { class: "hd-text" }, ...(lines.length ? lines : [t("Nothing written yet.")]).map((l) =>
-        el("span", { class: /^#/.test(l) ? "hd-line hd-head" : "hd-line" }, ...inline(l.replace(/^#+\s*|^[-*]\s+(\[[ x]\]\s*)?|^>\s*(\[![^\]]+\]\s*)?/gi, "")))))));
+        el("span", { class: /^#/.test(l) ? "hd-line hd-head" : "hd-line" }, ...inline(l.replace(/^#+\s*|^[-*]\s+(\[[ x]\]\s*)?|^>\s*(\[![^\]]+\]\s*)?/gi, ""))))));
+  };
+  box.replaceChildren(el("h2", { class: "home-h" }, t("Daily")),
+    el("div", { class: "hd-cards" }, ...latest.map((f, i) => card(f, bodies[i]))));
 }
 
 // The Mac's date and time beside the title, kept current while Home is on screen.

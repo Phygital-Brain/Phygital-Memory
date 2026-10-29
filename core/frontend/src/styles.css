@@ -1019,6 +1019,7 @@ body { font-family: var(--font-body); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .setup-page, .sp-screen, .sp-card, .sp-row, .sp-seg.on, .sp-card.pop .sp-art svg { animation: none !important; } .sp-card::before { transition: none; } }
 
 /* Home: the latest daily note */
+.hd-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; align-items: stretch; }
 .hd-card { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 12px 14px; text-align: left; border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text-2); transition: background 140ms var(--ease); }
 .hd-card:hover { background: var(--bg-subtle); }
