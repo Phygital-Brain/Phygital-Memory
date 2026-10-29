@@ -33,7 +33,7 @@ IGNORE = ".DS_Store\n._*\n.encryptor-*\n*.tmp\n"
 # Every file is scrambled: git must never merge inside one (a small one can look like text to it and get spliced).
 ATTRIBUTES = "* binary\n"
 LOST = "phygital-lost-folders.json"   # in .git: folder IDs that lost a clash, for the app to fold back in
-README_MARK = "<!-- phygital-memory-readme 8 -->"   # the app updates its own README when this goes up
+README_MARK = "<!-- phygital-memory-readme 9 -->"   # the app updates its own README when this goes up
 README = README_MARK + """
 <p><img src="phygital-memory-mark.svg" width="56" alt="Phygital Memory"></p>
 
@@ -96,6 +96,11 @@ folders nest and when things change.
 > [!CAUTION]
 > If both the password and the recovery key are lost, nobody can open these notes. There is no reset. Keep both in
 > a safe place, like a password manager.
+## About
+
+Made with [Phygital Memory](https://github.com/Phygital-Brain/Phygital-Memory), the open source notes app that keeps
+this backup. [Phygital Brain](https://github.com/Phygital-Brain/phygital-brain) is the ready-made set of folders and
+rules it can build in a memory.
 """
 # An Open memory's repo holds the notes as they are: readable on GitHub, and by AI apps that can reach GitHub.
 README_PLAIN = README_MARK + """
@@ -130,6 +135,12 @@ your Mac and sends nothing more here. The app never deletes this repo.
   "name (1)".
 - **You want this repo gone:** first make sure your Mac still has the memory. Then on GitHub, open Settings and
   press Delete this repository.
+
+## About
+
+Made with [Phygital Memory](https://github.com/Phygital-Brain/Phygital-Memory), the open source notes app that keeps
+this backup. [Phygital Brain](https://github.com/Phygital-Brain/phygital-brain) is the ready-made set of folders and
+rules it can build in a memory.
 """
 IGNORE_PLAIN = IGNORE + ".versions/\n.trash/\n.phygital/\n"   # git keeps the history; the app's own folders stay home
 # The Knot (brand/phygital-memory-mark.svg), shown at the top of the README.
