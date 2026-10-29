@@ -28,7 +28,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFGOTU2RTFFQzMzNzBFMDcKUldRSERqZkRIbTZWSDlUbjlFZGdjbis2R1NMb09KeTBZT0RjdHhzdk9mQi9WcmZYZmRxMVJrRTYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVFQThBMzc3OUY5NzAxRjAKUldUd0FaZWZkNk9vWG15Qzd5cVIzdi9kNTBRd1dLdmp4OS9mK3hTQWJwTWNpUHgzSWxaU2xNWXQK",
       "endpoints": [
         "https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/latest.json"
       ]

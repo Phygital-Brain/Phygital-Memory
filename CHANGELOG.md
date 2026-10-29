@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A new update key. Version 0.1.0 can't install the next version by itself: download it once from the Releases page, and updates are automatic again after that.
+- Clearer descriptions for the AI tools: when to use each one, whether it only reads or needs Allow edits, and what comes back.
+
 ## 0.1.0 (2026-10-29)
 
 - First version of Phygital Memory, for Mac, Windows and Linux. It keeps your notes as a memory your AI can use, in one of two kinds: **Open** (a plain folder any AI app can read, no password) or **Encrypted** (a Cryptomator format 8 vault, opened with your password, or Touch ID on a Mac).
