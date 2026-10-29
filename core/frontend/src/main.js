@@ -545,7 +545,8 @@ const touchTried = new Set(); // memories whose Touch ID ask already came up by 
 
 function drawUnlock() {
   const info = curInfo();
-  const kids = [knot(44), el("div", { class: "wordmark" }, t("Phygital Memory"))];
+  const kids = [knot(44), el("div", { class: "wordmark" }, t("Phygital Memory")),
+    el("p", { class: "unlock-tag" }, ...[t("Notes app"), t("Open source"), t("Encrypted when you want")].map((w) => el("span", {}, w)))];
   const links = [];
   let list = null;
   if (info) {
@@ -639,17 +640,19 @@ function drawUnlock() {
     unlockEl._submit = (e) => e.preventDefault();
     unlockEl._focus = null;
   }
+  const openMenu = (e) => { const r = e.currentTarget.getBoundingClientRect(); showMenu(openMenuItems(), r.left, r.bottom + 4); };
   if (backId && backId !== currentFolder() && views.has(backId)) {
     const b = folderList.find((f) => f.id === backId);
     if (b) links.push(el("button", { class: "link-btn", type: "button", onclick: () => switchTo(backId) }, t("Back to {0}", b.name)));
   }
-  links.push(el("button", { class: "link-btn", type: "button", onclick: (e) => {
-      const r = e.currentTarget.getBoundingClientRect();
-      showMenu(openMenuItems(), r.left, r.bottom + 4);
-    } }, t("Add memory")),
+  // No memory yet: the two ways in are real buttons. Behind a lock they stay small links under the password.
+  if (!info) kids.push(el("div", { class: "unlock-actions" },
+    el("button", { class: "btn primary", type: "button", onclick: createNewFolder }, icon("plus", 15, 2), t("New memory")),
+    el("button", { class: "btn", type: "button", "aria-haspopup": "menu", onclick: openMenu }, icon("folder", 15), t("Open memory"), icon("updown", 13))));
+  else links.push(el("button", { class: "link-btn", type: "button", onclick: openMenu }, t("Open memory")),
     el("button", { class: "link-btn", type: "button", onclick: createNewFolder }, t("New memory")));
-  kids.push(el("div", { class: "unlock-links" }, ...links),
-    el("div", { class: "unlock-lang" }, languagePicker(() => drawUnlock())));
+  kids.push(...(links.length ? [el("div", { class: "unlock-links" }, ...links)] : []),
+    el("label", { class: "unlock-lang" }, icon("globe", 14), languagePicker(() => drawUnlock())));
   const form = el("form", { class: "unlock-card" + (info?.kind === "open" ? " k-open" : ""), onsubmit: (e) => unlockEl._submit(e) }, ...kids);
   unlockEl.replaceChildren(unlockDrag, el("div", { class: "unlock-wrap" + (list ? " many" : "") }, form, list));
 }

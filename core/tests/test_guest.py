@@ -4,6 +4,7 @@ answers over stdin and stdout with the Open memories the key may reach, keeps to
 to the app's door. Throwaway folders, its own ports.
 
 Run: uv run python tests/test_guest.py
+With a built app: PM_GUEST_ENGINE="/Applications/Phygital Memory.app/Contents/Resources/server/phygital-memory-server"
 """
 import asyncio
 import json
@@ -54,7 +55,9 @@ env.pop("PHYGITAL_MEMORY_SERVER", None)
 
 
 async def ai(key, port, steps):
-    p = StdioServerParameters(command=sys.executable, args=["-c", "from phygital_memory.server import main; main()", "mcp"],
+    engine = os.environ.get("PM_GUEST_ENGINE")   # a built engine (the app's phygital-memory-server), or the source
+    p = StdioServerParameters(command=engine or sys.executable,
+                              args=["mcp"] if engine else ["-c", "from phygital_memory.server import main; main()", "mcp"],
                               env={**env, "PHYGITAL_MEMORY_KEY": key, "PHYGITAL_MEMORY_PORT": str(port)}, cwd=str(core))
     async with stdio_client(p) as (r, w):
         async with ClientSession(r, w) as s:
