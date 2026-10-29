@@ -6,6 +6,7 @@ What might come next. Nothing here is promised or has a date. If you want one of
 
 - **Windows and Linux.** Built from the same code as the Mac app, on GitHub, from one tag. Windows retested by hand with 0.1.0.
 - **Auto-update.** The app updates itself from the latest GitHub Release. See [updates.md](updates.md).
+- **Open memories with the app closed.** An AI app can start the engine itself. See [connect-your-ai.md](connect-your-ai.md#two-ways-in).
 - **Your own server.** The same app on a server you own, so the AI on your phone reaches your memories when the computer is off. See [server.md](server.md). Not tried on a real server yet.
 
 ## Wanted

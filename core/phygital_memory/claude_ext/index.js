@@ -1,6 +1,15 @@
 // Phygital Memory for Claude Desktop: a small bridge, no packages. Claude Desktop speaks MCP over stdin and stdout;
 // this passes each message to the Phygital Memory app on this Mac (MCP over HTTP, with the key) and passes the
 // answers back. It only ever talks to this Mac.
+// When the app wrote the engine's place into the extension (PM_ENGINE), the engine does all of this itself and also
+// answers with the app closed, for Open memories (server.py, main: mcp): start it and pass stdin and stdout through.
+const ENGINE = (process.env.PM_ENGINE || "").trim();
+if (ENGINE && require("node:fs").existsSync(ENGINE)) {
+  const child = require("node:child_process").spawn(ENGINE, ["mcp"], {
+    stdio: "inherit", env: { ...process.env, PHYGITAL_MEMORY_KEY: (process.env.PM_KEY || "").trim() } });
+  child.on("exit", (code) => process.exit(code ?? 0));
+  return;
+}
 const DOOR = process.env.PM_URL || "http://127.0.0.1:8790/mcp";
 const KEY = (process.env.PM_KEY || "").trim();
 const host = new URL(DOOR).hostname;

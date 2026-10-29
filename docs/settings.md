@@ -78,6 +78,8 @@ For when you want to change how the app looks or behaves, or find where somethin
 
 Set by the window for the program, never by you: `PHYGITAL_MEMORY_SHELL_TOKEN`, `PHYGITAL_MEMORY_SERVER_PROOF`, `PHYGITAL_MEMORY_APP_PID`.
 
+Set in an AI app's setup when it starts Phygital Memory itself (`phygital-memory-server mcp`, see [connect your AI](connect-your-ai.md#two-ways-in)): `PHYGITAL_MEMORY_KEY`, that AI app's key. It goes only in the AI app's own settings.
+
 On a server ([Run it on your own server](server.md)): `PHYGITAL_MEMORY_SERVER` (`1` turns server mode on), `PHYGITAL_MEMORY_URL` (the server's address), `PHYGITAL_MEMORY_PASSPHRASE` (optional: the passphrase as a setting, instead of choosing it on the first visit), `PHYGITAL_MEMORY_DATA` (where memories and settings live), `PHYGITAL_MEMORY_SYNC_PORT` (the one port for syncing with your computers), `PHYGITAL_MEMORY_SYNC_ADDRESS` (where computers reach that port, when it isn't your address's name and the sync port) and `PHYGITAL_MEMORY_VERSION` (set by the image, shown on the page). The server image sets all but the address. On Render and Railway the server reads its address from them (`RENDER_EXTERNAL_URL`, `RAILWAY_PUBLIC_DOMAIN`) and listens on the port they give (`PORT`).
 
 Test hooks, used only by `core/tests/`: `PHYGITAL_MEMORY_OFFLINE`, `PHYGITAL_MEMORY_SYNCTHING_LOCAL`, `PHYGITAL_MEMORY_SYNCTHING_NO_LAN`, and the Keychain item names `PHYGITAL_MEMORY_SEAL_KEYCHAIN`, `PHYGITAL_MEMORY_CLOUD_KEYCHAIN`, `PHYGITAL_MEMORY_APPROVER_KEYCHAIN`, `PHYGITAL_MEMORY_IDENTITY_KEYCHAIN`, `PHYGITAL_MEMORY_TOUCHID_KEYCHAIN`. Do not set these on your real computer.

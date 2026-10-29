@@ -84,7 +84,7 @@ Pick another page in [the guides](README.md).
 | **Recovery key** | 44 words that let you set a new password for an Encrypted memory. Keep them offline. |
 | **AI app** | Claude Code, Claude Desktop, Codex, Cursor or any app that can use tools through MCP. |
 | **MCP** | Model Context Protocol: the standard way AI apps plug into tools like this one. |
-| **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. |
+| **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. AI apps can also start the engine themselves, which reaches Open memories with the app closed. |
 | **Allow edits** | The switch that lets one AI app change notes. Off means read only. |
 | **Private for AI** | A folder or note the AI opens only when you ask in the chat. The tools follow this rule. The folder itself stays readable. |
 | **AI tasks** | A hidden note in each memory where you leave work for your AI. It is never shared. |

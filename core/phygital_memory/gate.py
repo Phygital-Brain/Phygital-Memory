@@ -123,6 +123,19 @@ class Gate:
                 self._save()
             return {**app, "id": t["app"]}
 
+    def peek(self, token: str) -> dict | None:
+        """app_of for an engine an AI app started for itself (server.py, mcp): the list is read fresh from disk on
+        every call and never written (the app owns the file), so a key removed or changed in the app applies at once."""
+        try:
+            d = json.loads(FILE.read_text())
+            t = d.get("tokens", {})[_fp(token)]
+            app = d.get("apps", {})[t["app"]]
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+        if t.get("type") != "access" or (t.get("expires") and t["expires"] < time.time()):
+            return None
+        return {**app, "id": t["app"]}
+
     def forget_folder(self, fid: str) -> None:
         with self._lock:
             for app in self.apps.values():

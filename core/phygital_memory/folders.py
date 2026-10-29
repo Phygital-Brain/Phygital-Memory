@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import threading
 import time
+import sys
 import zipfile
 from pathlib import Path
 
@@ -24,6 +25,9 @@ from .memory import Memory
 
 STATE = system.state_dir()
 REGISTRY = STATE / "folders.json"
+# An engine an AI app started for itself (`phygital-memory-server mcp`, see server.py): it only reads and writes notes.
+# Backups, cloud drives and moving old files stay with the app, which may be open at the same time.
+GUEST = sys.argv[1:2] == ["mcp"]
 
 
 def is_vault(path: Path) -> bool:
@@ -151,7 +155,9 @@ class Folder:
         self.gitdir = GITDIRS / fid
         self.memory.lost_store = self.gitdir / "phygital-lost-folders.json"
         inside = self.path / ".git"
-        if github and not cloud_at and inside.is_dir() and not self.gitdir.exists():
+        if GUEST:
+            github = s3_at = mirror_at = None
+        elif github and not cloud_at and inside.is_dir() and not self.gitdir.exists():
             self.gitdir.parent.mkdir(parents=True, exist_ok=True)   # the older way kept it inside: move it out
             shutil.move(str(inside), str(self.gitdir))
         elif github and not cloud_at and inside.is_dir() and not (inside / "HEAD").exists() and self.gitdir.exists():
@@ -281,10 +287,10 @@ class Folders:
                 self.items[e["id"]].syncthing = e.get("syncthing")
                 if e.get("openCopy"):
                     self.items[e["id"]].set_open_copy(Path(e["openCopy"]))
-        for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
+        for point in (CLOUDS.iterdir() if CLOUDS.is_dir() and not GUEST else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
                 cloud.unmount(point)
-        if first_run and default and is_vault(default) and not any(f.path == default for f in self.items.values()):
+        if first_run and not GUEST and default and is_vault(default) and not any(f.path == default for f in self.items.values()):
             self._add(default, default.name, first=True)
 
     # ---------- the list ----------

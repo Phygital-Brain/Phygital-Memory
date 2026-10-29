@@ -14,7 +14,7 @@ import { toast, toastOk, toastErr } from "./shell/toast.js";
 import { showMenu, closeMenu } from "./shell/menu.js";
 import { loadPrefs, clearPrefs, flushPrefs, takePrefs, givePrefs, getPref, setPref, setMapPref, noteState, setNoteState, movePrefs, dropPrefs } from "./shell/prefs.js";
 import { openSettings, closeSettings, onSettings, settings, setSettings, languagePicker } from "./shell/settings.js";
-import { aiAppsView, allowDialog } from "./shell/aiapps.js";
+import { aiAppsView, allowDialog, connectDialog } from "./shell/aiapps.js";
 import { openVersions, closeVersions, versionsOpenFor, whenDate } from "./shell/versions.js";
 import { createGraph } from "./shell/graph.js";
 import { createSearchView } from "./shell/search.js";
@@ -2529,7 +2529,7 @@ function openSetupTab(more = {}) {
   const page = el("div", { class: "setup-page", role: "dialog", "aria-modal": "true", "aria-label": t("Set up your Phygital Memory") });
   document.body.append(page);
   renderSetup(page, {
-    api, language: currentLanguage, openAI: (k) => openAI(k),
+    api, language: currentLanguage, openAI: (k) => openAI(k), openConnect,
     files: async () => { await syncFromDisk(); refreshHome(); },
     done: () => { page.remove(); if (hasPass(currentFolder())) goHome(); },
     ...more,
@@ -2783,6 +2783,15 @@ async function openAI(start, path) {
     },
   }, start);
   watchTodo();
+}
+
+// Connect an AI app, in its own window (AI menu), the same steps as the AI window's AI apps tab.
+function openConnect() {
+  return connectDialog({
+    load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
+    remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
+    claudeDesktop: () => api("claudedesktopext"), onServer: ON_SERVER, door: location.origin + "/mcp",
+  });
 }
 
 // Tell the person when their AI ticks a note off (checked with the status icons).
@@ -3075,6 +3084,7 @@ function menuSpec() {
       ...(encOpen.length ? [item("lockall", t("Lock all"), lockAll)] : [])] },
     { title: t("AI"), items: [
       item("aitasks", t("AI tasks and activity"), run(() => openAI(openTasks ? "tasks" : "activity")), { enabled: inApp }),
+      item("aiconnect", t("Connect an AI app"), run(openConnect), { enabled: inApp }),
       item("aiapps", t("AI apps"), run(() => openAI("apps")), { enabled: inApp }),
       ...(enc ? [item("aihide", t("Hide from AI"), async () => { try { await api("aihide", { hidden: !info.aiHidden }); await refreshFolders(); } catch (e) { toastErr(e.message); } },
         { check: !!info.aiHidden, enabled: open })] : [])] },

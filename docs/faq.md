@@ -225,7 +225,7 @@ Phygital Brain is a set of folders, rules and first notes for working with an AI
 <details>
 <summary><b>Does the app need to stay open?</b></summary>
 
-Yes, for AI apps to reach your memories. The door only exists while the app runs, and only unlocked memories can be searched. Quitting the app locks everything. The app asks before it closes.
+For Encrypted memories, yes: only unlocked memories can be searched, and quitting the app locks everything. The app asks before it closes. For Open memories, no: an AI app set up to start Phygital Memory itself reaches them with the app closed. See [two ways in](connect-your-ai.md#two-ways-in).
 
 </details>
 

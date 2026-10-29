@@ -61,8 +61,10 @@ The setup page asks a few questions, one at a time. Each is only clicks, plus a 
 
 1. **What should your AI call you?** Your name, and the language for folders and rules. Your notes stay in whatever language you write.
 2. **What kind of memory?** Pick one. You cannot switch later.
-   - **Open**: a normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.
+   - **Open** (marked **Recommended**): a normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.
    - **Encrypted**: opened with your password. Only the AI apps you allow get in, through this app. Not on phones yet.
+
+   Not sure which? [Find your threat model](find-your-threat-model.md) helps you pick.
 3. **Name it and pick its place.** The name, and where to keep it: this computer, a cloud folder the app found, WebDAV, or any other folder. For Encrypted, also a password of 8 or more characters, twice.
 4. **Back it up?** A private GitHub repo now, or **Later**. You can change this any time in **Storage and backup**.
 5. **What's this memory for?** Work, Personal, or both. This only decides which starter notes the app writes.
@@ -94,7 +96,7 @@ You should see your memory by name and how many notes it holds. For an Encrypted
 
 ## Keep it running
 
-Keep the app open for AI apps to reach your memories. An Open memory opens straight away when you switch to it. An Encrypted memory stays unlocked until you lock it or close the app. Closing the app asks first.
+Keep the app open for AI apps to reach your Encrypted memories. Open memories work with the app closed too, when the AI app starts Phygital Memory itself (see [connect your AI](connect-your-ai.md#two-ways-in)). An Open memory opens straight away when you switch to it. An Encrypted memory stays unlocked until you lock it or close the app. Closing the app asks first.
 
 ## Where things are
 

@@ -36,9 +36,20 @@ function accessForm(folders, cur = { folders: "all", write: false }) {
   return { node, value: () => ({ folders: all.checked ? "all" : boxes.filter((x) => x.b.checked).map((x) => x.f.id), write: write.checked }) };
 }
 
-// The setup to paste into each AI app, with the key in it.
-function setupFor(kind, door, key) {
+// The setup to paste into each AI app, with the key in it. With the engine's place (the built app), the AI app starts
+// the engine itself: it goes through the app when the app is open, and reaches Open memories by itself when it's closed.
+function setupFor(kind, door, key, engine) {
   const name = "phygital-memory";
+  if (engine) switch (kind) {
+    case "claude-code":
+      return { where: t("Run this in Terminal:"), text: `claude mcp add --scope user -e PHYGITAL_MEMORY_KEY=${key} ${name} -- "${engine}" mcp` };
+    case "cursor":
+      return { where: t("Add this to ~/.cursor/mcp.json:"), text: JSON.stringify({ mcpServers: { [name]: { command: engine, args: ["mcp"], env: { PHYGITAL_MEMORY_KEY: key } } } }, null, 2) };
+    case "codex":
+      return { where: t("Add this to ~/.codex/config.toml:"), text: `[mcp_servers.${name.replace("-", "_")}]\ncommand = '${engine}'\nargs = ["mcp"]\nenv = { PHYGITAL_MEMORY_KEY = "${key}" }` };
+    case "other":
+      return { where: t("In your AI app, add an MCP server it starts itself (stdio), with this command and setting:"), text: `"${engine}" mcp\nPHYGITAL_MEMORY_KEY=${key}` };
+  }
   switch (kind) {
     case "claude-code":
       return { where: t("Run this in Terminal:"), text: `claude mcp add --scope user --transport http ${name} ${door} --header "Authorization: Bearer ${key}"` };
@@ -111,7 +122,7 @@ export function aiAppsView(ctx) {
 
     const show = (kind, j) => {
       title.textContent = t("{0} is connected", j.app.name); err.textContent = "";
-      const s = setupFor(kind, j.door, j.key);
+      const s = setupFor(kind, j.door, j.key, j.engine);
       const copy = btn(t("Copy"), () => navigator.clipboard.writeText(s.text).then(() => { copy.textContent = t("Copied"); }), "small");
       const auto = kind === "claude-code" ? btn(t("Add to Claude Code for me"), async () => {
         busy(true);
@@ -147,6 +158,35 @@ export function aiAppsView(ctx) {
     document.addEventListener("ai-apps-changed", again);
     list();
     return { tools: [], body: [card], refresh: () => { if (title.textContent === t("AI apps")) list(); } };
+}
+
+// Connect an AI app, as its own window (AI menu), shaped like Link a computer: AI apps on this computer, or the AI
+// apps that run online (the web, phones), which need the person's own server. ctx: as aiAppsView, plus onServer.
+export function connectDialog(ctx) {
+  return modal((done) => {
+    const view = aiAppsView(ctx);
+    const body = el("div", { class: "lk-body" });
+    const seg = el("div", { class: "seg lk-seg", role: "tablist", "aria-label": t("Where the AI app runs") });
+    const copyBtn = (text) => { const b = el("button", { class: "btn small", type: "button", onclick: () => navigator.clipboard.writeText(text).then(() => { b.textContent = t("Copied"); }) }, t("Copy")); return b; };
+    const online = () => ctx.onServer
+      ? [el("p", {}, t("Claude (website, desktop and phone), ChatGPT and other AI apps add a custom connector with this address. The AI app opens this server's page: sign in with your passphrase and press Allow.")),
+         el("div", { class: "ai-door" }, el("code", {}, ctx.door), copyBtn(ctx.door))]
+      : [el("p", {}, t("Claude on the web and on phones, ChatGPT and other AI apps that run online can't reach this computer. They connect to your own Phygital Memory Server, at its https address with /mcp at the end.")),
+         el("p", { class: "set-hint" }, t("Set one up with docs/server.md on GitHub, then link it here with Link a computer › To my server."))];
+    const tabs = [["here", ctx.onServer ? t("With a key") : t("On this computer")], ["online", t("On the web and phones")]];
+    const show = (k) => {
+      for (const b of seg.children) { const on = b.dataset.k === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); }
+      body.replaceChildren(...(k === "here" ? view.body : online()));
+    };
+    for (const [k, label] of tabs) seg.append(el("button", { class: "seg-b", type: "button", role: "tab", "data-k": k, onclick: () => show(k) }, label));
+    const card = el("div", { class: "dlg lk", role: "dialog", "aria-label": t("Connect an AI app") },
+      el("div", { class: "dlg-title" }, t("Connect an AI app")),
+      el("p", { class: "lk-intro" }, t("Each AI app gets its own key and reaches only the memories you pick. You can undo every change it makes.")),
+      seg, body,
+      el("div", { class: "dlg-actions" }, el("button", { class: "btn", type: "button", onclick: () => done(null) }, t("Close"))));
+    show("here");
+    return { card };
+  });
 }
 
 // The Allow window: an AI app signed in and waits for the person. Resolves {allow, folders, write}.

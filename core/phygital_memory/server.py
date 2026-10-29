@@ -110,10 +110,16 @@ mcp = MCPServer("phygital-memory", instructions=INSTRUCTIONS, title="Phygital Me
                                   revocation_options=RevocationOptions(enabled=True)))
 
 
+GUEST_KEY = {"key": ""}   # set when an AI app started this engine for itself (main: mcp)
+
+
 def _app() -> dict:
     """The AI app behind this call, with what it may reach right now (changes in Settings apply at once)."""
-    token = get_access_token()
-    app = gate.apps.get(token.client_id) if token else None
+    if GUEST_KEY["key"]:
+        app = gate.peek(GUEST_KEY["key"])
+    else:
+        token = get_access_token()
+        app = gate.apps.get(token.client_id) if token else None
     if not app:
         raise ToolError("This AI app isn't connected. The person connects it in Phygital Memory: Settings › AI apps.")
     return app
@@ -164,6 +170,9 @@ def _guard(fn, *a, **k):
 def _open_or_fail():
     app = _app()
     open_ = [f for f in folders.open() if _allowed(f, app)]
+    if not open_ and GUEST_KEY["key"]:
+        raise ToolError("Phygital Memory is closed, and this AI app may use no Open memory without it. Encrypted "
+                        "memories need the app: the person opens it and unlocks one. Never ask for the password.")
     if not open_:
         raise ToolError(f"No memory this app may use is unlocked. The person unlocks one in the Phygital Memory app "
                         f"({PAGE}). Never ask for the password.")
@@ -2399,13 +2408,13 @@ async def api(request: Request) -> Response:
             return _ok({"folder": folders.rename(f.id, body["name"])})
         # ---- AI apps (Settings › AI apps): only from a page that unlocked a memory with its password ----
         if action == "aiapps":
-            return _ok({"apps": gate.list(), "waiting": gate.waiting(), "door": f"{PAGE}mcp",
+            return _ok({"apps": gate.list(), "waiting": gate.waiting(), "door": f"{PAGE}mcp", "engine": _engine(),
                         "folders": [{"id": x.id, "name": x.name, "aiHidden": x.ai_hidden} for x in folders.items.values()]})
         if action == "aiappadd":   # a new key: shown once here, never stored
             app, key = gate.add_key(str(body.get("name", "")), str(body.get("kind", "other")),
                                     body.get("folders", "all"), bool(body.get("write")))
             approvals.add(f"New key for {app['name']}", _reach(app), "click")
-            return _ok({"app": app, "key": key, "door": f"{PAGE}mcp"})
+            return _ok({"app": app, "key": key, "door": f"{PAGE}mcp", "engine": _engine()})
         if action == "aiappupdate":
             app = gate.update(str(body.get("id")), body.get("folders"), body.get("write"))
             approvals.add(f"Changed {app['name']}", _reach(app), "click")
@@ -2858,6 +2867,14 @@ async def api(request: Request) -> Response:
     return _ok({"error": "Unknown action."}, 404)
 
 
+def _engine() -> str:
+    """The engine's own file, for AI apps that start it themselves (main: mcp). Only in the built app, and only where
+    it stays put across updates (an AppImage runs from a new temporary place each time). Empty: use the door."""
+    if not getattr(sys, "frozen", False) or os.environ.get("APPIMAGE") or hosted.ON:
+        return ""
+    return sys.executable
+
+
 def _claude_desktop_ext() -> str:
     """Write "Phygital Memory.mcpb" to Downloads and show it in Finder. Inside: the bridge (claude_ext/index.js, run
     by Claude Desktop's own Node), its icon, and a manifest that asks for the key on install (kept by Claude Desktop
@@ -2871,7 +2888,8 @@ def _claude_desktop_ext() -> str:
         "author": {"name": "Phygital Memory"}, "icon": "icon.png",
         "server": {"type": "node", "entry_point": "server/index.js",
                    "mcp_config": {"command": "node", "args": ["${__dirname}/server/index.js"],
-                                  "env": {"PM_URL": "${user_config.address}", "PM_KEY": "${user_config.key}"}}},
+                                  "env": {"PM_URL": "${user_config.address}", "PM_KEY": "${user_config.key}",
+                                          "PM_ENGINE": _engine()}}},
         "user_config": {
             "key": {"type": "string", "title": "Key from Phygital Memory", "sensitive": True, "required": True,
                     "description": "Phygital Memory › Settings › AI apps › Connect an AI app › Claude Desktop shows it once."},
@@ -2902,9 +2920,10 @@ def _claude_code_add(key: str) -> dict:
     else:
         return {"ok": False, "error": "Claude Code isn't installed on this Mac. Copy the command instead."}
     subprocess.run([str(exe), "mcp", "remove", "--scope", "user", "phygital-memory"], capture_output=True, timeout=60)
-    r = subprocess.run([str(exe), "mcp", "add", "--scope", "user", "--transport", "http", "phygital-memory",
-                        f"{PAGE}mcp", "--header", f"Authorization: Bearer {key}"],
-                       capture_output=True, text=True, timeout=60)
+    engine = _engine()   # Claude Code starts the engine itself, so Open memories work with the app closed too
+    how = (["-e", f"PHYGITAL_MEMORY_KEY={key}", "phygital-memory", "--", engine, "mcp"] if engine else
+           ["--transport", "http", "phygital-memory", f"{PAGE}mcp", "--header", f"Authorization: Bearer {key}"])
+    r = subprocess.run([str(exe), "mcp", "add", "--scope", "user", *how], capture_output=True, text=True, timeout=60)
     if r.returncode != 0:
         return {"ok": False, "error": "Claude Code said no: " + (r.stderr.strip().splitlines() or ["unknown"])[-1][:200]}
     return {"ok": True}
@@ -3070,6 +3089,125 @@ def _watch_parent() -> None:
     threading.Thread(target=watch, name="watch-parent", daemon=True).start()
 
 
+def _door_proves(key: str) -> bool:
+    """Is the Phygital Memory app open on this computer? Its door must answer a fresh challenge with
+    HMAC(sha256(key), challenge), which only the real app can make, before the key is sent (as claude_ext/index.js)."""
+    import hmac
+    import urllib.request
+    n = secrets.token_hex(24)
+    want = hmac.new(hashlib.sha256(key.encode()).hexdigest().encode(), n.encode(), hashlib.sha256).hexdigest()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/mcp-proof?n={n}", timeout=2) as r:
+            got = json.loads(r.read()).get("proofs") or []
+    except Exception:
+        return False
+    return any(isinstance(p, str) and hmac.compare_digest(p, want) for p in got)
+
+
+def _guest() -> None:
+    """`phygital-memory-server mcp`: the AI app starts the engine itself, over stdin and stdout, with its key in
+    PHYGITAL_MEMORY_KEY. When the app is open, every message goes to the app's door, so Encrypted memories, Undo and
+    the activity list work as usual. When it's closed, this process answers by itself with the Open memories the key
+    may reach, and ends with the AI app. No backups, no cloud drives and no window: those stay with the app."""
+    key = os.environ.get("PHYGITAL_MEMORY_KEY", "").strip()
+    if not key:
+        sys.exit("Phygital Memory: PHYGITAL_MEMORY_KEY is empty. Make a key in the app: AI › AI apps.")
+    if _door_proves(key):
+        return _pass_to_app(key)
+    if not gate.peek(key):
+        sys.exit("Phygital Memory doesn't know this key. Make a new one in the app: AI › AI apps.")
+    GUEST_KEY["key"] = key
+    opened = []
+    for f in folders.items.values():
+        if f.plain and not f.cloud_at and not f.ai_hidden and f.path.is_dir():
+            try:
+                f.memory.unlock("")
+                opened.append(f)
+            except Exception as e:
+                print(f"Phygital Memory: couldn't open {f.name}: {e}", file=sys.stderr)
+    print(f"Phygital Memory {VERSION}: the app is closed, so this AI app reaches {len(opened)} Open memories by itself.",
+          file=sys.stderr)
+    try:
+        mcp.run("stdio")
+    finally:
+        for f in opened:
+            f.memory.lock()
+
+
+def _pass_to_app(key: str) -> None:
+    """The app is open: each message from the AI app goes to its door, one at a time, and the answers come back."""
+    import urllib.error
+    import urllib.request
+    door, s = f"http://127.0.0.1:{PORT}/mcp", {"session": None, "hello": None}
+
+    def out(m):
+        sys.stdout.write(json.dumps(m) + "\n")
+        sys.stdout.flush()
+
+    def fail(m, text):
+        if m.get("id") is not None:
+            out({"jsonrpc": "2.0", "id": m["id"], "error": {"code": -32000, "message": text}})
+
+    def post(m):
+        h = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+             "Authorization": f"Bearer {key}", **({"Mcp-Session-Id": s["session"]} if s["session"] else {})}
+        try:
+            return urllib.request.urlopen(urllib.request.Request(door, json.dumps(m).encode(), h, method="POST"),
+                                          timeout=600)
+        except urllib.error.HTTPError as e:
+            return e
+
+    def answers(res):   # a plain JSON answer, or an event stream that ends with the answer
+        text = res.read().decode("utf-8", "replace")
+        if "text/event-stream" in (res.headers.get("content-type") or ""):
+            datas = ["\n".join(ln[5:].lstrip() for ln in b.splitlines() if ln.startswith("data:"))
+                     for b in re.split(r"\r?\n\r?\n", text)]
+            return [json.loads(d) for d in datas if d]
+        v = json.loads(text) if text.strip() else []
+        return v if isinstance(v, list) else [v]
+
+    def send(m, again=True):
+        try:
+            if not _door_proves(key):
+                return fail(m, "Phygital Memory was closed, or this key was removed. Open the app, or start a new "
+                               "chat: with the app closed, your AI reaches your Open memories by itself.")
+            res = post(m)
+        except (urllib.error.URLError, OSError):
+            return fail(m, "Phygital Memory was closed. Open it again, or start a new chat: with the app closed, "
+                           "your AI reaches your Open memories by itself.")
+        status = getattr(res, "status", None) or res.code
+        s["session"] = res.headers.get("mcp-session-id") or s["session"]
+        if status == 404 and s["session"] and again and s["hello"]:   # the app restarted: say hello again, retry once
+            s["session"] = None
+            r = post(s["hello"])
+            s["session"] = r.headers.get("mcp-session-id") or s["session"]
+            r.read()
+            post({"jsonrpc": "2.0", "method": "notifications/initialized"}).read()
+            return send(m, False)
+        if status == 401:
+            return fail(m, "Phygital Memory refused the key. Make a new one in the app: AI › AI apps.")
+        if status in (202, 204):
+            return res.read()
+        if status >= 400:
+            return fail(m, f"Phygital Memory answered with an error ({status}).")
+        try:
+            for a in answers(res):
+                out(a)
+        except ValueError:
+            fail(m, "Phygital Memory sent an answer that couldn't be read.")
+
+    for line in sys.stdin:
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(m, dict):
+            continue
+        if m.get("method") == "initialize":
+            s["hello"] = m
+        send(m)
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "create":
         import getpass
@@ -3087,6 +3225,8 @@ def main() -> None:
             log.replace(log.with_suffix(".old.log"))
         sys.stderr = open(log, "a", buffering=1, encoding="utf-8", errors="replace")
         faulthandler.enable(sys.stderr)
+    if sys.argv[1:2] == ["mcp"]:
+        return _guest()
     if hosted.ON:
         from . import syncthing as st_mod
         st_mod.ADDRESS = st_mod.ADDRESS or hosted.sync_address()   # computers dial the server's public sync port first

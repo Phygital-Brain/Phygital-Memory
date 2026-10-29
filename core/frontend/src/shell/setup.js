@@ -37,9 +37,11 @@ const QUESTIONS = () => [
 ];
 
 // A new memory: one kind or the other, never both
-const KINDS = () => ({ key: "kind", one: true, q: t("What kind of memory?"), options: [
+// Open is marked Recommended: it fits most people (docs/find-your-threat-model.md says who needs Encrypted)
+const KINDS = () => ({ key: "kind", one: true, q: t("What kind of memory?"),
+  hint: t("You can't switch later. Not sure? Open fits most people. Find your threat model in the docs says when you need Encrypted."), options: [
   ["open", t("Open@@kind"), ON_SERVER ? t("A normal folder on this server. Every AI app you connect can read it.")
-    : t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive.")],
+    : t("A normal folder. Any AI reads it, and your phone gets it through iCloud Drive, Dropbox or Google Drive."), t("Recommended")],
   ["encrypted", t("Encrypted"), ON_SERVER ? t("Locked with your password. Only the AI apps you allow get in.")
     : t("Locked with your password. Only the AI apps you allow get in, through this app. Not on phones yet.")]] });
 
@@ -234,7 +236,7 @@ export function renderSetup(body, ctx) {
     const n = q.options.length;   // rows that come out even: 2 and 4 in twos, 5 and 6 in threes, 7 as 4+3
     const grid = el("div", { class: `sp-grid c${n <= 2 || n === 4 ? 2 : n <= 6 ? 3 : 4}` + (q.agent ? " agent" : "") + (q.one ? " kinds" : ""),
       role: q.one ? "radiogroup" : "group", "aria-label": q.q });
-    q.options.forEach(([v, label, desc], k) => {
+    q.options.forEach(([v, label, desc, badge], k) => {
       const on = () => answers[q.key].includes(v);
       const card = el("button", { class: "sp-card" + (on() ? " on" : "") + (q.one ? ` k-${v}` : ""), type: "button", role: q.one ? "radio" : "checkbox", "aria-checked": String(on()),
         style: `--i:${k}`,
@@ -258,7 +260,7 @@ export function renderSetup(body, ctx) {
           refreshNext();
         } },
         el("span", { class: "sp-art" }, art(v)),
-        el("span", { class: "sp-text" }, el("span", { class: "sp-label" }, label), el("span", { class: "sp-desc" }, desc)),
+        el("span", { class: "sp-text" }, el("span", { class: "sp-label" }, label, badge ? el("span", { class: "sp-badge" }, badge) : null), el("span", { class: "sp-desc" }, desc)),
         el("span", { class: "sp-tick" }, icon("check", 12, 2.6)),
         el("kbd", { class: "sp-key" }, String(k + 1)));
       grid.append(card);
@@ -353,7 +355,7 @@ export function renderSetup(body, ctx) {
         await navigator.clipboard.writeText(k).catch(() => {});
         tick(t("Saved in Downloads. Your key is copied: paste it when Claude Desktop asks."));
       }),
-      way(t("Another AI app"), t("Codex, Cursor and others: the AI window has the setup."), t("Open"), async () => ctx.openAI("apps")),
+      way(t("Another AI app"), t("Codex, Cursor and others: Connect an AI app has the setup."), t("Open"), async () => ctx.openConnect()),
       out,
       el("div", { class: "sp-end" },
         el("button", { class: "btn", type: "button", onclick: finishView }, t("Skip")),

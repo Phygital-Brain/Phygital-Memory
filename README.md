@@ -114,8 +114,8 @@ Or Coolify, or Docker Compose on any server: [Run it on your own server](docs/se
 
 1. **Make a memory.** Open the app and press **New memory**. Give it a name, pick **Open** or **Encrypted**, choose where it lives, and press **Set it up**. The app builds a ready-made set of folders for you (a Phygital Brain), or you can start empty.
 2. **Write.** Press **New note**, or open a folder on the left. Notes are Markdown. **Home** shows today's note and what you changed lately. Search finds anything across your memories.
-3. **Connect your AI.** In **Settings › AI apps**, press **Add to Claude Code**, or **Download** the extension for Claude Desktop (Mac). For Codex, Cursor and others, see [Connect your AI](docs/connect-your-ai.md).
-4. **Ask your AI.** Keep the app open and ask things like *"Search my memory for the logo brief"* or *"What did I decide about pricing?"*. More ideas in [Things to ask](docs/examples.md).
+3. **Connect your AI.** In **AI › Connect an AI app**, press **Add to Claude Code**, or **Download** the extension for Claude Desktop (Mac). For Codex, Cursor and others, see [Connect your AI](docs/connect-your-ai.md).
+4. **Ask your AI.** Ask things like *"Search my memory for the logo brief"* or *"What did I decide about pricing?"*. More ideas in [Things to ask](docs/examples.md).
 5. **Let it write, when you're ready.** Switch on **Allow edits** for that AI app in **Settings › AI apps**. Every change it makes shows in **AI tasks and activity**, with **Undo**.
 6. **Give it work.** On any note, press **Give AI a task** and say what you want. Then tell your AI *"Do my Phygital Memory tasks."*
 7. **Lock it.** An Encrypted memory locks with **Lock** and opens again with your password (or Touch ID on a Mac).
@@ -166,7 +166,7 @@ The full list of what leaves your computer, and when, is in [Privacy](docs/priva
 | **Recovery key** | 44 words that let you set a new password for an Encrypted memory. Keep them offline. |
 | **AI app** | Claude Code, Claude Desktop, Codex, Cursor or any app that can use tools through MCP. |
 | **MCP** | Model Context Protocol: the standard way AI apps plug into tools like this one. |
-| **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. |
+| **The AI door** | The part of the app that AI apps talk to, at `http://127.0.0.1:8790/mcp`. It exists only while the app is open. AI apps can also start the engine themselves, which reaches Open memories with the app closed. |
 | **Allow edits** | The switch that lets one AI app change notes. Off means read only. |
 | **Private for AI** | A folder or note the AI opens only when you ask in the chat. The tools follow this rule. The folder itself stays readable. |
 | **AI tasks** | A hidden note in each memory where you leave work for your AI. It is never shared. |
@@ -208,6 +208,7 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [Settings](docs/settings.md) | You want to change how the app works, or find where something is kept |
 | [Safety](docs/safety.md) | Before you let an AI read or change your notes |
 | [Privacy](docs/privacy.md) | You want to know what leaves your computer and who can see what |
+| [Find your threat model](docs/find-your-threat-model.md) | You are making a memory and want to pick Open or Encrypted |
 | [Threat model](docs/threat-model.md) | You want to know what the app protects against, and what it cannot |
 | [How it works](docs/how-it-works.md) | You want to know what happens inside, in plain words |
 | [Updates](docs/updates.md) | You want to know how the app gets updated |
