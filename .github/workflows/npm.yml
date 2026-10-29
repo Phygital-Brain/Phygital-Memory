@@ -1,0 +1,37 @@
+# Publishes the npx phygital-memory installer (npm/) when a GitHub Release is published, with the release's version.
+# No npm token: npm trusts this workflow directly (Trusted Publisher, set on npmjs.com for this repo and this file),
+# and the package gets a provenance statement saying it was built here.
+name: npm
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.repository == 'Phygital-Brain/Phygital-Memory'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write   # to prove to npm that this workflow is publishing
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1, pinned
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false   # a release build uses no cache, so nothing cached can sneak in
+      - name: Publish with the release's version
+        working-directory: npm
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          npm --version   # trusted publishing needs npm 11.5.1 or newer, which Node 24 ships with
+          npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+          npm publish --access public --provenance
