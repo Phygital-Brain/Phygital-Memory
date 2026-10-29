@@ -38,10 +38,10 @@ mkdir -p app/src-tauri/server/touchid && cp -p "$T/bin/Phygital Memory" app/src-
 export TAURI_SIGNING_PRIVATE_KEY="$(cat "$SIGN/updater.key")"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$SIGN/updater-password")"
 # The .dmg step sometimes can't eject its disk image ("Resource busy"): then build just the app, which is what gets installed.
-rm -f "app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.0_aarch64.dmg"   # so an old .dmg never passes for a new one
+rm -f "app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.1_aarch64.dmg"   # so an old .dmg never passes for a new one
 (cd app && cargo tauri build --bundles app,dmg >/tmp/pm-tauri.log 2>&1) || (cd app && cargo tauri build --bundles app >>/tmp/pm-tauri.log 2>&1)
 check_helper "app/src-tauri/target/release/bundle/macos/Phygital Memory.app/Contents/Resources/server/touchid/Phygital Memory"
-DMG="app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.0_aarch64.dmg"
+DMG="app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.1_aarch64.dmg"
 if [ -f "$DMG" ]; then   # the finished .dmg goes in release/, wearing the app icon in Finder
   mkdir -p release   # not in a fresh copy (git ignores it)
   cp "$DMG" "release/Phygital Memory.dmg"

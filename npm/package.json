@@ -1,6 +1,6 @@
 {
   "name": "phygital-memory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Installs the Phygital Memory desktop app: a notes app that becomes your second brain. Run: npx phygital-memory",
   "bin": { "phygital-memory": "install.js" },
   "files": ["install.js", "README.md"],

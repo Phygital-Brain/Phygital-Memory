@@ -23,9 +23,9 @@ You do this once for each version you install by hand.
 **Why:** an AppImage needs FUSE to run.
 **Fix:** install your system's FUSE 2 package (often called `libfuse2`), then open it again. Or use the `.deb` or `.rpm` instead.
 
-**What you see (Windows):** the app stops after **Show in folder**, a folder picker does not appear, or the close button does nothing.
-**Why:** these are known Windows issues, waiting for a retest. The folder picker may have opened hidden behind the app.
-**Fix:** look for the picker behind the app window or in the taskbar. If the app stopped, open it again. If it keeps happening, tell us in a [bug form](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=bug_report.yml).
+**What you see (Windows):** the folder picker takes a few seconds to appear.
+**Why:** Windows opens its folder picker slowly the first time.
+**Fix:** wait about 10 seconds. If it still does not appear, look in the taskbar, and tell us in a [bug form](https://github.com/Phygital-Brain/Phygital-Memory/issues/new?template=bug_report.yml).
 
 **What you see:** "Another program is using this app's port (8790). Quit it, then open Phygital Memory again."
 **Why:** the app's local program needs port 8790 on your computer, and something else holds it. The app refuses to talk to a program on that port that cannot prove it is the app's own.

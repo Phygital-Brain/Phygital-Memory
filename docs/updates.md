@@ -28,6 +28,9 @@ Updates are signed with the project's update key. The app installs only an updat
 
 The check is a request to `github.com` for `latest.json` (a small file that names the newest version) and, when there is an update, the download. Nothing about your notes is sent. See [privacy.md](privacy.md#what-leaves-your-computer).
 
+> [!IMPORTANT]
+> **From 0.1.0 to 0.1.1, update by hand once.** Version 0.1.1 uses a new update key, so 0.1.0 can't install it by itself. Download 0.1.1 from the releases page and install it over 0.1.0. Updates are automatic again after that.
+
 ## Update by hand
 
 1. Download the new file from the releases page.

@@ -2865,7 +2865,7 @@ def _claude_desktop_ext() -> str:
     import zipfile
     ext = HERE / "claude_ext"
     manifest = {
-        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.0",
+        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.1",
         "description": "Your locked notes in Phygital Memory, through the app on this Mac. Only unlocked memories, "
                        "only what you allowed in its Settings › AI apps.",
         "author": {"name": "Phygital Memory"}, "icon": "icon.png",

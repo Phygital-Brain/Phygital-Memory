@@ -13,7 +13,7 @@ Phygital Memory is a desktop app for Mac, Windows and Linux that keeps a person'
 
 It runs as one app window (Tauri, Rust) that starts one local program (Python) listening on `127.0.0.1:8790`. That program serves the app's screens, the app's own `/api`, and the MCP door at `/mcp`.
 
-It runs on Mac (one universal build for Apple and Intel; Intel will be dropped in a later release), Windows (x64; Windows on ARM through emulation) and Linux (x64 and ARM). Windows is built but not fully tested. What differs between the systems is kept in `core/phygital_memory/system.py`. Releases come from GitHub Releases, and the app updates itself from the latest one (see [docs/updates.md](docs/updates.md)). License: AGPL-3.0-only (see `LICENSE` and `NOTICE`); every new source file may carry `SPDX-License-Identifier: AGPL-3.0-only`.
+It runs on Mac (one universal build for Apple and Intel; Intel will be dropped in a later release), Windows (x64; Windows on ARM through emulation) and Linux (x64 and ARM). Windows was retested by hand with 0.1.0. What differs between the systems is kept in `core/phygital_memory/system.py`. Releases come from GitHub Releases, and the app updates itself from the latest one (see [docs/updates.md](docs/updates.md)). License: AGPL-3.0-only (see `LICENSE` and `NOTICE`); every new source file may carry `SPDX-License-Identifier: AGPL-3.0-only`.
 
 Works with Cryptomator vaults (it speaks their file format 8 and contains no Cryptomator code). Not made by or affiliated with Cryptomator. It also uses Syncthing and rclone as helper programs.
 

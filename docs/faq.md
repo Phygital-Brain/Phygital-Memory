@@ -42,7 +42,7 @@ Pick Open if you want any AI app, and your phone, to read your notes with no set
 <details>
 <summary><b>Which computers does it work on?</b></summary>
 
-Mac (one download for Apple chip and Intel Macs), Windows (x64, and Windows on ARM through emulation) and Linux (x64 and ARM). The Mac app is used every day. Windows is built but not fully tested yet, and has known issues waiting for a retest. The Intel Mac build will be dropped in a later release. See [what we tested](setup-computer.md#what-we-tested).
+Mac (one download for Apple chip and Intel Macs), Windows (x64, and Windows on ARM through emulation) and Linux (x64 and ARM). The Mac app is used every day. Windows was tested by hand on Windows on ARM in a virtual machine. The Intel Mac build will be dropped in a later release. See [what we tested](setup-computer.md#what-we-tested).
 
 </details>
 

@@ -4,13 +4,12 @@ What might come next. Nothing here is promised or has a date. If you want one of
 
 ## Done
 
-- **Windows and Linux.** Built from the same code as the Mac app, on GitHub, from one tag.
+- **Windows and Linux.** Built from the same code as the Mac app, on GitHub, from one tag. Windows retested by hand with 0.1.0.
 - **Auto-update.** The app updates itself from the latest GitHub Release. See [updates.md](updates.md).
 - **Your own server.** The same app on a server you own, so the AI on your phone reaches your memories when the computer is off. See [server.md](server.md). Not tried on a real server yet.
 
 ## Wanted
 
-- **Windows: finish testing and fix known issues.** Waiting for a retest: **Show in folder** could stop the app's engine, the folder picker could open hidden, and the close button once did nothing.
 - **Code signing for Mac and Windows.** It would remove the one-time **Open Anyway** step on a Mac and the "unknown publisher" warning on Windows.
 - **Drop the Intel Mac build in a later release.** The Mac download is one file for Apple and Intel today.
 - **Native speakers for the translations.** All 41 languages were made with AI and checked by a script. A person who reads them is worth more than any tool.

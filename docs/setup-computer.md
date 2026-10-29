@@ -4,7 +4,7 @@ For when you want to try Phygital Memory on a Mac, Windows or Linux computer, fr
 
 ## Before you start
 
-- A Mac (Apple chip or Intel), a Windows computer (x64, or Windows on ARM through emulation), or a Linux computer (x64 or ARM). Windows is built but not fully tested yet. See [what we tested](#what-we-tested).
+- A Mac (Apple chip or Intel), a Windows computer (x64, or Windows on ARM through emulation), or a Linux computer (x64 or ARM). Windows was tested in a virtual machine. See [what we tested](#what-we-tested).
 - An AI app that can use MCP tools: Claude Code, Claude Desktop, Cursor or Codex. See [connect-your-ai.md](connect-your-ai.md).
 - No other program using port 8790 on your computer.
 
@@ -129,6 +129,6 @@ There is no phone app. An **Open** memory kept in iCloud Drive, Dropbox or Googl
 |---|---|---|
 | Mac (Apple chip) | Used every day, built from this repository, with the test scripts in `core/tests/` | Works |
 | Linux on ARM | A virtual machine | Works |
-| Windows on ARM | A virtual machine | Installs and opens. Known issues waiting for a retest: **Show in folder** could stop the app's engine, the folder picker could open hidden behind the app, and the close button once did nothing |
+| Windows on ARM | A virtual machine | Works (retested with 0.1.0). **Open folder** on Home did not visibly open a window |
 | Linux x64, Windows x64, Intel Mac | The engine tests on GitHub's machines only | Not tried by hand yet |
 | A real Finder drag, a real Touch ID unlock, a real Nextcloud server | Checked by hand | Not yet fully tested |

@@ -48,7 +48,7 @@ For anyone deciding where to use Phygital Memory. It says what the app protects 
 
 ## Not audited yet
 
-Nobody outside the project has audited the code. It is not certified and we do not claim it is secure. The tests in `core/tests/` check the rules in [AGENTS.md](../AGENTS.md), but tests are not an audit. A security review of the whole app is planned. The Windows and Linux builds use new code in some places (the secret store, the pickers, the file manager) and need the same review. Windows is not fully tested yet.
+Nobody outside the project has audited the code. It is not certified and we do not claim it is secure. The tests in `core/tests/` check the rules in [AGENTS.md](../AGENTS.md), but tests are not an audit. A security review of the whole app is planned. The Windows and Linux builds use new code in some places (the secret store, the pickers, the file manager) and need the same review.
 
 ## What next
 
