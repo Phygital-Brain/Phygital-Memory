@@ -17,6 +17,14 @@
 </p>
 
 <p align="center">
+<a href="core/languages/TRANSLATING.md"><img src="https://img.shields.io/badge/languages-41%20ready%2C%20add%20yours-C8F031?labelColor=0B0D12" alt="41 languages ready, add yours"></a>
+<a href="docs/connect-your-ai.md"><img src="https://img.shields.io/badge/agents-Claude%2C%20Codex%2C%20Hermes%20Agent%2C%20OpenClaw%20and%20others-8A94FF?labelColor=0B0D12" alt="Agents: Claude, Codex, Hermes Agent, OpenClaw and others"></a>
+<a href="docs/how-it-works.md"><img src="https://img.shields.io/badge/notes-plain%20Markdown-F1EDE4?labelColor=0B0D12" alt="Notes: plain Markdown"></a>
+<a href="docs/privacy.md"><img src="https://img.shields.io/badge/telemetry-none-0B0D12" alt="No telemetry"></a>
+<a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/pull%20requests-welcome-C8F031?labelColor=0B0D12" alt="Pull requests welcome"></a>
+</p>
+
+<p align="center">
 <a href="https://github.com/Phygital-Brain/Phygital-Memory/releases">Download</a> ·
 <a href="docs/setup-computer.md">Get started</a> ·
 <a href="docs/connect-your-ai.md">Connect your AI</a> ·
