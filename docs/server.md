@@ -9,7 +9,7 @@ You get two things at your address, say `https://memory.example.com`:
 
 ## What it can reach
 
-Only the memories on the server. Nothing on your computer.
+It reaches only the memories on the server, never your computer.
 
 - The same 17 tools as the desktop app ([the list](tools.md)). Search goes through Engram, like on your computer.
 - Every AI app starts **read only**. You choose which memories it sees, and turn on **Allow edits** for each one.
@@ -26,10 +26,10 @@ Pick one. Each gives you an address with HTTPS, and keeps your memories on a dis
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/phygital-memory)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory)
 
-- **Railway:** press the button, then Deploy. Railway gives the server its address and a disk, and the server picks up the address by itself.
-- **Render:** press the button, then Apply. It uses Render's smallest paid plan, because the free one has no disk. The server picks up its address by itself.
+- **Railway:** press the button, then Deploy. Railway gives the server its address and a disk.
+- **Render:** press the button, then Apply. It uses Render's smallest paid plan, because the free one has no disk.
 
-Then open the address Railway or Render shows you, for [the first visit](#the-first-visit).
+On both, the server picks up its address by itself. Then open the address Railway or Render shows you, for [the first visit](#the-first-visit).
 
 On Railway and Render there is no WebDAV drive (they don't allow one), and syncing with your computer goes through relays, which is a little slower.
 
@@ -63,7 +63,7 @@ docker run -d --name phygital-memory --restart unless-stopped -p 8790:8790 -p 22
 
 ## The first visit
 
-Open your server's address. It asks you to choose its passphrase: 12 characters or more, used nowhere else. First it wants the **setup code** it wrote in its log, so nobody who finds the address before you can claim the server. The page shows where the log is for each host. With Docker Compose:
+Open your server's address. It asks you to choose its passphrase: 12 characters or more, used nowhere else. First it wants the setup code it wrote in its log, so nobody who finds the address before you can claim the server. The page shows where the log is for each host. With Docker Compose:
 
 ```bash
 docker compose logs memory
@@ -81,7 +81,7 @@ The code stays the same until you set the passphrase. After that, the page asks 
 | `PHYGITAL_MEMORY_SYNC_PORT` | The port for syncing with your computers. `22000` in the image |
 | `PHYGITAL_MEMORY_SYNC_ADDRESS` | Optional. Where computers reach that port, like `tcp://memory.example.com:22000`. By default your address's name and the sync port |
 
-The passphrase chosen on the first visit is never written down: the server keeps only a fingerprint of it. To choose a new one, delete `state/passphrase.json` on the `/data` disk and restart: the first visit comes back, with a new setup code. If you set `PHYGITAL_MEMORY_PASSPHRASE`, keep it in your host's secret settings or in `.env`, never in a file you share.
+The passphrase chosen on the first visit is never written down. The server keeps only a fingerprint of it. To choose a new one, delete `state/passphrase.json` on the `/data` disk and restart. The first visit comes back, with a new setup code. If you set `PHYGITAL_MEMORY_PASSPHRASE`, keep it in your host's secret settings or in `.env`, never in a file you share.
 
 ## Connect your AI apps
 
