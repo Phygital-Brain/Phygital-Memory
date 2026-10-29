@@ -545,12 +545,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cheroot", specifier = ">=10" },
-    { name = "cryptography", specifier = ">=44" },
-    { name = "keyring", marker = "sys_platform != 'darwin'", specifier = ">=25" },
+    { name = "cheroot", specifier = ">=11.1.2" },
+    { name = "cryptography", specifier = ">=50.0.2" },
+    { name = "keyring", marker = "sys_platform != 'darwin'", specifier = ">=25.7.0" },
     { name = "mcp", specifier = ">=2.3,<3" },
     { name = "pypdf", specifier = ">=6.21.2" },
-    { name = "wsgidav", specifier = ">=4.3" },
+    { name = "wsgidav", specifier = ">=4.3.5" },
 ]
 
 [package.metadata.requires-dev]
