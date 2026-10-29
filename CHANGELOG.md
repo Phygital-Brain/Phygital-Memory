@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2 (2026-10-29)
+
+- A tidier start screen: the three tags on one line, smaller New memory and Open memory buttons, and the language picker the same width.
+- **Connect an AI app › On the web and phones** is shorter and ends with a link to the full guide.
+
 ## 0.1.1 (2026-10-29)
 
 - AI agents can start Phygital Memory themselves. With the app closed, they reach your Open memories (search, read and, with Allow edits, write). With the app open, they go through it as before. The setup the app shows uses this when it can. See [docs/connect-your-ai.md](docs/connect-your-ai.md#two-ways-in).
