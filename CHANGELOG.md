@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Claude Code command the app shows, and its **Add to Claude Code for me** button, put the server's name first. Before, Claude Code read the name as part of the key setting and refused the command.
+
 ## 0.1.2 (2026-10-29)
 
 - A tidier start screen: the three tags on one line, smaller New memory and Open memory buttons, and the language picker the same width.

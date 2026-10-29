@@ -32,7 +32,7 @@ The quickest way: in **AI › Connect an AI app**, pick **Claude Code** and pres
 By hand on a Mac, run this in a terminal, with your key in place of `YOUR_KEY`:
 
 ```bash
-claude mcp add --scope user -e PHYGITAL_MEMORY_KEY=YOUR_KEY phygital-memory -- "/Applications/Phygital Memory.app/Contents/Resources/server/phygital-memory-server" mcp
+claude mcp add phygital-memory --scope user -e PHYGITAL_MEMORY_KEY=YOUR_KEY -- "/Applications/Phygital Memory.app/Contents/Resources/server/phygital-memory-server" mcp
 ```
 
 Or through the door, which needs the app open:

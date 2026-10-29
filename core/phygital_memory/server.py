@@ -2927,9 +2927,10 @@ def _claude_code_add(key: str) -> dict:
         return {"ok": False, "error": "Claude Code isn't installed on this Mac. Copy the command instead."}
     subprocess.run([str(exe), "mcp", "remove", "--scope", "user", "phygital-memory"], capture_output=True, timeout=60)
     engine = _engine()   # Claude Code starts the engine itself, so Open memories work with the app closed too
-    how = (["-e", f"PHYGITAL_MEMORY_KEY={key}", "phygital-memory", "--", engine, "mcp"] if engine else
-           ["--transport", "http", "phygital-memory", f"{PAGE}mcp", "--header", f"Authorization: Bearer {key}"])
-    r = subprocess.run([str(exe), "mcp", "add", "--scope", "user", *how], capture_output=True, text=True, timeout=60)
+    # The name goes first: -e takes every word after it, so a name after -e is read as another setting
+    how = (["-e", f"PHYGITAL_MEMORY_KEY={key}", "--", engine, "mcp"] if engine else
+           ["--transport", "http", f"{PAGE}mcp", "--header", f"Authorization: Bearer {key}"])
+    r = subprocess.run([str(exe), "mcp", "add", "phygital-memory", "--scope", "user", *how], capture_output=True, text=True, timeout=60)
     if r.returncode != 0:
         return {"ok": False, "error": "Claude Code said no: " + (r.stderr.strip().splitlines() or ["unknown"])[-1][:200]}
     return {"ok": True}

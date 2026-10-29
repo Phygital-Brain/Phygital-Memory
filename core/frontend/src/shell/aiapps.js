@@ -42,7 +42,7 @@ function setupFor(kind, door, key, engine) {
   const name = "phygital-memory";
   if (engine) switch (kind) {
     case "claude-code":
-      return { where: t("Run this in Terminal:"), text: `claude mcp add --scope user -e PHYGITAL_MEMORY_KEY=${key} ${name} -- "${engine}" mcp` };
+      return { where: t("Run this in Terminal:"), text: `claude mcp add ${name} --scope user -e PHYGITAL_MEMORY_KEY=${key} -- "${engine}" mcp` };
     case "cursor":
       return { where: t("Add this to ~/.cursor/mcp.json:"), text: JSON.stringify({ mcpServers: { [name]: { command: engine, args: ["mcp"], env: { PHYGITAL_MEMORY_KEY: key } } } }, null, 2) };
     case "codex":
