@@ -34,4 +34,5 @@ jobs:
         run: |
           npm --version   # trusted publishing needs npm 11.5.1 or newer, which Node 24 ships with
           npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+          node readme.mjs "$TAG"   # the npm page shows the project's full README, its links pointing at this release
           npm publish --access public --provenance
