@@ -231,6 +231,7 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [`server/`](server) | Phygital Memory Server: the Docker image and Compose files ([guide](docs/server.md)). |
 | [`render.yaml`](render.yaml) | The Deploy to Render button's settings for the server (Render looks for it here). |
 | [`npm/`](npm) | The `npx phygital-memory` installer on npm. It downloads the latest app from Releases. |
+| [`glama.json`](glama.json) | Who maintains the listing on [Glama](https://glama.ai/mcp/servers), the MCP server directory. |
 | [`brand/`](brand) | Logo, colours, icons and the brand guide. |
 | [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 
