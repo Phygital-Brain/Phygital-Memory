@@ -43,6 +43,7 @@ rm -f "app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.0_aarch64.dmg
 check_helper "app/src-tauri/target/release/bundle/macos/Phygital Memory.app/Contents/Resources/server/touchid/Phygital Memory"
 DMG="app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.0_aarch64.dmg"
 if [ -f "$DMG" ]; then   # the finished .dmg goes in release/, wearing the app icon in Finder
+  mkdir -p release   # not in a fresh copy (git ignores it)
   cp "$DMG" "release/Phygital Memory.dmg"
   osascript -l JavaScript -e 'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.setIconForFileOptions($.NSImage.alloc.initWithContentsOfFile("'"$PWD/brand/png/app-icon-1024.png"'"), "'"$PWD/release/Phygital Memory.dmg"'", 0)' >/dev/null
   echo "built: release/Phygital Memory.dmg"
