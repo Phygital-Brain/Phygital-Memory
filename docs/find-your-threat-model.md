@@ -58,7 +58,7 @@ Write one sentence that sums up your grid, like the people below. Check every ch
 
 **Ana, freelance developer, notes in Dropbox.** "Work notes are fine to show, but my journal isn't." Two memories: an **Open** one for work, and an **Encrypted** one for the journal. You can have as many memories as you like, each of its own kind.
 
-**Leo, therapist.** "Session notes about clients must never be readable by my cloud or by anyone who gets my laptop." Privacy from people: 3. From companies: 3. **Encrypted.** He keeps those notes away from online AI: the memory is marked **AI can't see this**. To use AI on them later, he'd turn that off only for a self-hosted AI on his own computer.
+**Leo, therapist.** "Session notes about clients must never be readable by my cloud or by anyone who gets my laptop." Privacy from people: 3. From companies: 3. **Encrypted.** He keeps those notes away from online AI: the memory is marked **AI can't see this**. To use AI on them later, he'd turn that off and connect only a self-hosted AI on his own computer.
 
 **Sara, journalist.** "The people I interview trust me with their names. Those notes must stay safe if my laptop is lost or my cloud account leaks." Privacy from people: 3. Leaks and loss: 3. **Encrypted**, locked when she travels, and the interview notes marked **Private for AI**.
 
