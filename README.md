@@ -19,6 +19,7 @@
 <p align="center">
 <a href="core/languages/TRANSLATING.md"><img src="https://img.shields.io/badge/languages-41%20ready%2C%20add%20yours-C8F031?labelColor=0B0D12" alt="41 languages ready, add yours"></a>
 <a href="docs/connect-your-ai.md"><img src="https://img.shields.io/badge/agents-Claude%2C%20Codex%2C%20Hermes%20Agent%2C%20OpenClaw%20and%20others-8A94FF?labelColor=0B0D12" alt="Agents: Claude, Codex, Hermes Agent, OpenClaw and others"></a>
+<a href="https://github.com/Phygital-Brain/phygital-engram"><img src="https://img.shields.io/badge/search-Engram%2C%20about%2011%20ms-C8F031?labelColor=0B0D12" alt="Search: Phygital Engram, about 11 ms"></a>
 <a href="docs/how-it-works.md"><img src="https://img.shields.io/badge/notes-plain%20Markdown-F1EDE4?labelColor=0B0D12" alt="Notes: plain Markdown"></a>
 <a href="docs/privacy.md"><img src="https://img.shields.io/badge/telemetry-none-0B0D12" alt="No telemetry"></a>
 <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/pull%20requests-welcome-C8F031?labelColor=0B0D12" alt="Pull requests welcome"></a>
@@ -175,7 +176,8 @@ The full list of what leaves your computer, and when, is in [Privacy](docs/priva
 
 <p align="center"><img src="docs/images/storage.png" alt="Where a memory can live: this computer, a synced cloud folder or WebDAV. Where it can be backed up: private GitHub, a WebDAV server, Amazon S3 or Cloudflare R2, or a backup file. It can also be shared straight between computers." width="100%"></p>
 
-- **Write and find.** An editor, search across your memories, a note graph, and **Version history** for every note.
+- **Write.** An editor, a note graph, and **Version history** for every note.
+- **Find in milliseconds.** Search across your memories runs on [Phygital Engram](https://github.com/Phygital-Brain/phygital-engram), built in. It finds the right note and the exact line, in about 11 ms per search in Engram's own tests ([how they were measured](https://github.com/Phygital-Brain/phygital-engram/blob/main/docs/benchmarks.md)). Your AI apps search the same way, and nothing leaves your computer.
 - **Undo.** A trash that keeps things for 7 days, and **Undo** for every change an AI made.
 - **Let AI apps in, one by one.** 17 tools for search, read, write, move, trash and AI tasks. See [docs/tools.md](docs/tools.md).
 - **AI tasks.** Press **Give AI a task** on a note, then ask your AI *"Do my Phygital Memory tasks."*
