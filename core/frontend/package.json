@@ -7,7 +7,7 @@
     "watch": "node build.mjs --watch"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12"
+    "esbuild": "^0.28.2"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",
