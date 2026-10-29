@@ -2,7 +2,7 @@
 
 For when you make a new memory and have to pick **Open** or **Encrypted**. You can't switch later, so this page helps you pick once. You leave knowing which one fits you, and why.
 
-A threat model is a short answer to two questions: **what do you want to keep safe, and from whom?** This page uses the simple grid from [Techlore](https://techlore.tech) (their Techlore Dispatch guide to threat modeling), and then turns your answers into Open or Encrypted.
+A threat model is a short answer to two questions: **what do you want to keep safe, and from whom?** This page uses the simple grid from [Techlore](https://techlore.tech) (their Techlore Dispatch guide to threat modeling), adapted for notes, and then turns your answers into Open or Encrypted.
 
 > [!TIP]
 > Not sure? Pick **Open**. It fits most people, and it's the one the app marks **Recommended**.
@@ -16,7 +16,7 @@ A threat model is a short answer to two questions: **what do you want to keep sa
 
 Draw this grid on paper, or just think it through. For each box, give a score from **1** (I don't worry about this) to **3** (this matters a lot), and one line on what you want to protect.
 
-| | **People** (family, coworkers, a thief, an ex) | **Companies** (your cloud, AI providers, advertisers) | **Governments** (police, border checks, courts) |
+| | **People** (family, coworkers, a thief, an ex) | **Companies** (your cloud, AI providers, advertisers) | **Leaks and loss** (a lost or stolen laptop, a hacked account, a data breach) |
 |---|---|---|---|
 | **Security:** nobody changes or destroys my notes | | | |
 | **Privacy:** nobody reads my notes | | | |
@@ -37,9 +37,9 @@ The three rows mean different things:
 - **Mostly 1s:** Open. Your notes are no more private than your other files, and that's fine for you.
 - **A 3 under People:** think about who uses your computer, and where your laptop goes. Encrypted locks when you lock it or quit the app. An Open memory is readable by anyone at your unlocked computer.
 - **A 3 under Companies:** Encrypted, if your notes sit in a cloud folder (iCloud Drive, Dropbox, Google Drive, a GitHub backup). The cloud then only stores scrambled files.
-- **A 3 under Governments:** Encrypted, and keep the app locked when you cross a border or when the computer is out of your hands. See [threat-model.md](threat-model.md) for what the app does and doesn't protect.
+- **A 3 under Leaks and loss:** Encrypted, and lock it when you leave your computer or travel with it. A lost laptop or a leaked cloud account then shows only scrambled files. See [threat-model.md](threat-model.md) for what the app does and doesn't protect.
 
-**Anonymity row.** Neither kind hides who you are. Your cloud account, your GitHub account and your AI app all know it's you. If this row has a 3, Phygital Memory isn't the tool for that part. Use tools made for anonymity.
+**Anonymity row.** Neither kind hides who you are, and Phygital Memory isn't made to. Your cloud account, your GitHub account and your AI app all know it's you.
 
 > [!IMPORTANT]
 > **What you show an AI app, its company sees.** When your AI reads a note to answer you, that text goes to the AI's company (Anthropic, OpenAI and others), whatever the kind. Encrypted protects the files where they're kept. It doesn't stop your AI from sending what it reads. To keep a note from AI, mark it **Private for AI**, or hide the whole memory from AI.
@@ -58,7 +58,7 @@ Write one sentence that sums up your grid, like the people below. Check every ch
 
 **Leo, therapist.** "Session notes about clients must never be readable by my cloud or by anyone who gets my laptop." Privacy from people: 3. From companies: 3. **Encrypted.** He keeps those notes out of AI too: the memory is marked **AI can't see this**.
 
-**Sara, journalist.** "My sources' names must not leak, even if my laptop is taken at a border." Privacy from governments: 3. **Encrypted**, locked before travel, and the sources' notes marked **Private for AI**. For staying anonymous herself, she uses other tools.
+**Sara, journalist.** "The people I interview trust me with their names. Those notes must stay safe if my laptop is lost or my cloud account leaks." Privacy from people: 3. Leaks and loss: 3. **Encrypted**, locked when she travels, and the interview notes marked **Private for AI**.
 
 **Ken, small business owner.** "Prices, plans and supplier deals. A competitor seeing them would hurt." Privacy from companies: 2, from people: 2. He works mostly with his AI on one computer. **Encrypted** if the memory goes to a shared cloud; **Open** if it stays on his own computer only. He picked Encrypted to be safe.
 
