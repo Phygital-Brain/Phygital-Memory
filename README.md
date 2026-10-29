@@ -51,6 +51,12 @@ It's built around four promises:
 
 <p align="center"><sub>Mac: one download for Apple chips and Intel. Linux: Ubuntu and Debian. Other Linux files (.rpm, AppImage, ARM) are on the <a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest">Releases page</a>.</sub></p>
 
+Or with Node.js, on any computer:
+
+```bash
+npx phygital-memory
+```
+
 - **Mac:** open the file and drag **Phygital Memory** into **Applications**. The first time, right-click the app and choose **Open**.
 - **Windows:** run the file. If Windows asks, choose **More info**, then **Run anyway**.
 - **Linux:** open the file with your software installer.
@@ -60,11 +66,6 @@ It keeps itself up to date after that.
 ### Or install from the terminal
 
 One line, for you or your AI agent. Each one gets the latest version and installs it.
-
-**Any computer with Node.js**
-```bash
-npx phygital-memory
-```
 
 **Mac**
 ```bash
