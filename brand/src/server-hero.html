@@ -1,0 +1,51 @@
+<link rel="stylesheet" href="kit.css">
+<style>
+body{width:1280px;height:640px;position:relative;overflow:hidden;
+  background:radial-gradient(520px 420px at 960px 300px,#141a3a 0%,rgba(11,13,18,0) 70%),var(--ground)}
+.card{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.pill{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#11141b;border-radius:999px;padding:8px 14px;font-size:16px;margin-right:6px}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--lime)}
+.dots{position:absolute;left:960px;width:0;border-left:3px dotted var(--ultra-ui)}
+.tag{position:absolute;left:960px;transform:translateX(-50%);background:var(--rec);border-radius:4px;padding:4px 10px;font-size:12px;letter-spacing:.2em;color:var(--muted)}
+body>*{translate:0 34px}
+</style>
+<body>
+<div style="position:absolute;left:64px;top:120px;display:flex;align-items:center;gap:14px">
+  <img src="../phygital-memory-mark.svg" style="width:50px">
+  <div class="card-t" style="font-size:27px">Phygital Memory <span class="lime">Server</span></div>
+</div>
+<div class="card-t" style="position:absolute;left:62px;top:196px;font-size:52px;font-weight:800;line-height:1.02">Your server.<br>Your data.<br><span class="lime">Your phone.</span></div>
+<div class="muted" style="position:absolute;left:64px;top:384px;width:580px;font-size:20px;line-height:1.4">Run it on a server you own. The AI on your phone reaches your memories, even when your computer is off.</div>
+<div style="position:absolute;left:64px;top:470px">
+  <span class="pill"><i></i>Self-hosted</span><span class="pill"><i></i>Your data</span><span class="pill"><i></i>Encrypted</span><span class="pill"><i></i>Open source</span>
+</div>
+
+<!-- phone -->
+<div class="card" style="left:690px;top:60px;width:540px;padding:18px 20px">
+  <div class="eyebrow">The AI on your phone</div>
+  <div style="margin:12px 0 0 90px;background:#1f2430;border-radius:8px;padding:11px 15px;font-size:17px">What did I decide about the kite poster?</div>
+  <div style="margin-top:10px;width:440px;background:var(--ultra-tint);border-radius:8px;padding:10px 14px">
+    <div class="mono ultra" style="font-size:11px;letter-spacing:.2em">FROM YOUR MEMORY</div>
+    <div style="font-size:17px;margin-top:4px">Hand-drawn type, to print on 3 November.</div>
+  </div>
+</div>
+
+<div class="dots" style="top:250px;height:26px"></div>
+<!-- server -->
+<div class="card" style="left:690px;top:276px;width:540px;padding:18px 20px;display:flex;align-items:center;gap:18px;border-color:#3a4a12">
+  <img src="../phygital-memory-mark.svg" style="width:62px">
+  <div>
+    <div class="eyebrow">Your server · always on</div>
+    <div class="mono" style="font-size:20px;margin-top:6px">memory.example.com</div>
+  </div>
+  <div class="mono" style="margin-left:auto;font-size:12px;letter-spacing:.15em;color:var(--lime);border:1px solid #3a4a12;border-radius:4px;padding:5px 9px">YOURS</div>
+</div>
+
+<div class="dots" style="top:381px;height:46px"></div>
+<div class="tag mono" style="top:392px">IN SYNC, STILL ENCRYPTED</div>
+<!-- computer -->
+<div class="card" style="left:690px;top:427px;width:540px;padding:16px 20px">
+  <div class="eyebrow">Your computer</div>
+  <div style="font-size:18px;margin-top:6px">The same memories in the app, kept in step.</div>
+</div>
+</body>

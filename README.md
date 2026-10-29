@@ -75,10 +75,17 @@ curl -fL -o /tmp/pm.deb https://github.com/Phygital-Brain/Phygital-Memory/releas
 sudo dnf install -y https://github.com/Phygital-Brain/Phygital-Memory/releases/latest/download/Phygital-Memory-linux-$(uname -m).rpm
 ```
 
-**Your own server**, so the AI on your phone reaches your memories when your computer is off:
+### Or run it on your own server
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/phygital-memory)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory)
+<p align="center"><img src="docs/images/server.png" alt="Phygital Memory Server. Your server, your data, your phone. The AI on your phone asks about a note, your server at your own address answers from your memory, and your computer stays in sync, still encrypted." width="100%"></p>
+
+So the AI on your phone reaches your memories when your computer is off.
+
+<p align="center">
+<a href="https://railway.com/deploy/phygital-memory"><img src="https://img.shields.io/badge/Deploy%20on-Railway-C8F031?style=for-the-badge&labelColor=0B0D12&logo=railway&logoColor=white" alt="Deploy on Railway" height="40"></a>
+<a href="https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory"><img src="https://img.shields.io/badge/Deploy%20on-Render-8A94FF?style=for-the-badge&labelColor=0B0D12&logo=render&logoColor=white" alt="Deploy on Render" height="40"></a>
+<a href="docs/server.md#docker-compose-on-any-server"><img src="https://img.shields.io/badge/Run%20with-Docker-F1EDE4?style=for-the-badge&labelColor=0B0D12&logo=docker&logoColor=white" alt="Run with Docker" height="40"></a>
+</p>
 
 Or Coolify, or Docker Compose on any server: [Run it on your own server](docs/server.md).
 

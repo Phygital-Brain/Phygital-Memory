@@ -12,6 +12,7 @@ What goes here (the README already links the first five):
 - diagram.png (and diagram.svg): how it fits together. Your AI app talks to the door on your own computer
   (127.0.0.1:8790/mcp), which reaches your Open and Encrypted memories. Backups and sharing go out only when you turn
   them on.
+- server.png: the Phygital Memory Server hero, for the README and docs/server.md. Source: brand/src/server-hero.html.
 - social-preview.png: 1280x640, PNG under 1 MB, for GitHub's Settings, General, Social preview. Not linked from the
   docs. A ready one is in brand/png/social-preview.png.
 

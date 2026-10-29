@@ -1,5 +1,7 @@
 # Run it on your own server
 
+<p align="center"><img src="images/server.png" alt="Phygital Memory Server. Your server, your data, your phone. The AI on your phone asks about a note, your server at your own address answers from your memory, and your computer stays in sync, still encrypted." width="100%"></p>
+
 Phygital Memory Server is the same app on a server you own, without the window. It is open all the time, so the AI apps on your phone can reach your memories even when your computer is off.
 
 You get two things at your address, say `https://memory.example.com`:
@@ -23,8 +25,11 @@ Pick one. Each gives you an address with HTTPS, and keeps your memories on a dis
 
 ### One click
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/phygital-memory)
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory)
+<p align="center">
+<a href="https://railway.com/deploy/phygital-memory"><img src="https://img.shields.io/badge/Deploy%20on-Railway-C8F031?style=for-the-badge&labelColor=0B0D12&logo=railway&logoColor=white" alt="Deploy on Railway" height="40"></a>
+<a href="https://render.com/deploy?repo=https://github.com/Phygital-Brain/Phygital-Memory"><img src="https://img.shields.io/badge/Deploy%20on-Render-8A94FF?style=for-the-badge&labelColor=0B0D12&logo=render&logoColor=white" alt="Deploy on Render" height="40"></a>
+<a href="#docker-compose-on-any-server"><img src="https://img.shields.io/badge/Run%20with-Docker-F1EDE4?style=for-the-badge&labelColor=0B0D12&logo=docker&logoColor=white" alt="Run with Docker" height="40"></a>
+</p>
 
 - **Railway:** press the button, then Deploy. Railway gives the server its address and a disk.
 - **Render:** press the button, then Apply. It uses Render's smallest paid plan, because the free one has no disk.
