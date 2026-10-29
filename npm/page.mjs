@@ -1,6 +1,6 @@
 // Makes the npm page show the project's full README: copies ../README.md over npm/README.md with every link and
 // image that points into the repo turned into a full GitHub address (npm can't follow relative paths). Run by the
-// npm release workflow just before publishing, with the release tag: node readme.mjs v0.1.2
+// npm release workflow just before publishing, with the release tag: node page.mjs v0.1.2
 import { readFileSync, writeFileSync } from "node:fs";
 
 const ref = process.argv[2] || "main";
