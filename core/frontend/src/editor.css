@@ -27,6 +27,7 @@
 .md-code { font-family: var(--font-mono); font-size: .9em; background: var(--bg-subtle); border-radius: 4px; padding: .1em .3em; }
 .md-link { color: var(--link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
 .md-url { color: var(--text-3); }
+.md-span { line-height: 1.45; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .md-wiki { color: var(--accent); cursor: pointer; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
 .md-wiki:hover { color: var(--accent-hover); border-bottom-color: var(--accent-hover); }
 a.md-wiki-missing { color: var(--text-3); border-bottom-style: dashed; border-bottom-color: var(--text-faint); }

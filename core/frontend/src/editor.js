@@ -257,6 +257,25 @@ class WikiWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
+// <span style="...">text</span>, the coloured labels Obsidian draws (like a "last edited" badge). Only plain looks
+// carry over: colours, padding, corners, borders and text size. Anything that could load or run something is left out.
+const SPAN_STYLE = new Set(["color", "background-color", "background", "padding", "border-radius", "border", "border-color",
+  "font-size", "font-weight", "font-style", "text-decoration", "margin", "letter-spacing"]);
+class StyledSpanWidget extends WidgetType {
+  constructor(text, style) { super(); this.text = text; this.style = style; }
+  eq(o) { return o.text === this.text && o.style === this.style; }
+  toDOM() {
+    const s = document.createElement("span");
+    s.className = "md-span"; s.textContent = this.text;
+    for (const part of this.style.split(";")) {
+      const i = part.indexOf(":"), prop = part.slice(0, i).trim().toLowerCase(), value = part.slice(i + 1).trim();
+      if (i > 0 && SPAN_STYLE.has(prop) && /^[#\w.%\s,()-]+$/.test(value) && !/url|expression|var\(/i.test(value)) s.style.setProperty(prop, value);
+    }
+    return s;
+  }
+  ignoreEvent() { return false; }
+}
+
 class CodeHeaderWidget extends WidgetType {
   constructor(lang, code) { super(); this.lang = lang; this.code = code; }
   eq(o) { return o.lang === this.lang && o.code === this.code; }
@@ -598,6 +617,13 @@ function buildDecorations(state, opts) {
   // Footnote references [^1] and definitions [^1]: (the base parser has no node for them)
   for (const m of doc.toString().matchAll(/\[\^([^\]\s]+)\](:?)/g)) {
     add(m.index, m.index + m[0].length, Decoration.mark({ class: m[2] ? "md-footnote-def" : "md-footnote" }));
+  }
+
+  // Styled labels: <span style="...">text</span> on one line, drawn as the label unless the cursor is on it
+  const inCode = (pos) => { for (let n = tree.resolveInner(pos, 1); n; n = n.parent) if (/Code/.test(n.name)) return true; return false; };
+  for (const m of doc.toString().matchAll(/<span\s+style="([^"\n]*)"\s*>([^<\n]*)<\/span>/gi)) {
+    const from = m.index, to = from + m[0].length;
+    if (!touches(from, to) && !inCode(from)) add(from, to, Decoration.replace({ widget: new StyledSpanWidget(m[2], m[1]) }));
   }
 
   items.sort((a, b) => a[0] - b[0] || startSide(a[2]) - startSide(b[2]) || a[1] - b[1]);

@@ -2888,7 +2888,7 @@ def _claude_desktop_ext() -> str:
     import zipfile
     ext = HERE / "claude_ext"
     manifest = {
-        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.3",
+        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.4",
         "description": "Your locked notes in Phygital Memory, through the app on this Mac. Only unlocked memories, "
                        "only what you allowed in its Settings › AI apps.",
         "author": {"name": "Phygital Memory"}, "icon": "icon.png",
@@ -3173,9 +3173,16 @@ def _pass_to_app(key: str) -> None:
         v = json.loads(text) if text.strip() else []
         return v if isinstance(v, list) else [v]
 
+    def back() -> bool:   # the app restarting (an update, say) answers again within seconds: wait for it
+        for _ in range(30):
+            if _door_proves(key):
+                return True
+            time.sleep(1)
+        return False
+
     def send(m, again=True):
         try:
-            if not _door_proves(key):
+            if not _door_proves(key) and not back():
                 return fail(m, "Phygital Memory was closed, or this key was removed. Open the app, or start a new "
                                "chat: with the app closed, your AI reaches your Open memories by itself.")
             res = post(m)

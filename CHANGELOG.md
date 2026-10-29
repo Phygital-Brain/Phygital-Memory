@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.4 (2026-10-29)
 
 - **Check for updates** in the Phygital Memory menu: it looks right away, and installs a new version or says you have the latest.
+- Coloured labels written as `<span style="...">` (like the badges Obsidian shows) are drawn as labels. Click into one to edit its code.
+- An AI agent connected to the app waits for it while it restarts, for an update say, instead of failing.
 
 ## 0.1.3 (2026-10-29)
 
