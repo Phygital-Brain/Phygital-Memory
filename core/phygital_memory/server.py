@@ -241,7 +241,9 @@ EditPath = Annotated[str, Field(description="The note's path, like 'Projects/pla
 
 @mcp.tool(annotations=READ)
 def status(ctx: Context) -> str:
-    """Which locked folders exist, which are unlocked, how many notes each holds."""
+    """Start here. Lists the person's memories (folders) you may use: each one's name, whether it is unlocked, how
+    many notes it holds and which subfolders are private. Also says whether this AI app may only read or may edit.
+    Read only. Call it first, or when another tool says a folder is locked or unknown."""
     app = _seen(ctx)
     mine = [f for f in folders.items.values() if _allowed(f, _app())]
     for f in mine:
@@ -297,7 +299,9 @@ def search_notes(ctx: Context, question: Annotated[str, Field(description="What 
 def open_result(ctx: Context, id: ResultId,
                 whole_note: Annotated[bool, Field(description="True for the whole note, not just the section.")] = False,
                 private: Private = False) -> str:
-    """Read one search result: its section, or the whole note."""
+    """Read a search_notes result by its id. Returns the note's path and the matching section, or the whole note
+    with whole_note=true. Read only. Use read_note instead when you are about to edit, since it gives the text
+    exactly as saved."""
     app = _seen(ctx)
     f, cid = _split(id)
     r = _guard(f.memory.get, cid, whole_note)
@@ -310,7 +314,8 @@ def open_result(ctx: Context, id: ResultId,
 
 @mcp.tool(annotations=READ)
 def around_result(ctx: Context, id: ResultId, private: Private = False) -> str:
-    """The sections just before and after a result, and other notes from the same day."""
+    """Context for a search_notes result: the sections just before and after it in the same note, and other notes
+    from the same day. Returns JSON. Read only. Use it when the result alone is not enough to answer."""
     app = _seen(ctx)
     f, cid = _split(id)
     r = _guard(f.memory.around, cid)
@@ -404,7 +409,9 @@ def replace_in_note(ctx: Context,
 def append_to_note(ctx: Context, text: Annotated[str, Field(description="Text to add at the end of the note.")],
                    id: EditId = "", path: EditPath = "", folder: FolderName = "",
                    private: Private = False) -> str:
-    """Add text at the end of a note. Name it by path or by a search or handed id."""
+    """Add text at the end of an existing note, leaving the rest unchanged. Name the note by path, or by a search or
+    handed id. Use it for logs and running lists; use replace_in_note to change text already there. Needs Allow
+    edits; the person can undo it in the app. Returns the saved path."""
     _need_write()
     _seen(ctx)
     f, rel = _edit_target(id, path, folder, private)
@@ -417,7 +424,9 @@ def append_to_note(ctx: Context, text: Annotated[str, Field(description="Text to
 def create_note(ctx: Context, path: Annotated[str, Field(description="Where it goes, like 'Projects/new-idea.md'.")],
                 text: Annotated[str, Field(description="The note's text.")],
                 folder: FolderName = "", private: Private = False) -> str:
-    """Make a new note. Refuses if a note is already at that path."""
+    """Make a new Markdown note at a path inside an unlocked folder; subfolders in the path are created. Refuses if
+    a note already exists there (use append_to_note or replace_in_note to change it). Needs Allow edits; the
+    person can undo it in the app. Returns the saved path."""
     _need_write()
     _seen(ctx)
     target = _pick(folder)
@@ -448,7 +457,9 @@ TEXT_LIMIT = 60_000
 def list_notes(ctx: Context, folder: FolderName = "",
                inside: Annotated[str, Field(description="Only what's inside this subfolder, like 'Projects'.")] = "",
                private: Private = False) -> str:
-    """The folder's notes, files and subfolders, by path (up to 500). Private folders show without what's in them."""
+    """List a folder's notes, files and subfolders by path (up to 500), optionally only inside one subfolder. Private
+    folders show without what's in them. Read only. Use it to browse or find exact paths; use search_notes to find
+    notes by what they say."""
     app = _seen(ctx)
     f = _pick(folder)
     inside = inside.strip("/")
@@ -471,7 +482,8 @@ def list_notes(ctx: Context, folder: FolderName = "",
 @mcp.tool(annotations=READ)
 def recent_changes(ctx: Context, limit: Annotated[int, Field(ge=1, le=50, description="How many (default 15).")] = 15
                    ) -> str:
-    """The notes and files changed most recently, in every unlocked folder, newest first."""
+    """The notes and files changed most recently, in every unlocked folder, newest first, each with its date and
+    time. Read only. Use it for "what did I work on lately" or to pick up where the person left off."""
     app = _seen(ctx)
     rows = []
     for f in _open_or_fail():
@@ -486,7 +498,9 @@ def recent_changes(ctx: Context, limit: Annotated[int, Field(ge=1, le=50, descri
 
 @mcp.tool(annotations=READ)
 def read_file_text(ctx: Context, path: NotePath, folder: FolderName = "", private: Private = False) -> str:
-    """The text inside a note or a file: Markdown, plain text, CSV, Word (.docx) or PDF. Long text is cut."""
+    """Read the text inside a note or file by path: Markdown, plain text, CSV, JSON, YAML, Word (.docx) or PDF.
+    Text over 60,000 characters is cut. Read only. Use it for attachments and exact paths from list_notes; use
+    open_result for search results."""
     app = _seen(ctx)
     f = _pick(folder)
     rel = path.strip().lstrip("/")
@@ -514,7 +528,8 @@ def read_file_text(ctx: Context, path: NotePath, folder: FolderName = "", privat
 
 @mcp.tool(annotations=READ)
 def links_to(ctx: Context, path: NotePath, folder: FolderName = "", private: Private = False) -> str:
-    """The notes that link to this note ([[wiki links]]), with the line where each link is."""
+    """Backlinks: the notes that link to this note with [[wiki links]], each with the line where the link is. Read
+    only. Use it to see how a person, project or idea connects to the rest of the notes."""
     app = _seen(ctx)
     f = _pick(folder)
     _private(f, path, private, "look at")
@@ -527,7 +542,8 @@ def links_to(ctx: Context, path: NotePath, folder: FolderName = "", private: Pri
 def move_note(ctx: Context, path: NotePath,
               new_path: Annotated[str, Field(description="Where it goes, like 'Archive/plan.md'. Also renames.")],
               folder: FolderName = "", private: Private = False) -> str:
-    """Move or rename a note, file or subfolder inside the same folder."""
+    """Move or rename a note, file or subfolder within the same memory. Links to it are not rewritten. Needs Allow
+    edits. Returns the old and new path."""
     _need_write()
     app = _seen(ctx)
     f = _pick(folder)
@@ -541,7 +557,9 @@ def move_note(ctx: Context, path: NotePath,
 @mcp.tool(annotations=WRITE)
 def make_folder(ctx: Context, path: Annotated[str, Field(description="The new subfolder, like 'Projects/2027'.")],
                 folder: FolderName = "", private: Private = False) -> str:
-    """Make a subfolder."""
+    """Make a new, empty subfolder in an unlocked memory, like 'Projects/2027'. Parent folders are created too.
+    Needs Allow edits. Returns the folder's path. create_note makes missing folders by itself, so use this only for
+    an empty folder."""
     _need_write()
     app = _seen(ctx)
     f = _pick(folder)
