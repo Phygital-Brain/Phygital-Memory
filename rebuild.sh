@@ -12,8 +12,8 @@ python3 core/packaging/bundle_server.py >/tmp/pm-bundle.log 2>&1
 # (.signing, see its README), so a rebuilt helper keeps that trust and macOS never asks again after an update.
 # The build stops if the helper isn't signed that way: an unsigned one would make macOS ask for every kept item.
 T=core/packaging/touchid
-SIGN=.signing
-KC="$PWD/$SIGN/phygital-memory-signing.keychain-db"
+SIGN="${PHYGITAL_MEMORY_SIGNING:-.signing}"   # the keys folder: .signing here, or set PHYGITAL_MEMORY_SIGNING to keep it elsewhere
+KC="$(cd "$SIGN" 2>/dev/null && pwd)/phygital-memory-signing.keychain-db"
 [ -f "$KC" ] && [ -f "$SIGN/keychain-password" ] || { echo "missing $SIGN (the helper's signing certificate)"; exit 1; }
 security unlock-keychain -p "$(cat "$SIGN/keychain-password")" "$KC"
 ID=$(security find-identity "$KC" | awk '/Phygital Memory Local Signing/ {print $2; exit}')
@@ -33,10 +33,10 @@ check_helper() {
 }
 check_helper "$T/bin/Phygital Memory"
 mkdir -p app/src-tauri/server/touchid && cp -p "$T/bin/Phygital Memory" app/src-tauri/server/touchid/
-# The update files are signed with the app's own update key (.signing/updater.key): the app only installs updates
+# The update files are signed with the app's own update key ($SIGN/updater.key): the app only installs updates
 # signed with it. Never printed; only this build reads it.
-export TAURI_SIGNING_PRIVATE_KEY="$(cat .signing/updater.key)"
-export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat .signing/updater-password)"
+export TAURI_SIGNING_PRIVATE_KEY="$(cat "$SIGN/updater.key")"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat "$SIGN/updater-password")"
 # The .dmg step sometimes can't eject its disk image ("Resource busy"): then build just the app, which is what gets installed.
 rm -f "app/src-tauri/target/release/bundle/dmg/Phygital Memory_0.1.0_aarch64.dmg"   # so an old .dmg never passes for a new one
 (cd app && cargo tauri build --bundles app,dmg >/tmp/pm-tauri.log 2>&1) || (cd app && cargo tauri build --bundles app >>/tmp/pm-tauri.log 2>&1)
