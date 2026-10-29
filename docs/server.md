@@ -1,6 +1,6 @@
 # Run it on your own server
 
-<p align="center"><img src="images/server.png" alt="Phygital Memory Server. Your server, your data, your phone. The AI on your phone asks about a note, your server at your own address answers from your memory, and your computer stays in sync, still encrypted." width="100%"></p>
+<p align="center"><img src="images/server.png" alt="Phygital Memory Server. Your server, your data, your phone. A phone and a computer are wired to your own server racks, inside a locked zone." width="100%"></p>
 
 Phygital Memory Server is the same app on a server you own, without the window. It is open all the time, so the AI apps on your phone can reach your memories even when your computer is off.
 

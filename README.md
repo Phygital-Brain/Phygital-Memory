@@ -77,7 +77,7 @@ sudo dnf install -y https://github.com/Phygital-Brain/Phygital-Memory/releases/l
 
 ### Or run it on your own server
 
-<p align="center"><img src="docs/images/server.png" alt="Phygital Memory Server. Your server, your data, your phone. The AI on your phone asks about a note, your server at your own address answers from your memory, and your computer stays in sync, still encrypted." width="100%"></p>
+<p align="center"><img src="docs/images/server.png" alt="Phygital Memory Server. Your server, your data, your phone. A phone and a computer are wired to your own server racks, inside a locked zone." width="100%"></p>
 
 So the AI on your phone reaches your memories when your computer is off.
 
