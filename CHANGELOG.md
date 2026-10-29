@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `search_notes` takes an optional `inside`, like `Projects`: only notes in that subfolder come back.
+
 ## 0.1.4 (2026-10-29)
 
 - **Check for updates** in the Phygital Memory menu: it looks right away, and installs a new version or says you have the latest.

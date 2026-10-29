@@ -45,6 +45,11 @@ try:
     m.save("Projects/Plan.md", "# Plan\n\nthe kite festival in June\n")
     check((root / "Projects" / "Plan.md").read_text() == "# Plan\n\nthe kite festival in June\n", "a note is a plain file on disk")
     check(m.search("lighthouse") and m.search("kite festival"), "search finds old and new notes")
+    m.save("Ideas/Kites.md", "# Kites\n\na kite festival idea\n")
+    inside = [r["path"] for r in m.search("kite festival", inside="Projects")]
+    check(inside == ["Projects/Plan.md"] and len(m.search("kite festival")) == 2,
+          "search inside a subfolder finds only the notes in it")
+    check(m.search("kite festival", inside="No_Such%Folder") == [], "search inside a missing subfolder finds nothing")
     files = {f["path"] for f in m.list_files()}
     check("Old.md" in files and "Projects/Plan.md" in files, "the sidebar lists the files")
     check(not any(p.startswith((".git", "outside", ".phygital", ".DS_Store")) for p in files), ".git, the app's own folders, Mac clutter and links are left out")

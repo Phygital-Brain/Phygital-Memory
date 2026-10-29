@@ -57,7 +57,7 @@ Most tools that read or write a note take a `private` option (all except `status
 
 ## Limits
 
-- `search_notes` returns 1 to 20 results (default 8).
+- `search_notes` returns 1 to 20 results (default 8). With `inside`, like `Projects`, only notes in that subfolder come back.
 - `recent_changes` returns 1 to 50 (default 15).
 - `list_notes` shows up to 500 paths. Use `inside` to look in one subfolder.
 - `read_file_text` cuts text at 60,000 characters, reads the first 200 pages of a PDF, and reads only notes, text, CSV, Word and PDF files.

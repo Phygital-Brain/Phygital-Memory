@@ -275,8 +275,10 @@ def status(ctx: Context) -> str:
 @mcp.tool(annotations=READ)
 def search_notes(ctx: Context, question: Annotated[str, Field(description="What to look for, in plain words.")],
                  limit: Annotated[int, Field(ge=1, le=20, description="How many results (default 8).")] = 8,
+                 inside: Annotated[str, Field(description="Only notes inside this subfolder, like 'Projects'.")] = "",
                  private: Private = False) -> str:
-    """Search the person's notes by meaning and words (Engram), in every unlocked folder at once. Read only.
+    """Search the person's notes by meaning and words (Engram), in every unlocked folder at once, or only inside
+    one subfolder with inside. Read only.
     Returns ranked results, best first: id, folder, note path, heading and a short snippet. Use it when you know
     what a note is about but not where it is; use list_notes to browse by path, recent_changes for the latest work.
     Then call open_result with an id to read one. Private notes show only as a locked line (place and section),
@@ -284,7 +286,7 @@ def search_notes(ctx: Context, question: Annotated[str, Field(description="What 
     app = _seen(ctx)
     rows = []
     for f in _open_or_fail():
-        found = _guard(f.memory.search, question, limit)
+        found = _guard(f.memory.search, question, limit, inside[:200])
         _log(app, f, "searched private notes" if private else "searched", f'"{question}" · {len(found)} results')
         for r in found:
             rows.append((r["score"], f, r))

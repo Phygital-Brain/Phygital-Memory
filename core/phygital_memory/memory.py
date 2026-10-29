@@ -240,11 +240,11 @@ class Memory:
 
     # ---------- what an AI app may do: search, open a result, write ----------
 
-    def search(self, q: str, n: int = 8) -> list[dict]:
+    def search(self, q: str, n: int = 8, inside: str = "") -> list[dict]:
         with self._lock:
             self._need_open()
             self._sync()
-            return engram.search(self.cfg, q, n, con=self._con, private=False)
+            return engram.search(self.cfg, q, n, con=self._con, private=False, folder=inside or None)
 
     def get(self, chunk_id: int, whole_note: bool = False) -> dict | None:
         with self._lock:

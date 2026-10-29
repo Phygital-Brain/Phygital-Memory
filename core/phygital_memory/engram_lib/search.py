@@ -175,10 +175,12 @@ def tail_slots(n, n_main, n_extra, cap):
 
 
 def search(cfg, q, n=None, recency=True, weights=True, source=None, use_cards=True, exact=True,
-           include_hidden=False, with_body=False, con=None, private=True, log=False):
+           include_hidden=False, with_body=False, con=None, private=True, log=False, folder=None):
     """The notes, plus the private index (finances). Private matches come back
-    as WHERE only: path and heading, no snippet, no text, id prefixed with 'p'."""
+    as WHERE only: path and heading, no snippet, no text, id prefixed with 'p'.
+    folder ("Projects/decisions") keeps only notes inside that folder: a filter, unlike folder hints."""
     n = n or cfg["results_default"]
+    folder = (folder or "").strip().strip("/") or None
     con = con or connect(cfg["db"])
     has_chats = con.execute("SELECT 1 FROM files WHERE source='chat' LIMIT 1").fetchone() is not None
     chat_info = chat_factors(cfg, con) if has_chats else ({}, {})  # worked out once per search, not per query
@@ -187,7 +189,7 @@ def search(cfg, q, n=None, recency=True, weights=True, source=None, use_cards=Tr
     use_f = usage.factors(cfg, con) if weights else {}  # empty until there is enough real use
     back_f = backlink_factors(cfg, con) if weights else {}
     run = lambda src, k: _search(cfg, q, k, recency, weights, src, use_cards, exact, include_hidden, with_body, con,
-                                 chat_info, common=common, use_f=use_f, back_f=back_f)
+                                 chat_info, common=common, use_f=use_f, back_f=back_f, folder=folder)
     if source == "private":
         rows = []
     elif source is None and has_chats:  # notes and chats fetched apart, so a few chats can always follow the notes
@@ -196,7 +198,7 @@ def search(cfg, q, n=None, recency=True, weights=True, source=None, use_cards=Tr
         rows = run(source, n)
     chats_first = [r for r in rows if r["source"] == "chat"]  # kept apart so the back shelf cannot push them out
     rows = _add_background(cfg, q, n, [r for r in rows if r["source"] != "chat"], recency, weights, source, use_cards,
-                           exact, include_hidden, with_body, con, chat_info) + chats_first
+                           exact, include_hidden, with_body, con, chat_info, folder) + chats_first
     pcfg = cfg.get("private", {})
     if private and pcfg.get("enabled") and pcfg["db"].exists() and source in (None, "private"):
         # Private matches say WHERE only, and come after the normal notes (at most a few, one per file):
@@ -204,7 +206,8 @@ def search(cfg, q, n=None, recency=True, weights=True, source=None, use_cards=Tr
         pcon = connect(pcfg["db"])
         priv, seen = [], set()
         # every word of the question must be in the private note, so unrelated questions show no finance notes
-        for r in _search(cfg, q, n, recency, False, None, False, False, True, False, pcon, ({}, {}), qmode="and"):
+        for r in _search(cfg, q, n, recency, False, None, False, False, True, False, pcon, ({}, {}), qmode="and",
+                         folder=folder):
             if r["path"] in seen:
                 continue
             seen.add(r["path"])
@@ -277,7 +280,7 @@ def why(cfg, q, r, exact_hits, status, typ, table, use_f, back_f, info, newest):
 
 
 def _add_background(cfg, q, n, rows, recency, weights, source, use_cards, exact, include_hidden, with_body, con,
-                    chat_info):
+                    chat_info, folder=None):
     """Two shelves. The background shelf (archives, copied code) is searched apart from the main notes.
     mode 'after': background results follow the main ones, at most max_in_results, more only if the main
     shelf found little. mode 'merge': everything is ranked together. The background is searched with
@@ -286,9 +289,9 @@ def _add_background(cfg, q, n, rows, recency, weights, source, use_cards, exact,
     if not sh.get("enabled") or source in ("private", "chat", "session"):
         return rows
     args = (recency, weights, source, use_cards, exact, include_hidden, with_body, con, chat_info)
-    bg = _search(cfg, q, n, *args, table="fts_bg", qmode=sh.get("background_query", "and"))
+    bg = _search(cfg, q, n, *args, table="fts_bg", qmode=sh.get("background_query", "and"), folder=folder)
     if not bg and sh.get("background_query", "and") == "and" and len(rows) < n:
-        bg = _search(cfg, q, n, *args, table="fts_bg", qmode="or")  # nothing with every word: try any word
+        bg = _search(cfg, q, n, *args, table="fts_bg", qmode="or", folder=folder)  # nothing with every word: try any word
     if sh.get("mode", "after") == "merge":
         return sorted(rows + bg, key=lambda r: r["score"], reverse=True)[:n]
     k = tail_slots(n, len(rows), len(bg), sh.get("max_in_results", 3))
@@ -296,7 +299,7 @@ def _add_background(cfg, q, n, rows, recency, weights, source, use_cards, exact,
 
 
 def _search(cfg, q, n, recency, weights, source, use_cards, exact, include_hidden, with_body, con, chat_info,
-            table="fts", qmode="or", common=None, use_f=None, back_f=None):
+            table="fts", qmode="or", common=None, use_f=None, back_f=None, folder=None):
     """Two steps, for speed: first rank on small facts only (id, scores, weights, dates), then build snippets
     and fetch text for the few results that are actually shown."""
     # expiry dates are checked at search time, so a note hides itself the day its valid_until passes
@@ -304,6 +307,9 @@ def _search(cfg, q, n, recency, weights, source, use_cards, exact, include_hidde
     src = [source] if source else []
     if source:
         where += " AND f.source = ?"
+    if folder:  # only notes inside this folder (% and _ in a folder name are matched as themselves)
+        where += " AND f.path LIKE ? ESCAPE '\\'"
+        src.append(folder.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "/%")
     cols = "c.id, c.file_path, c.heading, c.date, f.source, c.weight, c.evergreen, f.keep, f.linked"
     frm = (f"FROM {table} JOIN chunks c ON c.id = {table}.rowid JOIN files f ON f.path = c.file_path "
            f"WHERE {table} MATCH ?")
