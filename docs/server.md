@@ -108,13 +108,13 @@ If the same note changes in both places at once, both copies are kept, and **Ver
 
 ## Updates
 
-Every release also builds a new server image. The page tells you when a newer version is out. To update:
+Every release also builds a new server image, and the page tells you when a newer version is out.
 
-```bash
-docker compose pull && docker compose up -d
-```
+- **Docker Compose and Coolify** update by themselves. The `updater` part of `compose.yaml` checks once a day, at 4 in the morning, and swaps in the newer image. Remove it to update by hand with `docker compose pull && docker compose up -d`.
+- **Railway** updates by itself when you deploy from the button. You can change this in the service's settings.
+- **Render and Docker by hand:** press Redeploy, or pull the image and start it again.
 
-On Coolify, Render and Railway, press Redeploy. Your memories and settings stay on the `/data` disk. After an update, unlock your Encrypted memories again.
+Your memories and settings stay on the `/data` disk. After an update, unlock your Encrypted memories again.
 
 ## Safety
 

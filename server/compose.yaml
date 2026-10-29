@@ -6,6 +6,8 @@ services:
   memory:
     image: ghcr.io/phygital-brain/phygital-memory:latest
     restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true   # the updater below may update this one
     init: true
     environment:
       PHYGITAL_MEMORY_URL: https://${DOMAIN}
@@ -33,6 +35,15 @@ services:
       - "443:443/udp"
     volumes:
       - caddy-data:/data
+
+  # Updates the memory server by itself: once a day it checks for a newer image, and if there is one it swaps it in,
+  # keeping /data. It touches only containers labelled above. Remove this part to update by hand.
+  updater:
+    image: nickfedor/watchtower:1.23.0
+    restart: unless-stopped
+    command: --label-enable --cleanup --schedule "0 0 4 * * *"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   memory-data:
