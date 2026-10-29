@@ -98,15 +98,15 @@ http://127.0.0.1:8790/mcp
 Authorization: Bearer YOUR_KEY
 ```
 
-Apps that support MCP sign-in can add the address without a key. The app then shows an **Allow** window and you press **Allow**. This is not tested with the Claude app, which refuses sign-in pages that are not on `https`, so use a key there.
+Apps that support MCP sign-in can add the address without a key. The app then shows an **Allow** window and you press **Allow**. Agents that only accept `https` sign-in pages connect with a key instead.
 
 ## AI agents on the web and phones
 
-They run on their company's computers and can't reach yours by themselves. There are four ways in: remote control of an agent on your computer, your cloud, your own server, or a tunnel. **AI › Connect an AI app › On the web and phones** shows them, and [Use it from your phone](phone.md) has every step.
+They can't reach your computer directly. Pick a way in: [Use it from your phone](phone.md).
 
 ## ChatGPT, VS Code, Gemini CLI, OpenClaw, Hermes Agent, Goose
 
-Not tested. If the app can use an MCP server over streamable HTTP with a header, the "Other MCP apps" steps are the ones to try. We say "not tested" because we have not run them.
+If the agent can use an MCP server over streamable HTTP with a header, follow the steps in [Other MCP apps](#other-mcp-apps).
 
 ## If it does not connect
 

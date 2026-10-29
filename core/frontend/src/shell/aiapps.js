@@ -174,17 +174,18 @@ export function connectDialog(ctx) {
       el("div", { class: "aw-text" }, el("div", { class: "aw-title" }, title), el("div", { class: "aw-line" }, line), el("div", { class: "aw-note" }, note)),
       action ? el("button", { class: "btn small", type: "button", onclick: () => { done(null); action[1](); } }, action[0]) : null);
     const online = () => ctx.onServer
-      ? [el("p", {}, t("AI agents on the web and in phone apps add a custom connector with this address. The agent opens this server's page: sign in with your passphrase and press Allow.")),
+      ? [el("p", {}, t("Add this address as a custom connector in your agent. Sign in with your passphrase, then press Allow.")),
          el("div", { class: "ai-door" }, el("code", {}, ctx.door), copyBtn(ctx.door))]
-      : [el("p", {}, t("AI agents on the web and in phone apps run on their company's computers, so they can't reach this one by themselves. Four ways in:")),
+      : [el("p", {}, t("Agents on the web and phones can't reach this computer directly. Pick a way in:")),
          el("div", { class: "aw-list" },
-           way("laptop", t("Remote control"), t("Some agents let you steer a session on this computer from your phone. The agent stays here and uses your memories as usual."), t("Opens nothing. This computer stays on.")),
-           way("cloud", t("Your cloud"), t("Keep an Open memory in a cloud your agents already read, like iCloud Drive, Dropbox, Google Drive or a private GitHub backup."), t("Open memories only. No search or Undo from the app."),
+           way("laptop", t("Remote control"), t("Control an agent on this computer from your phone."), t("Nothing opens to the internet.")),
+           way("cloud", t("Your cloud"), t("Keep an Open memory in iCloud Drive, Dropbox, Google Drive or GitHub."), t("For Open memories."),
              ctx.storage ? [t("Storage"), ctx.storage] : null),
-           way("sync", t("Your own server"), t("The same app on a server you own, with its own https address. Works when this computer is off."), t("Your server, behind your passphrase."),
+           way("sync", t("Your own server"), t("Run the app on your own server. Works when this computer is off."), t("Protected by your passphrase."),
              ctx.linkServer ? [t("Link@@verb"), ctx.linkServer] : null),
-           way("link", t("A tunnel"), t("A tool like Cloudflare Tunnel gives this computer's door a public https address while it's on."), t("Opens this computer's door to the internet. Not tested yet."))),
-         el("p", { class: "set-hint" }, t("Every step for each way: Use it from your phone, in the docs on GitHub."))];
+           way("link", t("A tunnel"), t("Give this computer a web address, with Cloudflare Tunnel or similar."), t("Turn it off when you're done."))),
+         el("a", { class: "aw-guide", href: "https://github.com/Phygital-Brain/Phygital-Memory/blob/main/docs/phone.md", target: "_blank", rel: "noopener",
+           onclick: (e) => { if (ctx.openDoc) { e.preventDefault(); ctx.openDoc("phone"); } } }, t("Read the full guide"), icon("arrow", 13))];
     const tabs = [["here", ctx.onServer ? t("With a key") : t("On this computer")], ["online", t("On the web and phones")]];
     const show = (k) => {
       for (const b of seg.children) { const on = b.dataset.k === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); }

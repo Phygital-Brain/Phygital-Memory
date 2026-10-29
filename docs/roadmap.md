@@ -35,7 +35,6 @@ What might come next. Nothing here is promised or has a date. If you want one of
 
 - **A phone app.** The engine is Python, which does not run well on phones. An Open memory in a cloud folder still shows up in your phone's files.
 - **Encrypted memories on phones.** They need the app to open, and there is no phone app.
-- **A tested tunnel.** AI agents on the web and phones reach your computer through remote control, your cloud or your own server today. A tunnel is described but not tested yet. See [Use it from your phone](phone.md).
 - **Sign-in from agents that need https.** Some AI agents refuse sign-in pages that are not on https, and the door is a local address. Connect with a key instead.
 - **Code signing.** The Mac and Windows downloads are not signed yet, so the first open needs one extra step.
 - **Switching a memory between Open and Encrypted.** Old plain copies would stay in your cloud's history, so the app doesn't offer it.

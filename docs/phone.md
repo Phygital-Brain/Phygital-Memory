@@ -1,54 +1,63 @@
 # Use it from your phone
 
-For when you want your AI agent on your phone, or on the web, to use your memories. There is no Phygital Memory phone app, but there are several ways in. You leave knowing which one fits you.
+Your AI agent on the phone or the web can use your memories. Pick one of four ways.
 
-AI agents on the web and in phone apps run on their company's computers, not on your phone. They can't reach the app on your computer by themselves. Each way below gives them a path.
-
-| Way | Your computer must be on | Encrypted memories | Opens anything to the internet |
-|---|---|---|---|
-| [1. Remote control of an agent on your computer](#1-remote-control-of-an-agent-on-your-computer) | Yes | Yes, while unlocked | No |
-| [2. Your cloud](#2-your-cloud) | No | No | No (your cloud already has the files) |
-| [3. Your own server](#3-your-own-server) | No | Yes | Yes, your server, behind your passphrase |
-| [4. A tunnel to your computer](#4-a-tunnel-to-your-computer) | Yes | Yes, while unlocked | Yes, your computer's door, behind a key |
+| Way | Computer must be on | Encrypted memories |
+|---|---|---|
+| [Remote control](#remote-control) | Yes | Yes |
+| [Your cloud](#your-cloud) | No | No |
+| [Your own server](#your-own-server) | No | Yes |
+| [A tunnel](#a-tunnel) | Yes | Yes |
 
 > [!TIP]
-> Start with 1 or 2. They open nothing new to the internet.
+> Start with remote control or your cloud. Neither opens anything to the internet.
 
-## 1. Remote control of an agent on your computer
+## Remote control
 
-Some AI agents let you continue a session on your computer from your phone. The agent keeps running on your computer and uses Phygital Memory there, through the same local connection as always. Your phone only sends your messages and shows the answers.
+Some agents let you control a session on your computer from your phone. The agent runs on your computer and uses your memories there.
 
-- Connect the agent on your computer first: [connect your AI](connect-your-ai.md).
-- Turn on its remote control, the way that agent's own docs describe.
-- Open memories work with the app closed. Encrypted memories need the app open and unlocked.
+1. Connect the agent on your computer: [connect your AI](connect-your-ai.md).
+2. Turn on the agent's remote control. Its own docs show how.
+3. Talk to it from your phone.
 
-## 2. Your cloud
+Encrypted memories must be unlocked in the app.
 
-An **Open** memory is a normal folder. Keep it in a cloud your phone and your AI agents can already read: iCloud Drive, Dropbox, Google Drive, OneDrive, a WebDAV or Nextcloud folder, or a private GitHub backup (in **Storage and backup**). Many AI agents can connect to these clouds and read the notes from there.
+## Your cloud
 
-- Nothing to set up in Phygital Memory beyond where the memory lives.
-- The agent reads the files directly, so there is no search across notes, no **Undo** and no AI tasks from Phygital Memory.
-- An **Encrypted** memory's cloud copy is scrambled, so this way works for Open memories only. See [find your threat model](find-your-threat-model.md).
+An Open memory is a normal folder. Keep it in a cloud your agent can read.
 
-## 3. Your own server
+1. In **Storage and backup**, put the memory in iCloud Drive, Dropbox, Google Drive or OneDrive, or back it up to GitHub.
+2. Connect that cloud to your agent.
+3. Ask your agent about your notes.
 
-Run the same app on a server you own. It gets its own https address, so web and phone agents connect to it as a custom connector, and you approve each one with your passphrase. It works when your computer is off, and keeps in step with your computer. See [server.md](server.md).
+The agent reads the files directly, so it works without the app. Search, Undo and AI tasks need the app.
 
-## 4. A tunnel to your computer
+## Your own server
 
-A tunnel gives the app's door on your computer a public https address, so web and phone agents can reach it while your computer is on. Tools that do this include Cloudflare Tunnel, ngrok and Tailscale Funnel.
+Run Phygital Memory on a server you own. It has its own web address and works when your computer is off.
 
-> [!WARNING]
-> Not tested yet. A tunnel opens your computer's door, and the app's own page, to the internet. Every AI agent still needs its own key, and the page needs your password, but use it only if you understand the risk. Turn the tunnel off when you don't need it.
+1. Set up the server: [server.md](server.md).
+2. Link it to your computer: **Link a computer › To my server**.
+3. In your agent, add a custom connector with your server's address and `/mcp` at the end.
+4. Sign in with your passphrase and press **Allow**.
 
-The door only answers to the names `127.0.0.1` and `localhost`, so the tunnel has to send that name on. With Cloudflare's quick tunnel:
+## A tunnel
 
-```bash
-cloudflared tunnel --url http://127.0.0.1:8790 --http-host-header localhost:8790
-```
+A tunnel gives your computer a web address while it's on.
 
-Then, in **AI › Connect an AI app**, make a key for the agent. In the agent, add a custom connector with the tunnel's address and `/mcp` at the end, and the header `Authorization: Bearer YOUR_KEY`. Agents that only offer sign-in, with no header, don't work this way yet: the sign-in page expects the local address.
+1. Install [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (`cloudflared`).
+2. Run:
+
+   ```bash
+   cloudflared tunnel --url http://127.0.0.1:8790 --http-host-header localhost:8790
+   ```
+
+3. Copy the `https://` address it prints.
+4. In **AI › Connect an AI app**, make a key for your agent.
+5. In your agent, add a custom connector with that address plus `/mcp`, and the header `Authorization: Bearer YOUR_KEY`.
+
+Every agent needs its own key, and the app's page needs your password. Stop the tunnel when you're done: press **Ctrl+C**.
 
 ## What next
 
-Not sure which memories should leave your computer at all? Read [find your threat model](find-your-threat-model.md).
+Not sure which memories should leave your computer? Read [find your threat model](find-your-threat-model.md).

@@ -2674,6 +2674,12 @@ async def api(request: Request) -> Response:
             return _ok({"approvals": approvals.listing(20)})   # the last 20; every older one is still checked
         if action == "claudedesktopext":   # a Claude Desktop extension file in Downloads; the key is asked for on install
             return _ok({"path": await asyncio.to_thread(_claude_desktop_ext)})
+        if action == "opendoc":   # one of the project's own guides on github.com, in the browser (names listed here only)
+            doc = {"phone": "docs/phone.md"}.get(str(body.get("doc", "")))
+            if not doc:
+                return _ok({"error": "Unknown guide."}, 400)
+            await asyncio.to_thread(system.open_url, f"https://github.com/Phygital-Brain/Phygital-Memory/blob/main/{doc}")
+            return _ok({"ok": True})
         if action == "claudecodeadd":   # one button: add the door, with its key, to Claude Code
             return _ok(await asyncio.to_thread(_claude_code_add, str(body.get("key", ""))))
         if action == "forgetfolder":
