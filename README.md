@@ -12,6 +12,7 @@
 <a href="docs/how-it-works.md"><img src="https://img.shields.io/badge/encryption-Cryptomator%20format-C8F031" alt="Cryptomator format encryption"></a>
 <a href="docs/setup-computer.md"><img src="https://img.shields.io/badge/Mac%20%C2%B7%20Windows%20%C2%B7%20Linux-4D5BFF" alt="Mac, Windows and Linux"></a>
 <a href="https://github.com/Phygital-Brain/Phygital-Memory/releases/latest"><img src="https://img.shields.io/github/v/release/Phygital-Brain/Phygital-Memory" alt="Latest release"></a>
+<a href="https://www.npmjs.com/package/phygital-memory"><img src="https://img.shields.io/npm/v/phygital-memory?label=npx%20phygital-memory&color=C8F031&labelColor=0B0D12" alt="Install with npx phygital-memory"></a>
 </p>
 
 <p align="center">
@@ -54,6 +55,11 @@ It keeps itself up to date after that.
 ### Or install from the terminal
 
 One line, for you or your AI agent. Each one gets the latest version and installs it.
+
+**Any computer with Node.js**
+```bash
+npx phygital-memory
+```
 
 **Mac**
 ```bash
@@ -218,6 +224,7 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [`app/`](app) | The window around it all (Tauri, Rust): starts the engine, draws the menu bar, asks before closing. |
 | [`server/`](server) | Phygital Memory Server: the Docker image and Compose files ([guide](docs/server.md)). |
 | [`render.yaml`](render.yaml) | The Deploy to Render button's settings for the server (Render looks for it here). |
+| [`npm/`](npm) | The `npx phygital-memory` installer on npm. It downloads the latest app from Releases. |
 | [`brand/`](brand) | Logo, colours, icons and the brand guide. |
 | [`rebuild.sh`](rebuild.sh) | Builds the Mac app and makes the `.dmg`. |
 

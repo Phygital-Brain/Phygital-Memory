@@ -1,0 +1,15 @@
+{
+  "name": "phygital-memory",
+  "version": "0.1.0",
+  "description": "Installs the Phygital Memory desktop app: a notes app that becomes your second brain. Run: npx phygital-memory",
+  "bin": { "phygital-memory": "install.js" },
+  "files": ["install.js", "README.md"],
+  "engines": { "node": ">=18" },
+  "os": ["darwin", "win32", "linux"],
+  "license": "AGPL-3.0-only",
+  "author": "Phygital-Brain",
+  "homepage": "https://github.com/Phygital-Brain/Phygital-Memory",
+  "repository": { "type": "git", "url": "git+https://github.com/Phygital-Brain/Phygital-Memory.git", "directory": "npm" },
+  "bugs": "https://github.com/Phygital-Brain/Phygital-Memory/issues",
+  "keywords": ["notes", "second-brain", "mcp", "encryption", "markdown", "privacy", "installer"]
+}
