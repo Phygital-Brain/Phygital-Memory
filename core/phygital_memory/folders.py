@@ -828,6 +828,11 @@ class Folders:
             shutil.rmtree(CLOUDS / f"{fid}.cache", ignore_errors=True)
             if not any(g.cloud_at and cloud.make_key(g.cloud_at) == cloud.make_key(f.cloud_at) for g in self.items.values()):
                 cloud.forget_password(f.cloud_at)
+        for backup in (f.sync, f.s3):   # its backups stop, so a removed memory never uploads again
+            if backup:
+                backup.stop()
+        f.sync = f.s3 = None
+        shutil.rmtree(f.gitdir, ignore_errors=True)   # git's own files for its GitHub backup (the repo stays on GitHub)
 
     def lock_all(self) -> None:
         for f in list(self.items.values()):
