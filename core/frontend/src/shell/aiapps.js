@@ -160,19 +160,31 @@ export function aiAppsView(ctx) {
     return { tools: [], body: [card], refresh: () => { if (title.textContent === t("AI apps")) list(); } };
 }
 
-// Connect an AI app, as its own window (AI menu), shaped like Link a computer: AI apps on this computer, or the AI
-// apps that run online (the web, phones), which need the person's own server. ctx: as aiAppsView, plus onServer.
+// Connect an AI app, as its own window (AI menu), shaped like Link a computer: AI agents on this computer, or the
+// ways in for agents on the web and phones (docs/phone.md). ctx: as aiAppsView, plus onServer, door, storage(), linkServer().
 export function connectDialog(ctx) {
   return modal((done) => {
     const view = aiAppsView(ctx);
     const body = el("div", { class: "lk-body" });
     const seg = el("div", { class: "seg lk-seg", role: "tablist", "aria-label": t("Where the AI app runs") });
     const copyBtn = (text) => { const b = el("button", { class: "btn small", type: "button", onclick: () => navigator.clipboard.writeText(text).then(() => { b.textContent = t("Copied"); }) }, t("Copy")); return b; };
+    // One way in: a name, a line, a note on what it opens, and a button where the app can take the next step itself
+    const way = (ic, title, line, note, action) => el("div", { class: "aw-row" },
+      el("span", { class: "aw-ic" }, icon(ic, 16)),
+      el("div", { class: "aw-text" }, el("div", { class: "aw-title" }, title), el("div", { class: "aw-line" }, line), el("div", { class: "aw-note" }, note)),
+      action ? el("button", { class: "btn small", type: "button", onclick: () => { done(null); action[1](); } }, action[0]) : null);
     const online = () => ctx.onServer
-      ? [el("p", {}, t("Claude (website, desktop and phone), ChatGPT and other AI apps add a custom connector with this address. The AI app opens this server's page: sign in with your passphrase and press Allow.")),
+      ? [el("p", {}, t("AI agents on the web and in phone apps add a custom connector with this address. The agent opens this server's page: sign in with your passphrase and press Allow.")),
          el("div", { class: "ai-door" }, el("code", {}, ctx.door), copyBtn(ctx.door))]
-      : [el("p", {}, t("Claude on the web and on phones, ChatGPT and other AI apps that run online can't reach this computer. They connect to your own Phygital Memory Server, at its https address with /mcp at the end.")),
-         el("p", { class: "set-hint" }, t("Set one up with docs/server.md on GitHub, then link it here with Link a computer › To my server."))];
+      : [el("p", {}, t("AI agents on the web and in phone apps run on their company's computers, so they can't reach this one by themselves. Four ways in:")),
+         el("div", { class: "aw-list" },
+           way("laptop", t("Remote control"), t("Some agents let you steer a session on this computer from your phone. The agent stays here and uses your memories as usual."), t("Opens nothing. This computer stays on.")),
+           way("cloud", t("Your cloud"), t("Keep an Open memory in a cloud your agents already read, like iCloud Drive, Dropbox, Google Drive or a private GitHub backup."), t("Open memories only. No search or Undo from the app."),
+             ctx.storage ? [t("Storage"), ctx.storage] : null),
+           way("sync", t("Your own server"), t("The same app on a server you own, with its own https address. Works when this computer is off."), t("Your server, behind your passphrase."),
+             ctx.linkServer ? [t("Link@@verb"), ctx.linkServer] : null),
+           way("link", t("A tunnel"), t("A tool like Cloudflare Tunnel gives this computer's door a public https address while it's on."), t("Opens this computer's door to the internet. Not tested yet."))),
+         el("p", { class: "set-hint" }, t("Every step for each way: Use it from your phone, in the docs on GitHub."))];
     const tabs = [["here", ctx.onServer ? t("With a key") : t("On this computer")], ["online", t("On the web and phones")]];
     const show = (k) => {
       for (const b of seg.children) { const on = b.dataset.k === k; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); }

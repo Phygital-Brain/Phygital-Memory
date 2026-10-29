@@ -2794,6 +2794,7 @@ function openConnect() {
     load: () => api("aiapps"), add: (b) => api("aiappadd", b), update: (b) => api("aiappupdate", b),
     remove: (id) => api("aiappremove", { id }), claudeCode: (key) => api("claudecodeadd", { key }),
     claudeDesktop: () => api("claudedesktopext"), onServer: ON_SERVER, door: location.origin + "/mcp",
+    storage: curInfo() ? openStoragePanel : null, linkServer: () => linkOtherMac("server"),
   });
 }
 

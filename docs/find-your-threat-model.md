@@ -42,7 +42,7 @@ The three rows mean different things:
 **Anonymity row.** Neither kind hides who you are, and Phygital Memory isn't made to. Your cloud account, your GitHub account and your AI app all know it's you.
 
 > [!IMPORTANT]
-> **What you show an AI app, its company sees.** When your AI reads a note to answer you, that text goes to the AI's company (Anthropic, OpenAI and others), whatever the kind. Encrypted protects the files where they're kept. It doesn't stop your AI from sending what it reads. To keep a note from AI, mark it **Private for AI**, or hide the whole memory from AI.
+> **What you show an AI app, its company sees.** When your AI reads a note to answer you, that text goes to the company that runs the AI, whatever the kind. Encrypted protects the files where they're kept. It doesn't stop your AI from sending what it reads. To keep a note from AI, mark it **Private for AI**, or hide the whole memory from AI.
 >
 > **For notes that should never leave your computer**, use a self-hosted AI: a model that runs on your own computer or your own server, in an app that supports MCP (for example LM Studio, or Ollama with an MCP app). Then nothing you show it goes to an AI company. We haven't tested these with Phygital Memory yet.
 

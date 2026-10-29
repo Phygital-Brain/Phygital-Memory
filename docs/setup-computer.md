@@ -123,7 +123,7 @@ The app updates itself from the latest GitHub Release. See [updates.md](updates.
 
 ## Use it from your phone
 
-There is no phone app. An **Open** memory kept in iCloud Drive, Dropbox or Google Drive shows up in your phone's files. AI apps on your phone that are connected to that cloud, or to a private GitHub backup, can read it. Encrypted memories are not on phones yet.
+There is no phone app, but your AI agent on the phone can still reach your memories: through remote control of an agent on your computer, your cloud, your own server, or a tunnel. See [Use it from your phone](phone.md).
 
 ## What we tested
 

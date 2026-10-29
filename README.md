@@ -208,6 +208,7 @@ The app's screens come in 41 languages. It follows your computer's language, or 
 | [Settings](docs/settings.md) | You want to change how the app works, or find where something is kept |
 | [Safety](docs/safety.md) | Before you let an AI read or change your notes |
 | [Privacy](docs/privacy.md) | You want to know what leaves your computer and who can see what |
+| [Use it from your phone](docs/phone.md) | You want your AI agent on your phone or the web to use your memories |
 | [Find your threat model](docs/find-your-threat-model.md) | You are making a memory and want to pick Open or Encrypted |
 | [Threat model](docs/threat-model.md) | You want to know what the app protects against, and what it cannot |
 | [How it works](docs/how-it-works.md) | You want to know what happens inside, in plain words |

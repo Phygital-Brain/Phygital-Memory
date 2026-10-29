@@ -100,9 +100,9 @@ Authorization: Bearer YOUR_KEY
 
 Apps that support MCP sign-in can add the address without a key. The app then shows an **Allow** window and you press **Allow**. This is not tested with the Claude app, which refuses sign-in pages that are not on `https`, so use a key there.
 
-## Claude website and phone app
+## AI agents on the web and phones
 
-They run online and can't reach your computer. Use your own [Phygital Memory Server](server.md): in **AI › Connect an AI app › On the web and phones**, it says how. If your memory is **Open** and sits in a cloud folder or a private GitHub backup that your phone AI app can read, that app can read the files without any of this.
+They run on their company's computers and can't reach yours by themselves. There are four ways in: remote control of an agent on your computer, your cloud, your own server, or a tunnel. **AI › Connect an AI app › On the web and phones** shows them, and [Use it from your phone](phone.md) has every step.
 
 ## ChatGPT, VS Code, Gemini CLI, OpenClaw, Hermes Agent, Goose
 

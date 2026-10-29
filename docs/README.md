@@ -19,6 +19,7 @@ All the guides for Phygital Memory. Pick the one that answers your question.
 |---|---|
 | [Safety](safety.md) | You are about to let an AI read or change your notes |
 | [Privacy](privacy.md) | You want to know what leaves your computer and who can see what |
+| [Use it from your phone](phone.md) | You want your AI agent on your phone or the web to use your memories |
 | [Find your threat model](find-your-threat-model.md) | You are making a memory and want to pick Open or Encrypted |
 | [Threat model](threat-model.md) | You want to know what the app protects against, and what it cannot |
 

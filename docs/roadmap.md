@@ -15,7 +15,7 @@ What might come next. Nothing here is promised or has a date. If you want one of
 - **Drop the Intel Mac build in a later release.** The Mac download is one file for Apple and Intel today.
 - **Native speakers for the translations.** All 41 languages were made with AI and checked by a script. A person who reads them is worth more than any tool.
 - **A security review of the whole app.** Planned.
-- **An https address for the AI door.** The Claude app refuses sign-in pages that are not on https, so sign-in from it fails on the local address. For now, Claude connects with a key.
+- **An https address for the AI door.** Some AI agents refuse sign-in pages that are not on https, so sign-in from them fails on the local address. For now, they connect with a key.
 - **Shutting out someone you removed from a share.** Changing the memory's key so a removed person cannot read later changes is not built yet.
 - **Unlinking a computer, and moving shares to a linked computer.** Not built yet.
 
@@ -35,8 +35,8 @@ What might come next. Nothing here is promised or has a date. If you want one of
 
 - **A phone app.** The engine is Python, which does not run well on phones. An Open memory in a cloud folder still shows up in your phone's files.
 - **Encrypted memories on phones.** They need the app to open, and there is no phone app.
-- **AI apps that run in the cloud, without a server.** The browser and phone versions of Claude, ChatGPT and others connect from their own servers, and the desktop app's door only answers on your computer. Use a desktop AI app, or [run it on your own server](server.md).
-- **Sign-in from the Claude app.** It refuses sign-in pages that are not on https, and the door is a local address. Connect with a key instead.
+- **A tested tunnel.** AI agents on the web and phones reach your computer through remote control, your cloud or your own server today. A tunnel is described but not tested yet. See [Use it from your phone](phone.md).
+- **Sign-in from agents that need https.** Some AI agents refuse sign-in pages that are not on https, and the door is a local address. Connect with a key instead.
 - **Code signing.** The Mac and Windows downloads are not signed yet, so the first open needs one extra step.
 - **Switching a memory between Open and Encrypted.** Old plain copies would stay in your cloud's history, so the app doesn't offer it.
 - **Shutting a removed person out of later changes.** Changing a shared memory's key is not built yet.

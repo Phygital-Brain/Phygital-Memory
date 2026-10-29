@@ -883,6 +883,16 @@ body { font-family: var(--font-body); font-size: 14px; }
 .unlock-tag span:last-child { color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
 .ai-connect .lk-body > p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); }
 .ai-connect .lk-body > p.set-hint { color: var(--text-3); }
+.ai-connect { max-height: calc(100vh - 48px); overflow-y: auto; }
+.aw-list { display: flex; flex-direction: column; margin: 4px 0 10px; }
+.aw-row { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; box-shadow: inset 0 -1px var(--border); }
+.aw-row:last-child { box-shadow: none; }
+.aw-ic { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-s); background: var(--bg-subtle); color: var(--text-2); }
+.aw-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.aw-title { font-weight: 600; font-size: 13px; }
+.aw-line { font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.aw-note { font: 500 10.5px/1.4 var(--font-mono); color: var(--text-3); }
+.aw-row .btn { flex: none; align-self: center; }
 .ai-connect .ai-apps .cl-body > .mf-hint:first-child { display: none; }   /* the window's own intro says it already */
 .unlock-actions { display: flex; flex-direction: column; gap: 7px; margin: 6px 16px 0; }
 .unlock-actions .btn { justify-content: center; gap: 7px; height: 34px; padding: 0 14px; font-size: 12.5px; font-weight: 600; border-radius: var(--r-s); }
