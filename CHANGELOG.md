@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 (2026-10-29)
 
 - `search_notes` takes an optional `inside`, like `Projects`: only notes in that subfolder come back.
 - `status` shows a folder map that makes itself: each main folder, its note count, and the first line of its `README.md`, `AGENTS.md` or `CLAUDE.md` (or its recent notes). Private folders are counted, never described.
