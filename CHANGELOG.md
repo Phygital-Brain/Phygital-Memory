@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 (2026-10-29)
 
 - The Claude Code command the app shows, and its **Add to Claude Code for me** button, put the server's name first. Before, Claude Code read the name as part of the key setting and refused the command.
 

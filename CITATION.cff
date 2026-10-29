@@ -7,5 +7,5 @@ authors:
   - name: "Phygital-Brain"
 license: AGPL-3.0-only
 repository-code: "https://github.com/Phygital-Brain/Phygital-Memory"
-version: 0.1.2
+version: 0.1.3
 keywords: [mcp, notes, encryption, ai, macos, windows, linux, local-first]
