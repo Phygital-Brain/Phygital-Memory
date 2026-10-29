@@ -12,7 +12,8 @@ python3 core/packaging/bundle_server.py >/tmp/pm-bundle.log 2>&1
 # (.signing, see its README), so a rebuilt helper keeps that trust and macOS never asks again after an update.
 # The build stops if the helper isn't signed that way: an unsigned one would make macOS ask for every kept item.
 T=core/packaging/touchid
-SIGN="${PHYGITAL_MEMORY_SIGNING:-.signing}"   # the keys folder: .signing here, or set PHYGITAL_MEMORY_SIGNING to keep it elsewhere
+SIGN="${PHYGITAL_MEMORY_SIGNING:-$([ -d .signing ] && echo .signing || echo "$HOME/.phygital-memory-signing")}"   # the keys folder: .signing here,
+                                                                    # else ~/.phygital-memory-signing, or PHYGITAL_MEMORY_SIGNING
 KC="$(cd "$SIGN" 2>/dev/null && pwd)/phygital-memory-signing.keychain-db"
 [ -f "$KC" ] && [ -f "$SIGN/keychain-password" ] || { echo "missing $SIGN (the helper's signing certificate)"; exit 1; }
 security unlock-keychain -p "$(cat "$SIGN/keychain-password")" "$KC"
