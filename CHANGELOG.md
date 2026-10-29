@@ -1,13 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-10-29)
 
-- AI apps can start Phygital Memory themselves. With the app closed, they reach your Open memories (search, read and, with Allow edits, write). With the app open, they go through it as before. The setup the app shows uses this when it can. See [docs/connect-your-ai.md](docs/connect-your-ai.md#two-ways-in).
+- AI agents can start Phygital Memory themselves. With the app closed, they reach your Open memories (search, read and, with Allow edits, write). With the app open, they go through it as before. The setup the app shows uses this when it can. See [docs/connect-your-ai.md](docs/connect-your-ai.md#two-ways-in).
 - A new memory marks **Open** as Recommended, and a new guide, [Find your threat model](docs/find-your-threat-model.md), says who needs Encrypted.
 - The start screen grows with the window, says what the app is (notes app, open source, encrypted when you want), and has two clear buttons: **New memory** and **Open memory**, with a tidier language picker.
 - **AI › Connect an AI app**: its own window, like Link a computer, with a tab for AI agents on this computer and one for the web and phones, which shows the four ways in. A new guide, [Use it from your phone](docs/phone.md), has the steps.
-
-## 0.1.1 (2026-10-29)
 
 - A new update key. Version 0.1.0 can't install the next version by itself: download it once from the Releases page, and updates are automatic again after that.
 - A removed memory stays removed. Before, the default `~/Phygital Memory` came back on every start while its folder was still on disk.
