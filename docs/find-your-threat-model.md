@@ -43,6 +43,8 @@ The three rows mean different things:
 
 > [!IMPORTANT]
 > **What you show an AI app, its company sees.** When your AI reads a note to answer you, that text goes to the AI's company (Anthropic, OpenAI and others), whatever the kind. Encrypted protects the files where they're kept. It doesn't stop your AI from sending what it reads. To keep a note from AI, mark it **Private for AI**, or hide the whole memory from AI.
+>
+> **For notes that should never leave your computer**, use a self-hosted AI: a model that runs on your own computer or your own server, in an app that supports MCP (for example LM Studio, or Ollama with an MCP app). Then nothing you show it goes to an AI company. We haven't tested these with Phygital Memory yet.
 
 ## Step 3: one sentence
 
@@ -56,7 +58,7 @@ Write one sentence that sums up your grid, like the people below. Check every ch
 
 **Ana, freelance developer, notes in Dropbox.** "Work notes are fine to show, but my journal isn't." Two memories: an **Open** one for work, and an **Encrypted** one for the journal. You can have as many memories as you like, each of its own kind.
 
-**Leo, therapist.** "Session notes about clients must never be readable by my cloud or by anyone who gets my laptop." Privacy from people: 3. From companies: 3. **Encrypted.** He keeps those notes out of AI too: the memory is marked **AI can't see this**.
+**Leo, therapist.** "Session notes about clients must never be readable by my cloud or by anyone who gets my laptop." Privacy from people: 3. From companies: 3. **Encrypted.** He keeps those notes away from online AI: the memory is marked **AI can't see this**. To use AI on them later, he'd turn that off only for a self-hosted AI on his own computer.
 
 **Sara, journalist.** "The people I interview trust me with their names. Those notes must stay safe if my laptop is lost or my cloud account leaks." Privacy from people: 3. Leaks and loss: 3. **Encrypted**, locked when she travels, and the interview notes marked **Private for AI**.
 
