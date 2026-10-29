@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A new update key. Version 0.1.0 can't install the next version by itself: download it once from the Releases page, and updates are automatic again after that.
+- A removed memory stays removed. Before, the default `~/Phygital Memory` came back on every start while its folder was still on disk.
 - Removing a memory now also stops its GitHub and S3 backups. Before, its last backup kept uploading until the app restarted, and git's files for it stayed behind.
 - Clearer descriptions for the AI tools: when to use each one, whether it only reads or needs Allow edits, and what comes back.
 

@@ -266,6 +266,7 @@ class Folders:
         self._lock = threading.RLock()
         self.items: dict[str, Folder] = {}
         entries = []
+        first_run = not REGISTRY.exists()   # the default folder is added once; a memory removed later stays removed
         try:
             entries = json.loads(REGISTRY.read_text()).get("folders", [])
         except (OSError, ValueError):
@@ -283,7 +284,7 @@ class Folders:
         for point in (CLOUDS.iterdir() if CLOUDS.is_dir() else []):   # hidden drives left by a crash
             if not point.name.endswith(".cache"):
                 cloud.unmount(point)
-        if default and is_vault(default) and not any(f.path == default for f in self.items.values()):
+        if first_run and default and is_vault(default) and not any(f.path == default for f in self.items.values()):
             self._add(default, default.name, first=True)
 
     # ---------- the list ----------
