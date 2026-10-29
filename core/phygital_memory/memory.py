@@ -240,6 +240,14 @@ class Memory:
 
     # ---------- what an AI app may do: search, open a result, write ----------
 
+    def folder_map(self) -> list[dict]:
+        """The main folders with their note counts and one line about each. A private folder shows no line."""
+        with self._lock:
+            self._need_open()
+            self._sync()
+            rows = engram.folder_map(self.cfg, self._con, hide=self.is_ai_private)
+        return [dict(r, about="private, ask first") if self.is_ai_private(r["folder"]) else r for r in rows]
+
     def search(self, q: str, n: int = 8, inside: str = "") -> list[dict]:
         with self._lock:
             self._need_open()

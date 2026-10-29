@@ -50,6 +50,15 @@ try:
     check(inside == ["Projects/Plan.md"] and len(m.search("kite festival")) == 2,
           "search inside a subfolder finds only the notes in it")
     check(m.search("kite festival", inside="No_Such%Folder") == [], "search inside a missing subfolder finds nothing")
+    m.save("Projects/AGENTS.md", "# Projects\n\nOne folder per [[Plan|plan]], newest first.\n")
+    m.save("Secret/Diary.md", "# Diary\n\nprivate thoughts\n")
+    m.set_ai_private("Secret", True)
+    fmap = {r["folder"]: r for r in m.folder_map()}
+    check(fmap["Projects"]["about"] == "One folder per plan, newest first." and fmap["Projects"]["notes"] == 2,
+          "the folder map reads a folder's AGENTS.md")
+    check(fmap["Ideas"]["about"] == "recent: Kites", "a folder with no README shows its recent notes")
+    check(fmap["Secret"]["about"] == "private, ask first" and "Diary" not in str(fmap), "a private folder is counted, never named inside")
+    m.set_ai_private("Secret", False)
     files = {f["path"] for f in m.list_files()}
     check("Old.md" in files and "Projects/Plan.md" in files, "the sidebar lists the files")
     check(not any(p.startswith((".git", "outside", ".phygital", ".DS_Store")) for p in files), ".git, the app's own folders, Mac clutter and links are left out")

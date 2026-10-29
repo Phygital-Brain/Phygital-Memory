@@ -8,7 +8,7 @@ An AI app reaches these through the door at `http://127.0.0.1:8790/mcp`, with it
 
 | Tool | What it does | Changes anything? |
 |---|---|---|
-| `status` | Lists the memories this app may use, which are unlocked, how many notes each holds, and which folders are private. Also says if the app may read only or edit | No |
+| `status` | Lists the memories this app may use, which are unlocked, how many notes each holds, its main folders with a line about each (from that folder's `README.md`, `AGENTS.md` or `CLAUDE.md`, or its recent notes), and which folders are private. Also says if the app may read only or edit | No |
 | `search_notes` | Searches every unlocked memory for a question in plain words. Returns ranked results: an id, the folder, the note path, a heading and a snippet. Private notes show only as a locked line | No |
 | `open_result` | Reads one search result: its section, or the whole note | No |
 | `around_result` | Shows the sections right before and after a result, and other notes from the same day | No |

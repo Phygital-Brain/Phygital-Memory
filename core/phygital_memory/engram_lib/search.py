@@ -413,6 +413,48 @@ def _search(cfg, q, n, recency, weights, source, use_cards, exact, include_hidde
     return final
 
 
+ABOUT_FILES = ("README.md", "AGENTS.md", "CLAUDE.md")
+
+
+def _plain_line(line):
+    """One line as plain words, or "" for a heading, table, quote, code fence, image or comment."""
+    line = line.strip()
+    if not line or line.startswith(("#", "---", "|", ">", "```", "<!--", "![", "%%")):
+        return ""
+    line = re.sub(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]", r"\1", line)  # [[note|text]] and [[note]] become the text
+    return re.sub(r"[*_`]", "", line).replace("...", "").replace("\u2026", "").lstrip("- ").strip()
+
+
+def folder_map(cfg, con=None, limit=25, hide=None):
+    """The notes' own map, made from the index: each top folder, how many notes it holds, and one line about it
+    (the first line of its README.md, AGENTS.md or CLAUDE.md, else a few recent note names). No AI, no setup.
+    hide(path) -> True keeps a note out of the line about its folder (private notes are counted, never named)."""
+    con = con or connect(cfg["db"])
+    hide = hide or (lambda p: False)
+    folders = {}
+    for path, mtime in con.execute("SELECT path, mtime FROM files WHERE source='vault' AND hidden=0"):
+        if "/" in path:
+            folders.setdefault(path.split("/", 1)[0], []).append((mtime or 0, path))
+    out = []
+    for name in sorted(folders, key=str.lower)[:limit]:
+        about = ""
+        for f in (x for x in ABOUT_FILES if not hide(f"{name}/{x}")):
+            for heading, body in con.execute("SELECT heading, body FROM chunks WHERE file_path=? ORDER BY ordinal LIMIT 3",
+                                             (f"{name}/{f}",)):
+                about = next((x for x in map(_plain_line, (body or "").splitlines()) if x), "")
+                for head in ((heading or "").rsplit(" > ", 1)[-1], f[:-3]):  # a short section starts "Heading: "
+                    about = about[len(head) + 2:] if about.startswith(head + ": ") else about
+                if about:
+                    break
+            if about:
+                break
+        if not about:
+            recent = [p for _, p in sorted(folders[name], reverse=True) if not hide(p)][:3]
+            about = "recent: " + ", ".join(p.rsplit("/", 1)[-1].removesuffix(".md") for p in recent) if recent else ""
+        out.append(dict(folder=name, notes=len(folders[name]), about=about[:120]))
+    return out
+
+
 def get(cfg, chunk_id, whole_note=False, con=None, allow_private=False, log=False):
     """Full text of one section, or of the whole note (sections in order). Short notes come back whole.
     Private ids ('p...') stay locked unless allow_private is set, which an AI app does only when the person asked."""

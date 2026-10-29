@@ -251,9 +251,11 @@ EditPath = Annotated[str, Field(description="The note's path, like 'Projects/pla
 @mcp.tool(annotations=READ)
 def status(ctx: Context) -> str:
     """Start here. Lists the person's memories (folders) you may use: each one's name, whether it is unlocked, how
-    many notes it holds and which subfolders are private. Also says whether this AI app may only read or may edit.
+    many notes it holds, its main subfolders with a line about each, and which subfolders are private. Also says
+    whether this AI app may only read or may edit.
     Read only, no inputs. Call it first in a chat, and again when another tool says a folder is locked or unknown.
-    Use the names it gives as folder= in the other tools. To see what is inside a folder, use list_notes."""
+    Use the names it gives as folder= in the other tools, and a subfolder as inside= in search_notes when a question
+    clearly belongs there. To see what is inside a folder, use list_notes."""
     app = _seen(ctx)
     mine = [f for f in folders.items.values() if _allowed(f, _app())]
     for f in mine:
@@ -267,6 +269,10 @@ def status(ctx: Context) -> str:
                      + (f". Open memory: a plain folder at {f.open_copy or f.path}, which you may also read directly"
                         if f.plain or f.open_copy else "")
                      + (f". Private, ask first: {priv}" if priv else ""))
+        if s["open"]:
+            for r in _guard(f.memory.folder_map):
+                n = f"{r['notes']} note" + ("" if r["notes"] == 1 else "s")
+                lines.append(f"  - {r['folder']} ({n})" + (f": {r['about']}" if r["about"] else ""))
     may = "read and edit" if _app()["write"] else "only read"
     return ("\n".join(lines) + f"\n\nOnly unlocked folders can be searched. Unlocking happens in the app ({PAGE}). "
             f"This app may {may}.")
