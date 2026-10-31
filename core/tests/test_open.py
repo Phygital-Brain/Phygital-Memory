@@ -126,6 +126,34 @@ try:
     check(back["kind"] == "open" and (tmp / "restore" / "Zip Me" / "Hello.md").read_text() == "zipped note, changed",
           "the backup file comes back as an Open memory")
     fs.lock_all()
+
+    # A big memory shows at once; search fills in behind it and waits for it, and a save meanwhile is kept
+    big = tmp / "Big"
+    Memory.create_open(big)
+    for i in range(600):
+        (big / f"n{i:03}.md").write_text(f"# Note {i}\n\nplain words number {i}\n" + "filler line\n" * 200)
+    (big / "n599.md").write_text("# Last\n\nthe violet harbour\n")
+    mb = Memory(big, plain=True)
+    s = mb.unlock("")
+    check(s["notes"] == 600, "a big memory gives its note count at once")
+    mb.save("n000.md", "# First\n\nthe amber window\n")
+    check([r["path"] for r in mb.search("violet harbour")][:1] == ["n599.md"], "search waits for the whole index")
+    check([r["path"] for r in mb.search("amber window")][:1] == ["n000.md"],
+          "a note saved while the index builds keeps its new text")
+    check(len(mb.list_notes()) == 600 and mb.status()["notes"] == 600, "the index holds every note")
+    mb.lock()
+
+    # The quick checks before the slow secret patterns hide exactly what the patterns alone hide
+    from phygital_memory.engram_lib import ingest
+    cfg = memory._engram_config()
+    raw = [__import__("re").compile(p) for p in cfg["redact_patterns"]]
+    quick = ingest.make_redactor(cfg)
+    for text in ("API_KEY = abcdefghijklmnop1234", "my token: abcdefghijklmnopqrst", "Token\n= abcdefghijklmnopq",
+                 "NIF 123 456 789", "the tax id is PT 123456789", "a key to the city", "plain words, no secrets"):
+        slow = text
+        for r in raw:
+            slow = r.sub("[REDACTED]", slow)
+        check(quick(text) == slow, f"secrets hidden the same: {text!r}")
 finally:
     shutil.rmtree(_STATE, ignore_errors=True)
     shutil.rmtree(tmp, ignore_errors=True)

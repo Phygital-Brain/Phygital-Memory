@@ -882,9 +882,18 @@ function tellConflict(path, copy) {
   if (state.active && state.active.path === path) flashStatus(t("Kept both versions"), "warn");
 }
 
+// The sidebar's tags and the graph share one links request while it runs: it's big on a big memory, and right
+// after unlock it waits for the search index.
+let linksAsk = null;
+function fetchLinks() {
+  const fid = loadedFolder;
+  if (linksAsk?.fid !== fid) linksAsk = { fid, p: api("links").finally(() => { if (linksAsk?.fid === fid) linksAsk = null; }) };
+  return linksAsk.p;
+}
+
 async function loadLinks() {
   const fid = loadedFolder;
-  try { const j = await api("links"); if (fid === loadedFolder) state.tags = j.tags || []; } catch {}
+  try { const j = await fetchLinks(); if (fid === loadedFolder) state.tags = j.tags || []; } catch {}
 }
 let linksTimer = null;
 function scheduleLinksRefresh() {
@@ -1205,21 +1214,27 @@ async function openTrashPanel() {
 }
 
 
-// Click a note's path: copy it in the form you need.
-function copyPathMenu(path, anchor) {
-  const r = anchor.getBoundingClientRect();
+// A note's or folder's path, in the form you need: in the memory, as a [[link]] (not for folders), or on this Mac.
+// The Mac path is there for an Open memory, and for an Encrypted one while it's shown in Finder.
+function copyPathItems(path, folder = false) {
   const copy = (text, what) => navigator.clipboard.writeText(text)
     .then(() => toastOk(t("{0} copied", what))).catch(() => toastErr(t("Couldn't copy.")));
   const name = path.split("/").pop().replace(/\.md$/i, "");
-  const items = [
-    { label: t("Copy path"), hint: path, fn: () => copy(path, "Path") },
-    { label: t("Copy link"), hint: `[[${name}]]`, fn: () => copy(`[[${name}]]`, "Link") },
-  ];
-  if (finder.shown && finder.where) {
-    const full = `${finder.where}/${path}`;
+  const items = [{ label: t("Copy path"), hint: path, fn: () => copy(path, "Path") }];
+  if (!folder) items.push({ label: t("Copy link"), hint: `[[${name}]]`, fn: () => copy(`[[${name}]]`, "Link") });
+  const info = curInfo();
+  const base = finder.shown && finder.where ? finder.where : info?.kind === "open" ? info.path : "";
+  if (base) {
+    const full = `${base}/${path}`;
     items.push({ label: t("Copy Finder path"), hint: shortPath(full), fn: () => copy(full, t("Finder path")) });
   }
-  showMenu(items, r.left, r.bottom + 4);
+  return items;
+}
+
+// Click a note's path: copy it in the form you need.
+function copyPathMenu(path, anchor) {
+  const r = anchor.getBoundingClientRect();
+  showMenu(copyPathItems(path), r.left, r.bottom + 4);
 }
 
 // Show one note (or file) selected in Finder. Opens the folder in Finder first if needed (with the usual warning).
@@ -1709,6 +1724,7 @@ async function rowMenu(n, x, y) {
   }
   if (sh) items.push(sharingItem(n.path, sh));
   items.push(
+    { label: t("Copy path"), sub: copyPathItems(n.path, folder) },
     { label: t("Export"), fn: () => exportPath(n.path) },
     { label: t("Show in Finder"), fn: () => revealInFinder(n.path) },
     { label: t("Rename"), fn: () => renameDialog(n) });
@@ -2846,7 +2862,7 @@ function makeGraphPane(tab) {
 async function loadGraph(tab) {
   const fid = loadedFolder;
   try {
-    const j = await api("links");
+    const j = await fetchLinks();
     if (fid !== loadedFolder || !tab.graph) return;
     state.tags = j.tags || state.tags;
     const sig = JSON.stringify([j.nodes, j.files, j.folders, j.edges, colorsPref()]);

@@ -83,4 +83,4 @@ body:
     attributes:
       label: Version
       description: The version in the name of the file you installed, or the date you installed or last updated.
-      placeholder: 0.1.5
+      placeholder: 0.1.6

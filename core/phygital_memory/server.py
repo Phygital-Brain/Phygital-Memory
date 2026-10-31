@@ -2697,7 +2697,7 @@ async def api(request: Request) -> Response:
         if action == "gen":   # polled every few seconds: has any note changed?
             return _ok({"gen": m.gen()})
         if action == "notes":
-            return _ok({"notes": m.list_notes()})
+            return _ok({"notes": await asyncio.to_thread(m.list_notes)})
         if action == "read":
             return _ok({"path": body["path"], "text": m.read(body["path"])})
         if action == "save":   # with base: if the note changed meanwhile, the text goes to a conflict copy
@@ -2709,7 +2709,7 @@ async def api(request: Request) -> Response:
             return _ok({"path": path, **({"merged": merged} if merged is not None else {})})
         if action == "search":   # the app's search: up to 40 results, optionally only inside one subfolder
             within = str(body.get("within") or "").strip("/")
-            rows = m.search(body.get("q", ""), 40 if within else int(body.get("n") or 30))
+            rows = await asyncio.to_thread(m.search, body.get("q", ""), 40 if within else int(body.get("n") or 30))
             if within:
                 rows = [r for r in rows if r["path"].startswith(within + "/")]
             return _ok({"results": rows})
@@ -2833,9 +2833,9 @@ async def api(request: Request) -> Response:
         if action == "version":
             return _ok({"text": m.version(body["path"], body["id"])})
         if action == "links":
-            return _ok(m.links())
+            return _ok(await asyncio.to_thread(m.links))   # waits for the search index (built after unlock)
         if action == "backlinks":
-            return _ok({"backlinks": m.backlinks(body["path"])})
+            return _ok({"backlinks": await asyncio.to_thread(m.backlinks, body["path"])})
         if action == "finder":   # the person asked to see the unlocked notes as a normal folder in Finder
             do = body.get("do", "status")
             if do == "show":
@@ -2896,7 +2896,7 @@ def _claude_desktop_ext() -> str:
     import zipfile
     ext = HERE / "claude_ext"
     manifest = {
-        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.5",
+        "manifest_version": "0.2", "name": "phygital-memory", "display_name": "Phygital Memory", "version": "0.1.6",
         "description": "Your locked notes in Phygital Memory, through the app on this Mac. Only unlocked memories, "
                        "only what you allowed in its Settings › AI apps.",
         "author": {"name": "Phygital Memory"}, "icon": "icon.png",

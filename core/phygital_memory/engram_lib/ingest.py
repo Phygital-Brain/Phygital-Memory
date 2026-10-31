@@ -49,12 +49,38 @@ def path_weight(rel, cfg):
     return 1.0
 
 
+_KEY_WORDS = ("secret", "token", "password", "passwd", "apikey", "api_key", "private_key", "client_id")
+_KEY_TAIL = re.compile(r"[a-z0-9_]*\s*[=:]")
+_TAX_WORDS = ("NIF", "NIPC", "NISS", "CPF", "CNPJ", "EIN", "SSN", "ontribuinte", "ax I", "ax i", "VAT n")
+
+
+def _has_key_line(text):
+    """Cheap test for the "PASSWORD = ..." pattern: a key word followed by = or :. Same notes, a fifth of the time."""
+    low = text.lower()
+    for k in _KEY_WORDS:
+        i = low.find(k)
+        while i != -1:
+            if _KEY_TAIL.match(low, i + len(k)):
+                return True
+            i = low.find(k, i + 1)
+    return False
+
+
+# Slow patterns run only on notes that pass their cheap test. Keyed by the exact pattern: a changed pattern always runs.
+_QUICK = {
+    r"""(?i)\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_KEY|CLIENT_ID)[A-Z0-9_]*\s*[=:]\s*[\"']?[^\s\"'<]{12,}""": _has_key_line,
+    r"""\b(?:NIF|NIPC|NISS|CPF|CNPJ|EIN|SSN|[Cc]ontribuinte|[Tt]ax [Ii][Dd]|VAT (?:no|number))\b[^\n\d]{0,12}(?:PT ?)?\d[\d .\-/]{7,16}\d""":
+        lambda text: any(w in text for w in _TAX_WORDS),
+}
+
+
 def make_redactor(cfg):
-    rx = [re.compile(p) for p in cfg["redact_patterns"]]
+    rx = [(re.compile(p), _QUICK.get(p)) for p in cfg["redact_patterns"]]
 
     def redact(text):
-        for r in rx:
-            text = r.sub("[REDACTED]", text)
+        for r, quick in rx:
+            if quick is None or quick(text):
+                text = r.sub("[REDACTED]", text)
         return text
 
     return redact

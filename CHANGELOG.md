@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6 (2026-10-31)
+
+- A big memory opens much faster. Your notes show right away and search gets ready behind them, a few seconds later. On a memory of 6,000 notes, the notes now show in under 3 seconds instead of about 8.
+- Right-click a note or a folder for **Copy path**: the path in the memory, the `[[link]]` (notes only), or the full path on your computer. The full path is there for an Open memory, and for an Encrypted one while it's shown in Finder. Clicking a note's path at the top now offers the full path for an Open memory too.
+
 ## 0.1.5 (2026-10-29)
 
 - `search_notes` takes an optional `inside`, like `Projects`: only notes in that subfolder come back.

@@ -65,6 +65,9 @@ class Memory:
         self._links_cache = None   # called after every lock (the Finder view closes itself here)
         self._synced = 0.0         # when notes changed by a cloud drive were last picked up
         self._skipped: dict[str, float] = {}
+        self._built = threading.Event()   # set once the search index holds every note (see _build)
+        self._built.set()
+        self._building = 0
         self.clashes: list[dict] = []   # clash copies made since unlock, for the app to tell the person once
         self.on_change: list = []       # fn(what, path) after the person (or their AI) changes something here
 
@@ -148,8 +151,12 @@ class Memory:
                 self._drop_orphan_versions()
             except Exception:
                 pass   # never let trash upkeep stop an unlock
-            self._index_all()
             self._synced = time.time()
+            todo = [(p.lstrip("/"), e) for p, e in tree.walk()
+                    if e.kind == "file" and p.lower().endswith(".md") and p.split("/")[1] not in HIDDEN]
+            self._building = len(todo)   # the note count status() gives until the index is full
+            self._built = done = threading.Event()   # the notes show now; search fills in behind them
+            threading.Thread(target=self._build, args=(con, todo, done), name="index", daemon=True).start()
             return self.status()
 
     def recovery_words(self, password: str) -> str:
@@ -186,7 +193,8 @@ class Memory:
             self._sweep()
             if self._con is None:
                 return {"open": False, "folder": str(self.folder)}
-            notes = self._con.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+            notes = self._con.execute("SELECT COUNT(*) FROM files").fetchone()[0] if self._built.is_set() \
+                else self._building
             return {"open": True, "folder": str(self.folder), "notes": notes}
 
     def _sweep(self) -> None:
@@ -203,6 +211,35 @@ class Memory:
         self._touch()
 
     # ---------- index (in memory only) ----------
+
+    def _build(self, con, todo: list, done: threading.Event) -> None:
+        """Fill the index after an unlock, a few notes at a time, so the app answers meanwhile (a big memory takes
+        seconds). Stops if the memory locks. Search, links and the notes list wait for it (_wait_built)."""
+        try:
+            redact = ingest.make_redactor(self.cfg)
+            for i in range(0, len(todo), 50):
+                with self._lock:
+                    if self._con is not con:
+                        return
+                    for rel, entry in todo[i:i + 50]:
+                        if con.execute("SELECT 1 FROM files WHERE path=?", (rel,)).fetchone():
+                            continue   # saved while the index was building: already in
+                        try:
+                            self._index_one(rel, entry, redact)
+                        except Exception:
+                            pass   # moved or deleted meanwhile: the next sync tidies up
+            with self._lock:
+                if self._con is con:
+                    ingest.count_backlinks(con, self.cfg)
+                    con.commit()
+                    self._gen += 1
+                    self._synced = 0   # pick up anything that changed on disk while building
+        finally:
+            done.set()
+
+    def _wait_built(self) -> None:
+        """Call without holding the lock: the build needs it."""
+        self._built.wait(300)
 
     def _index_all(self) -> None:
         redact = ingest.make_redactor(self.cfg)
@@ -242,6 +279,7 @@ class Memory:
 
     def folder_map(self) -> list[dict]:
         """The main folders with their note counts and one line about each. A private folder shows no line."""
+        self._wait_built()
         with self._lock:
             self._need_open()
             self._sync()
@@ -249,6 +287,7 @@ class Memory:
         return [dict(r, about="private, ask first") if self.is_ai_private(r["folder"]) else r for r in rows]
 
     def search(self, q: str, n: int = 8, inside: str = "") -> list[dict]:
+        self._wait_built()
         with self._lock:
             self._need_open()
             self._sync()
@@ -483,7 +522,7 @@ class Memory:
 
     def _sync(self) -> None:
         """Pick up notes a cloud drive (or Finder) changed on disk: at most every few seconds, only what changed."""
-        if time.time() - self._synced < SYNC_EVERY:
+        if time.time() - self._synced < SYNC_EVERY or not self._built.is_set():   # the build catches up after
             return
         self._synced = time.time()
         self._adopt_lost_folders()
@@ -526,6 +565,7 @@ class Memory:
             return self._gen
 
     def list_notes(self) -> list[str]:
+        self._wait_built()
         with self._lock:
             self._need_open()
             return [r[0] for r in self._con.execute("SELECT path FROM files ORDER BY path")]
@@ -1071,6 +1111,7 @@ class Memory:
     def links(self) -> dict:
         """Every [[link]] between notes, and from notes to other files: {"nodes": [note paths], "files": [other file
         paths], "folders": [folder paths], "edges": [[from, to], ...], "missing": {from: [names]}}."""
+        self._wait_built()
         with self._lock:
             self._need_open()
             if self._links_cache and self._links_cache[0] == self._gen:
