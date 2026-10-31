@@ -49,8 +49,8 @@ def path_weight(rel, cfg):
     return 1.0
 
 
-_KEY_WORDS = ("secret", "token", "password", "passwd", "apikey", "api_key", "private_key", "client_id")
-_KEY_TAIL = re.compile(r"[a-z0-9_]*\s*[=:]")
+_KEY_WORDS = ("secret", "token", "password", "passwd", "apikey", "api_key", "api-key", "private_key", "client_id")
+_KEY_TAIL = re.compile(r"""[a-z0-9_]*["']?\s*[=:]""")
 _TAX_WORDS = ("NIF", "NIPC", "NISS", "CPF", "CNPJ", "EIN", "SSN", "ontribuinte", "ax I", "ax i", "VAT n")
 
 
@@ -68,7 +68,7 @@ def _has_key_line(text):
 
 # Slow patterns run only on notes that pass their cheap test. Keyed by the exact pattern: a changed pattern always runs.
 _QUICK = {
-    r"""(?i)\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_KEY|CLIENT_ID)[A-Z0-9_]*\s*[=:]\s*[\"']?[^\s\"'<]{12,}""": _has_key_line,
+    r"""(?i)\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE_KEY|CLIENT_ID)[A-Z0-9_]*[\"']?\s*[=:]\s*[\"']?[^\s\"'<]{12,}""": _has_key_line,
     r"""\b(?:NIF|NIPC|NISS|CPF|CNPJ|EIN|SSN|[Cc]ontribuinte|[Tt]ax [Ii][Dd]|VAT (?:no|number))\b[^\n\d]{0,12}(?:PT ?)?\d[\d .\-/]{7,16}\d""":
         lambda text: any(w in text for w in _TAX_WORDS),
 }

@@ -131,9 +131,9 @@
     "AKIA[0-9A-Z]{16}",
     "xox[baprs]-[A-Za-z0-9\\-]{10,}",
     "Bearer [A-Za-z0-9._\\-]{25,}",
-    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY-----",
-    "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]{0,4000}",
-    "(?i)\\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API_?KEY|PRIVATE_KEY|CLIENT_ID)[A-Z0-9_]*\\s*[=:]\\s*[\\\"']?[^\\s\\\"'<]{12,}",
+    "-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\\s\\S]*?-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----",
+    "-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\\s\\S]{0,4000}",
+    "(?i)\\b[A-Z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE_KEY|CLIENT_ID)[A-Z0-9_]*[\\\"']?\\s*[=:]\\s*[\\\"']?[^\\s\\\"'<]{12,}",
     "\\b(?:NIF|NIPC|NISS|CPF|CNPJ|EIN|SSN|[Cc]ontribuinte|[Tt]ax [Ii][Dd]|VAT (?:no|number))\\b[^\\n\\d]{0,12}(?:PT ?)?\\d[\\d .\\-/]{7,16}\\d",
     "\\b[A-Z]{2}\\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\\b",
     "\\b(?:\\d{4}[ -]){3}\\d{1,4}\\b"

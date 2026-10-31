@@ -149,11 +149,15 @@ try:
     raw = [__import__("re").compile(p) for p in cfg["redact_patterns"]]
     quick = ingest.make_redactor(cfg)
     for text in ("API_KEY = abcdefghijklmnop1234", "my token: abcdefghijklmnopqrst", "Token\n= abcdefghijklmnopq",
+                 '{"api_key": "abcdefghijklmnop1234"}', "X-API-Key: abcdefghijklmnop1234",
+                 "-----BEGIN PGP PRIVATE KEY BLOCK-----\nabcdefghijklmnop1234\n-----END PGP PRIVATE KEY BLOCK-----",
                  "NIF 123 456 789", "the tax id is PT 123456789", "a key to the city", "plain words, no secrets"):
         slow = text
         for r in raw:
             slow = r.sub("[REDACTED]", slow)
         check(quick(text) == slow, f"secrets hidden the same: {text!r}")
+        if "abcdefghijklmnop1234" in text:
+            check("abcdefghijklmnop1234" not in quick(text), f"secret hidden: {text!r}")
 finally:
     shutil.rmtree(_STATE, ignore_errors=True)
     shutil.rmtree(tmp, ignore_errors=True)

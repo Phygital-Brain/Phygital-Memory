@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Search hides more kinds of secrets: keys in JSON like `"api_key": "..."`, `X-API-Key` headers and PGP private key blocks. They show as `[REDACTED]` the next time a memory is opened.
+
 ## 0.1.6 (2026-10-31)
 
 - A big memory opens much faster. Your notes show right away and search gets ready behind them, a few seconds later. On a memory of 6,000 notes, the notes now show in under 3 seconds instead of about 8.
