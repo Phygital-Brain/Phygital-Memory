@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.7 (2026-11-23)
 
 - An Encrypted memory with a broken entry inside, like an empty folder left by a sync, opens again. Before, it showed nothing at all. The app now skips what is broken and opens the rest, like Cryptomator does.
 - A new logo: the Phygital Brain brain, in Memory's lime and blue. The app icon is the brain on a night tile.
