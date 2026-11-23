@@ -13,7 +13,7 @@ Visual identity for Phygital Memory. Same family as Phygital Brain and Phygital 
 
 ## The idea
 
-The logo is **the Knot**: one wire ties a loop inside the seal, like a string tied round a finger so you remember. Both ends are sparks: you and your agent. The loop is what's held safe between them. Chosen 2026-10-27. Tagline (draft): "Locked notes your agent can remember."
+The logo is **the brain**: one line folds into a brain inside the seal, your memory. One spark sits where the line starts and one inside the fold: you and your agent. The brain is what's held safe between them. Chosen 2026-10-27 as a knot, changed to the brain 2026-11-23. Tagline (draft): "Locked notes your agent can remember."
 
 ## Colour
 
@@ -51,10 +51,10 @@ Bright lime is a logo and fill colour only: as text on a light ground it is 1.2:
 | `phygital-memory-mark-night.svg` | Night seal, lime wire. When the mark sits on lime or a very light fill. |
 | `phygital-memory-wire-lime.svg` | The wire alone, no seal. Dark grounds. |
 | `phygital-memory-wire-ink.svg` | The wire alone, near black with ultramarine sparks. Light grounds and print. |
-| `phygital-memory-favicon.svg` | Thicker wire and a simpler knot for small sizes (below 32px). |
+| `phygital-memory-favicon.svg` | Thicker line and bigger sparks for small sizes (below 32px). |
 | `phygital-memory-wordmark.svg` / `-ink.svg` | Mark and name in one line, for dark / light grounds. |
 | `phygital-memory-stacked.svg` / `-ink.svg` | Mark above the name on two lines, for dark / light grounds. |
-| `png/app-icon-1024.png`, `png/app-icon.icns` | The Mac app icon: the Knot on a night tile. Also on the `.dmg` and every "Open in Phygital Memory" file. Source: `src/app-icon.html`. |
+| `png/app-icon-1024.png`, `png/app-icon.icns` | The Mac app icon: the brain line on a night tile. Also on the `.dmg` and every "Open in Phygital Memory" file. Source: `src/app-icon.html`. |
 | `phygital-memory-avatar.png` | GitHub organisation picture (500px). |
 | `png/` | `favicon.ico` (16, 32, 48), `favicon-16/32/48.png`, `apple-touch-icon.png` (180), `phygital-memory-mark-512.png`, `social-preview.png` (1280×640). |
 | `src/` | Sources: `make-logos.py` (SVGs), `guide.html` (the PDF), `social-preview.html`, `icon.html` and `render.sh` (PNGs, Brave headless). |

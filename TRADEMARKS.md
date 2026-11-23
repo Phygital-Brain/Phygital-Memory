@@ -8,7 +8,7 @@ You can use the code and text under the [GNU Affero General Public License v3.0]
 
 ## The name and logo
 
-The license covers the code and text. It does not cover the Phygital Memory name or the Knot logo (in `brand/`). The license gives no permission to use them.
+The license covers the code and text. It does not cover the Phygital Memory name or the brain logo (in `brand/`). The license gives no permission to use them.
 
 ## Always say where it came from
 

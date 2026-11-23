@@ -22,21 +22,21 @@ def line(text,x0,base,s):
         x+=hm[g][0]*s
     return pen.getCommands(), right
 NIGHT,LIME,ULTRA,TEXT='#0B0D12','#C8F031','#4D5BFF','#F1EDE4'
-KNOT='M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 C45 29 46 36 46 42 H52'
+KNOT='M12 40 H18 C16 30 20 22 28 22 C30 18 38 18 40 22 C48 22 50 32 46 36 C50 42 42 48 36 44 C32 48 24 46 24 40 C20 38 22 32 28 32 C30 28 36 28 36 34'
 def seal(bg=LIME,wire=NIGHT,spark=ULTRA,sw=3):
     return (f'<circle cx="32" cy="32" r="30" fill="{bg}"/><path d="{KNOT}" fill="none" stroke="{wire}" stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round"/>'
-            f'<circle cx="12" cy="42" r="3.2" fill="{spark}"/><circle cx="52" cy="42" r="3.2" fill="{spark}"/>')
+            f'<circle cx="12" cy="40" r="3.2" fill="{spark}"/><circle cx="36" cy="34" r="3.2" fill="{spark}"/>')
 def svg(vb,w,h,body): return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="{w}" height="{h}">{body}</svg>\n'
 def save(n,s): open(f'{OUT}/phygital-memory-{n}.svg','w').write(s)
 save('mark',svg('0 0 64 64',64,64,seal()))
 save('mark-night',svg('0 0 64 64',64,64,seal(bg=NIGHT,wire=LIME)))
 def wire(wc,sc,sw=3.4):
-    return svg('7 15 50 32',64,41,f'<path d="{KNOT}" fill="none" stroke="{wc}" stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="42" r="3.2" fill="{sc}"/><circle cx="52" cy="42" r="3.2" fill="{sc}"/>')
+    return svg('7 14 48 38',64,51,f'<path d="{KNOT}" fill="none" stroke="{wc}" stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="40" r="3.2" fill="{sc}"/><circle cx="36" cy="34" r="3.2" fill="{sc}"/>')
 save('wire-lime',wire(LIME,ULTRA))
 save('wire-ink',wire(NIGHT,ULTRA))
 # favicon: thicker wire, simpler knot (one loop) so it reads at 16px
-FAV='M11 42 H19 C24 42 25 36 25 30 C25 17 44 16 45 28 C46 38 33 41 30 35 C28 30 33 25 39 27 C45 30 46 36 46 42 H53'
-save('favicon',svg('0 0 64 64',64,64,f'<circle cx="32" cy="32" r="31" fill="{LIME}"/><path d="{FAV}" fill="none" stroke="{NIGHT}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="11" cy="42" r="5" fill="{ULTRA}"/><circle cx="53" cy="42" r="5" fill="{ULTRA}"/>'))
+FAV='M12 40 H18 C16 30 20 22 28 22 C30 18 38 18 40 22 C48 22 50 32 46 36 C50 42 42 48 36 44 C32 48 24 46 24 40 C20 38 22 32 28 32 C30 28 36 28 36 34'
+save('favicon',svg('0 0 64 64',64,64,f'<circle cx="32" cy="32" r="31" fill="{LIME}"/><path d="{FAV}" fill="none" stroke="{NIGHT}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="40" r="4.6" fill="{ULTRA}"/><circle cx="36" cy="34" r="4.6" fill="{ULTRA}"/>'))
 # wordmark: same metrics as Phygital Brain (cap 24.6, baseline 44.3, ink starts 82.57)
 s=24.6/1350
 d,r=line('PHYGITAL MEMORY',82.57,44.3,s); W=round(r+8.9)

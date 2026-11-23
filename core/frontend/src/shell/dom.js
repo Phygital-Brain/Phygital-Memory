@@ -78,7 +78,7 @@ export function icon(name, size = 16, width = 1.7) {
   return s;
 }
 
-// The Knot: the app's mark (brand/phygital-memory-mark.svg). Above 32px the fine wire, below it the thicker favicon wire.
+// The brain: the app's mark (brand/phygital-memory-mark.svg). Above 32px the fine line, below it the thicker favicon line.
 export function knot(size = 24) {
   const NS = "http://www.w3.org/2000/svg", w = size < 32 ? 4 : 3, r = size < 32 ? 4 : 3.2;
   const s = document.createElementNS(NS, "svg");
@@ -86,10 +86,10 @@ export function knot(size = 24) {
   s.setAttribute("class", "knot"); s.setAttribute("aria-hidden", "true");
   const add = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); s.append(n); return n; };
   add("circle", { cx: 32, cy: 32, r: 30, fill: "#C8F031" });
-  add("path", { class: "knot-wire", d: "M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 C45 29 46 36 46 42 H52",
+  add("path", { class: "knot-wire", d: "M12 40 H18 C16 30 20 22 28 22 C30 18 38 18 40 22 C48 22 50 32 46 36 C50 42 42 48 36 44 C32 48 24 46 24 40 C20 38 22 32 28 32 C30 28 36 28 36 34",
     fill: "none", stroke: "#0B0D12", "stroke-width": w, "stroke-linecap": "round", "stroke-linejoin": "round" });
-  add("circle", { cx: 12, cy: 42, r, fill: "#4D5BFF" });
-  add("circle", { cx: 52, cy: 42, r, fill: "#4D5BFF" });
+  add("circle", { cx: 12, cy: 40, r, fill: "#4D5BFF" });
+  add("circle", { cx: 36, cy: 34, r, fill: "#4D5BFF" });
   return s;
 }
 

@@ -694,10 +694,9 @@ async def allow_state(request: Request) -> Response:
 
 
 KNOT_SVG = ('<svg class="knot" viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">'
-            '<circle cx="32" cy="32" r="30" fill="#C8F031"/><path class="knot-wire" d="M12 42 H19 C24 42 25 36 25 30 C25 18 43 16 '
-            '45 28 C46 38 33 42 29 35 C26 29 32 23 39 26 C45 29 46 36 46 42 H52" fill="none" stroke="#0B0D12" stroke-width="3" '
-            'stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="42" r="3.2" fill="#4D5BFF"/>'
-            '<circle cx="52" cy="42" r="3.2" fill="#4D5BFF"/></svg>')
+            '<circle cx="32" cy="32" r="30" fill="#C8F031"/><path class="knot-wire" d="M12 40 H18 C16 30 20 22 28 22 C30 18 38 18 40 22 C48 22 50 32 46 36 C50 42 42 48 36 44 C32 48 24 46 24 40 C20 38 22 32 28 32 C30 28 36 28 36 34" fill="none" stroke="#0B0D12" stroke-width="3" '
+            'stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="40" r="3.2" fill="#4D5BFF"/>'
+            '<circle cx="36" cy="34" r="3.2" fill="#4D5BFF"/></svg>')
 
 # The server's own small pages wear the app's look: its stylesheet and fonts (the only files open before the login),
 # laid out like the unlock screen.

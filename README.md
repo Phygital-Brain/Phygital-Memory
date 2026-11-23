@@ -1,6 +1,6 @@
 <!-- TODO: demo video link (a GitHub user-attachments link, 30 to 60 seconds). -->
 
-<p align="center"><img src="docs/images/header.png" alt="Phygital Memory. Your notes, your AI, your rules. A notes app that becomes your second brain: open source, private, encrypted, your files. A note about a kite festival goes through the Phygital Memory knot, which lets through only what you allow, and your AI answers from it." width="100%"></p>
+<p align="center"><img src="docs/images/header.png" alt="Phygital Memory. Your notes, your AI, your rules. A notes app that becomes your second brain: open source, private, encrypted, your files. A note about a kite festival goes through the Phygital Memory brain mark, which lets through only what you allow, and your AI answers from it." width="100%"></p>
 
 <h1 align="center">Phygital Memory</h1>
 

@@ -3,7 +3,7 @@ never a real memory, a real name, a key or a password. Alt text goes in the docs
 
 What goes here (the README already links the first five):
 
-- icon.png (512 px) and icon.svg: the Knot logo. Copy them from brand/ (brand/png/phygital-memory-mark-512.png and
+- icon.png (512 px) and icon.svg: the brain logo. Copy them from brand/ (brand/png/phygital-memory-mark-512.png and
   brand/phygital-memory-mark.svg). The logo is not covered by the license: see TRADEMARKS.md.
 - screenshot-1.png: the setup page, one question at a time (your name, Open or Encrypted, a name and place).
 - screenshot-2.png: the main window, the folder list on the left and a note open in the editor on the right.

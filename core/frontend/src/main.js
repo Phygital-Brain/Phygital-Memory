@@ -1542,27 +1542,21 @@ async function setUpApprover(chip) {
   } catch (e) { toastErr(e.message); return false; }
 }
 
-// The splash screen: the Knot's wire bends into a lock, then a brain, then back into the Knot (one wire, the two
-// sparks stay put), while scrambled characters settle into the app's name, on one colour over the whole screen, then
-// it all fades out (under four seconds; a click skips it). Shown when the app opens and when a memory is unlocked,
-// solid from the first moment so the notes appear behind it. A plain fade with motion turned down.
-const KNOT = "M12 42 H19 C24 42 25 36 25 30 C25 24 29.5 20.5 34.25 20 C39 19.5 44 22 45 28 C45.5 33 42.5 36.5 38.875 37.875 C35.25 39.25 31 38.5 29 35 C27.5 32 28.25 29 30.25 27.125 C32.25 25.25 35.5 24.5 39 26 C45 29 46 36 46 42 H52";
-const LOCK = "M12 42 H19 C27 42 36 42 44 42 C44 38 44 34 44 30 C42 30 40 30 38 30 C38 22 35.5 18 32 18 C28.5 18 26 22 26 30 C24 30 22 30 20 30 C20 34 20 37 20 39 C20 40 20 41 20 42 H52";
-const BRAIN = "M12 42 H19 C14 40 13 34 17 31 C13 26 17 19 24 20 C26 16 31 17 32 21 C29 24 34 28 31 33 C34 28 30 24 33 21 C34 16 41 16 42 20 C48 19 51 26 47 31 C51 35 49 42 44 42 H52";
+// The splash screen: the brain's line draws itself (the two dots stay put) while scrambled characters settle into the
+// app's name, on one colour over the whole screen, then it all fades out (under four seconds; a click skips it). Shown
+// when the app opens and when a memory is unlocked, solid from the first moment so the notes appear behind it. A plain
+// fade with motion turned down.
+const BRAIN = "M12 40 H18 C16 30 20 22 28 22 C30 18 38 18 40 22 C48 22 50 32 46 36 C50 42 42 48 36 44 C32 48 24 46 24 40 C20 38 22 32 28 32 C30 28 36 28 36 34";
 function knotArt(loop = false) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   svg.setAttribute("viewBox", "0 0 64 64");
   svg.setAttribute("class", "pk-knot");
-  const ease = ".2 0 0 1;0 0 1 1;";   // bend, then hold
-  const again = loop ? ' repeatCount="indefinite"' : ' fill="freeze"';   // the update screen keeps bending until it's done
+  const again = loop ? ' repeatCount="indefinite"' : ' fill="freeze"';   // the update screen keeps drawing until it's done
   svg.innerHTML = '<circle cx="32" cy="32" r="30" fill="#C8F031"/>'
-    + `<path d="${KNOT}" fill="none" stroke="#0B0D12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
-    + `<animate attributeName="d" begin="indefinite" dur="3.1s"${again} calcMode="spline" keyTimes="0;.12;.3;.42;.6;.72;.9;1"`
-    + ` keySplines="0 0 1 1;${ease.repeat(3).slice(0, -1)}" values="${[KNOT, KNOT, LOCK, LOCK, BRAIN, BRAIN, KNOT, KNOT].join(";")}"/></path>`
-    + `<circle cx="32" cy="36" r="2.4" fill="#0B0D12" opacity="0"><animate attributeName="opacity" begin="indefinite" dur="3.1s"${again}`
-    + ' keyTimes="0;.27;.3;.42;.45;1" values="0;0;1;1;0;0"/></circle>'   // the keyhole, while it's a lock
-    + '<circle cx="12" cy="42" r="3.2" fill="#4D5BFF"/><circle cx="52" cy="42" r="3.2" fill="#4D5BFF"/>';
+    + `<path d="${BRAIN}" pathLength="1" stroke-dasharray="1" fill="none" stroke="#0B0D12" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
+    + `<animate attributeName="stroke-dashoffset" begin="indefinite" dur="1.6s"${again} calcMode="spline" keyTimes="0;1" keySplines=".2 0 0 1" values="1;0"/></path>`
+    + '<circle cx="12" cy="40" r="3.2" fill="#4D5BFF"/><circle cx="36" cy="34" r="3.2" fill="#4D5BFF"/>';
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches) svg.querySelectorAll("animate").forEach((x) => x.beginElement());
   return svg;
 }
@@ -1592,7 +1586,7 @@ function sealAnimation(cover = false) {
   setTimeout(() => box.remove(), still ? 900 : 3800);
 }
 
-// A newer version is out: it installs by itself when the app opens. The splash stays up with the Knot bending on a
+// A newer version is out: it installs by itself when the app opens. The splash stays up with the brain line drawing on a
 // loop and a thin line filling as it downloads, then the memories lock, it's put in place and the app restarts. The
 // app window does the work (check_update in main.rs) and tells the engine how far it got; this screen reads that.
 // If it fails, the screen goes and the app opens as it is; it tries again next time.
