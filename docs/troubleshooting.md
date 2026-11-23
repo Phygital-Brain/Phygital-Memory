@@ -98,6 +98,10 @@ You do this once for each version you install by hand.
 **Why:** the memory is locked, the note is bigger than about 2 MB (those are not searched), or the note was newly added from outside the app.
 **Fix:** unlock the memory. Wait a few seconds for changes from a cloud drive to be picked up. Search needs words that are in the note.
 
+**What you see:** a folder from Cryptomator, or one that a cloud drive synced, is missing a few notes or shows an empty folder.
+**Why:** some of its scrambled files are broken or didn't arrive, like an entry folder left empty by a sync. The app skips those and opens the rest, the same as Cryptomator does.
+**Fix:** run Cryptomator's **Health check** on the folder to repair it, or wait for the cloud drive to finish syncing.
+
 **What you see:** a note named like `Plan (1).md` or `Plan (shared copy).md` next to `Plan.md`.
 **Why:** two devices or people changed the same lines, so the app kept both versions. It also makes an AI task so your AI can merge them.
 **Fix:** open both, keep what you want, and delete the other.

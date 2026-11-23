@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- An Encrypted memory with a broken entry inside, like an empty folder left by a sync, opens again. Before, it showed nothing at all. The app now skips what is broken and opens the rest, like Cryptomator does.
+- A new logo: the Phygital Brain brain, in Memory's lime and blue. The app icon is the brain on a night tile.
 - Search hides more kinds of secrets: keys in JSON like `"api_key": "..."`, `X-API-Key` headers and PGP private key blocks. They show as `[REDACTED]` the next time a memory is opened.
 
 ## 0.1.6 (2026-10-31)

@@ -9,6 +9,9 @@ Inside a folder's directory d/XX/YYYY..., each entry is:
   dir.c9r (folder) or symlink.c9r (link).
 dirid.c9r (the folder's own ID, as a backup) and anything starting with "." or not ending in .c9r/.c9s are skipped.
 Conflict copies (like "ABC (1).c9r") are collected in Tree.conflicts as (path, folder ID); memory.py sorts them out.
+A broken entry (an empty .c9r folder, a missing name.c9s, a folder whose encrypted directory is gone) is skipped and
+kept in Tree.broken (stored path: reason), like Cryptomator does, so one bad entry never hides the whole vault. The
+health check finds and repairs them.
 """
 
 from __future__ import annotations
@@ -51,6 +54,7 @@ class Tree:
         self.cipher_combo = config.cipher_combo
         self.vault_id = config.vault_id
         self.conflicts: list[tuple[Path, bytes]] = []
+        self.broken: dict[Path, str] = {}
 
     def dir_location(self, dir_id: bytes) -> Path:
         xx, rest = self.names.dir_path(dir_id)
@@ -115,10 +119,17 @@ class Tree:
     def list_dir(self, dir_id: bytes = ROOT_DIR_ID) -> list[Entry]:
         location = self.dir_location(dir_id)
         if not location.is_dir():
-            raise VaultError("A folder's encrypted directory is missing (the vault may be incomplete or still syncing).")
+            if dir_id == ROOT_DIR_ID:
+                raise VaultError("A folder's encrypted directory is missing (the vault may be incomplete or still syncing).")
+            self.broken[location] = "this folder's encrypted directory is missing"   # shown as an empty folder
+            return []
         out = []
         for path in sorted(location.iterdir()):
-            entry = self._entry(path, dir_id)
+            try:
+                entry = self._entry(path, dir_id)
+            except (VaultError, OSError, ValueError) as e:   # ValueError: a name.c9s that isn't text
+                self.broken[path] = str(e)
+                continue
             if entry:
                 out.append(entry)
         return sorted(out, key=lambda e: e.name)
