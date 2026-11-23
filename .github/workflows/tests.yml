@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.full && '["macos-14", "windows-latest", "ubuntu-22.04"]' || '["ubuntu-22.04"]') }}
+        os: ${{ fromJSON(inputs.full && '["macos-15", "windows-latest", "ubuntu-22.04"]' || '["ubuntu-22.04"]') }}
     defaults:
       run:
         working-directory: core
@@ -67,7 +67,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest, ubuntu-22.04]
+        os: [macos-15, windows-latest, ubuntu-22.04]
     defaults:
       run:
         working-directory: core
@@ -141,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest, ubuntu-22.04]
+        os: [macos-15, windows-latest, ubuntu-22.04]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

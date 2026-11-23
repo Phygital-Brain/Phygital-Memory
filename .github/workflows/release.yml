@@ -16,7 +16,7 @@ on:
       only:
         description: "Build one system only, to save minutes (blank: all)"
         type: choice
-        options: ["", macos-14, windows-latest, ubuntu-22.04, ubuntu-22.04-arm]
+        options: ["", macos-15, windows-latest, ubuntu-22.04, ubuntu-22.04-arm]
         default: ""
 
 permissions:
@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON(inputs.only && format('["{0}"]', inputs.only) || '["macos-14", "windows-latest", "ubuntu-22.04", "ubuntu-22.04-arm"]') }}
+        os: ${{ fromJSON(inputs.only && format('["{0}"]', inputs.only) || '["macos-15", "windows-latest", "ubuntu-22.04", "ubuntu-22.04-arm"]') }}
         # ubuntu-22.04-arm: Linux on ARM computers. (No "include" here: it would add a Mac job to a one-system run.)
     env:
       PYTHONUTF8: "1"   # Windows' Python otherwise writes the licence files in its old code page
@@ -122,7 +122,7 @@ jobs:
           releaseDraft: true
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
-          args: ${{ matrix.os == 'macos-14' && '--target universal-apple-darwin' || '' }}   # one Mac download for Apple and Intel chips
+          args: ${{ matrix.os == 'macos-15' && '--target universal-apple-darwin' || '' }}   # one Mac download for Apple and Intel chips
       - name: The same files under names without the version, for one-click download links
         # README buttons and the install commands point at releases/latest/download/<these names>
         shell: bash
