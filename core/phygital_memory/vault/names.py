@@ -29,6 +29,7 @@ class Names:
     def __init__(self, key: Masterkey, shortening_threshold: int = 220):
         self._siv = AESSIV(bytes(key.mac) + bytes(key.enc))
         self.threshold = shortening_threshold
+        self._clear: dict[tuple[str, bytes], str] = {}   # decrypted names, in memory only: a re-walk skips the AES work
 
     def dir_path(self, dir_id: bytes) -> tuple[str, str]:
         """('d', 'XX', 'YYYY...') parts below the vault root for a folder ID: returned as ('XX', 'YYYY...')."""
@@ -50,9 +51,15 @@ class Names:
         stem = cipher_name[:-len(C9R)] if cipher_name.endswith(C9R) else cipher_name
         if len(stem) < MIN_CIPHER_NAME_LENGTH - len(C9R):
             raise VaultError("Too short to be an encrypted name.")
+        hit = self._clear.get((stem, parent_dir_id))
+        if hit is not None:
+            return hit
         try:
             data = base64.urlsafe_b64decode(stem + "=" * (-len(stem) % 4))
-            return self._siv.decrypt(data, [parent_dir_id]).decode("utf-8")
+            clear = self._siv.decrypt(data, [parent_dir_id]).decode("utf-8")
+            if len(self._clear) < 200_000:   # only names that decrypted; a name that fails is checked every time
+                self._clear[(stem, parent_dir_id)] = clear
+            return clear
         except (ValueError, InvalidTag, UnicodeDecodeError):
             raise VaultError("This name doesn't decrypt with this vault's keys in this folder.")
 

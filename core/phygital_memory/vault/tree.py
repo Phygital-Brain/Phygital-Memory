@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import os
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .content import Content
@@ -27,6 +27,7 @@ from .names import C9R, C9S, MAX_DIR_ID_LENGTH, ROOT_DIR_ID, Names
 
 MAX_NAME_FILE = 4096       # name.c9s holds one encrypted name; refuse anything bigger
 MAX_SYMLINK = 32767 + 4096
+MAX_DIR_ID_CACHE = 200_000   # remembered folder IDs (memory only)
 
 
 @dataclass
@@ -36,6 +37,9 @@ class Entry:
     stored: Path        # where it is on disk (the .c9r file, or the .c9r/.c9s folder)
     dir_id: bytes | None = None
     parent_id: bytes | None = None   # the ID of the folder it's in (None for the root)
+    # For a plain .c9r file entry: the directory read's own DirEntry. Its stat() is made on first use and kept
+    # for this listing only (a new walk makes new Entry objects), so size and mtime cost one stat, not many.
+    dirent: os.DirEntry | None = field(default=None, compare=False, repr=False)
 
 
 class NotFound(VaultError):
@@ -55,28 +59,31 @@ class Tree:
         self.vault_id = config.vault_id
         self.conflicts: list[tuple[Path, bytes]] = []
         self.broken: dict[Path, str] = {}
+        self._dir_ids: dict[Path, tuple[tuple[int, int, int], bytes]] = {}   # dir.c9r path -> (stat, folder ID); memory only
 
     def dir_location(self, dir_id: bytes) -> Path:
         xx, rest = self.names.dir_path(dir_id)
         return self.root / "d" / xx / rest
 
-    def _entry(self, path: Path, dir_id: bytes) -> Entry | None:
-        e = self._entry_inner(path, dir_id)
+    def _entry(self, path: Path, dir_id: bytes, dirent: os.DirEntry | None = None) -> Entry | None:
+        e = self._entry_inner(path, dir_id, dirent)
         if e:
             e.parent_id = dir_id
         return e
 
-    def _entry_inner(self, path: Path, dir_id: bytes) -> Entry | None:
-        e = self._entry_raw(path, dir_id)
+    def _entry_inner(self, path: Path, dir_id: bytes, dirent: os.DirEntry | None = None) -> Entry | None:
+        e = self._entry_raw(path, dir_id, dirent)
         if e is not None and not _safe_name(e.name):   # a name made to step out of its folder ("../x", "a/b"):
             return None                                 # only a forged entry can hold one, so it's left out
         return e
 
-    def _entry_raw(self, path: Path, dir_id: bytes) -> Entry | None:
+    def _entry_raw(self, path: Path, dir_id: bytes, dirent: os.DirEntry | None = None) -> Entry | None:
         name = path.name
         if name.startswith(".") or name == "dirid.c9r":
             return None
-        if name.endswith(C9S) and path.is_dir():
+        # The directory read already knows if it's a folder (it follows links, like Path.is_dir()).
+        is_dir = (lambda: dirent.is_dir()) if dirent is not None else path.is_dir
+        if name.endswith(C9S) and is_dir():
             name_file = path / "name.c9s"
             if not name_file.is_file() or name_file.stat().st_size > MAX_NAME_FILE:
                 raise VaultError(f"A shortened name's name.c9s is missing or too large: {path.name}")
@@ -98,7 +105,7 @@ class Tree:
         except VaultError:
             self.conflicts.append((path, dir_id))   # most often a sync conflict copy like "ABC (1).c9r"
             return None
-        if path.is_dir():
+        if is_dir():
             if (path / "dir.c9r").is_file():
                 return Entry(clear, "dir", path, self._read_dir_id(path / "dir.c9r"))
             if (path / "symlink.c9r").is_file():
@@ -107,13 +114,26 @@ class Tree:
             if clash:
                 return Entry(clear, "dir", path, self._read_dir_id(clash[0]))
             raise VaultError(f"An entry folder has neither dir.c9r nor symlink.c9r: {path.name}")
-        return Entry(clear, "file", path)
+        return Entry(clear, "file", path, dirent=dirent)
 
-    @staticmethod
-    def _read_dir_id(path: Path) -> bytes:
+    def _read_dir_id(self, path: Path) -> bytes:
+        # A stat (~4 us) is far cheaper than an open+read. The remembered ID is used only if the file's
+        # mtime, size and inode are all unchanged; any difference or a failed stat reads the file again.
+        try:
+            st = path.stat()
+            sig = (st.st_mtime_ns, st.st_size, st.st_ino)
+        except OSError:
+            sig = None
+        hit = self._dir_ids.get(path) if sig is not None else None
+        if hit is not None and hit[0] == sig:
+            return hit[1]
         data = path.read_bytes()
         if not data or len(data) > MAX_DIR_ID_LENGTH:
             raise VaultError(f"A folder ID file is empty or too long: {path.parent.name}")
+        if sig is not None:
+            if len(self._dir_ids) >= MAX_DIR_ID_CACHE:
+                self._dir_ids.clear()
+            self._dir_ids[path] = (sig, data)
         return data
 
     def list_dir(self, dir_id: bytes = ROOT_DIR_ID) -> list[Entry]:
@@ -124,9 +144,12 @@ class Tree:
             self.broken[location] = "this folder's encrypted directory is missing"   # shown as an empty folder
             return []
         out = []
-        for path in sorted(location.iterdir()):
+        with os.scandir(location) as it:
+            found = sorted(it, key=lambda d: d.name)
+        for dirent in found:
+            path = location / dirent.name
             try:
-                entry = self._entry(path, dir_id)
+                entry = self._entry(path, dir_id, dirent)
             except (VaultError, OSError, ValueError) as e:   # ValueError: a name.c9s that isn't text
                 self.broken[path] = str(e)
                 continue
@@ -152,8 +175,7 @@ class Tree:
     def read_file(self, entry: Entry) -> bytes:
         if entry.kind != "file":
             raise VaultError(f"'{entry.name}' isn't a file.")
-        path = entry.stored / "contents.c9r" if entry.stored.is_dir() else entry.stored
-        return self.content.decrypt(path.read_bytes())
+        return self.content.decrypt(self.contents_path(entry).read_bytes())
 
     def read_file_to(self, entry: Entry, dst) -> None:
         """Decrypt a file into an open file, a part at a time (for files too big to hold in memory)."""
@@ -161,16 +183,23 @@ class Tree:
             raise VaultError(f"'{entry.name}' isn't a file.")
         path = self.contents_path(entry)
         with open(path, "rb") as src:
-            self.content.decrypt_stream(src, dst, path.stat().st_size)
+            self.content.decrypt_stream(src, dst, self.contents_stat(entry).st_size)
 
     @staticmethod
     def contents_path(entry: Entry) -> Path:
         """The encrypted contents file of a file entry (inside the .c9s folder for long names)."""
+        if entry.dirent is not None:     # a plain file from list_dir: the entry is the file, no stat needed
+            return entry.stored
         return entry.stored / "contents.c9r" if entry.stored.is_dir() else entry.stored
 
+    def contents_stat(self, entry: Entry) -> os.stat_result:
+        """Size and mtime of the contents file; made once per listing for plain files, then reused."""
+        if entry.dirent is not None:
+            return entry.dirent.stat()
+        return self.contents_path(entry).stat()
+
     def file_size(self, entry: Entry) -> int:
-        path = self.contents_path(entry)
-        return self.content.cleartext_size(path.stat().st_size)
+        return self.content.cleartext_size(self.contents_stat(entry).st_size)
 
     def read_link(self, entry: Entry) -> str:
         data = (entry.stored / "symlink.c9r").read_bytes()

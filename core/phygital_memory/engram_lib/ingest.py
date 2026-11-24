@@ -119,6 +119,10 @@ def date_of(meta, name, mtime):
     return (to_ts(m.group(1)) if m else None) or mtime
 
 
+_HEAD_RE = re.compile(r"^(#{1,4}) (\S.*)")
+_CALLOUT_RE = re.compile(r"^>\s*\[!(\w+)\]\s*(.*)")
+
+
 def split_chunks(body, title, cfg):
     """Split on headings, keeping the full heading path ("Note > H2 > H3").
     Tiny sections are merged into the next one; long ones are split with a small overlap."""
@@ -129,7 +133,8 @@ def split_chunks(body, title, cfg):
     for line in body.splitlines():
         if line.lstrip().startswith("```"):
             in_code = not in_code
-        m = None if in_code else re.match(r"^(#{1,4}) (\S.*)", line)
+        # a heading must start with "#": skip the regex for every other line
+        m = _HEAD_RE.match(line) if line.startswith("#") and not in_code else None
         if m:
             if "\n".join(buf).strip():
                 parts.append([current, "\n".join(buf).strip()])
@@ -180,6 +185,8 @@ def chunk_hash(path, head, body):
 def add_file(con, path, source, mtime, size, weight, hidden, title, chunks, keep=0, linked=0, fhash=None,
              shelf="main", until=None):
     remove_file(con, path)
+    # one cheap check per file: with no cards at all, the per-chunk lookup can never find a row
+    has_cards = con.execute("SELECT 1 FROM cards LIMIT 1").fetchone() is not None
     con.execute("INSERT INTO files(path,source,mtime,size,weight,hidden,indexed_at,keep,linked,fhash,shelf,until) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (path, source, mtime, size, weight, hidden, time.time(), keep, linked, fhash, shelf, until))
@@ -191,7 +198,8 @@ def add_file(con, path, source, mtime, size, weight, hidden, title, chunks, keep
             (path, i, c["heading"], c["date"], c["evergreen"], c["type"], c["project"], c["status"], c["tags"],
              c["weight"], h, c["body"]),
         )
-        card = con.execute("SELECT context, summary, questions, atoms FROM cards WHERE hash=?", (h,)).fetchone()
+        card = (con.execute("SELECT context, summary, questions, atoms FROM cards WHERE hash=?", (h,)).fetchone()
+                if has_cards else None)
         fts_put(con, cur.lastrowid, shelf, title, c["heading"], c["tags"], c["body"], card_text(card))
 
 
@@ -204,7 +212,7 @@ def callout_text(body, cfg):
     types = set(c.get("types", ["important", "warning", "tip", "todo", "note", "info", "success", "failure", "question"]))
     out, inside = [], False
     for line in body.splitlines():
-        m = re.match(r"^>\s*\[!(\w+)\]\s*(.*)", line)
+        m = _CALLOUT_RE.match(line) if line.startswith(">") else None  # callouts start with ">"
         if m:
             inside = m.group(1).lower() in types
             if inside and m.group(2):

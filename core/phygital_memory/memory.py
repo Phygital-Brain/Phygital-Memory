@@ -145,14 +145,17 @@ class Memory:
             self._writer = _NoWrites() if getattr(self, "read_only", False) else \
                 PlainWriter(tree) if self.plain else Writer(tree)
             self._touch()
-            self._fix_clash_copies()
+            walked = []
+            if self._fix_clash_copies(walked):
+                walked = None   # clash copies changed the disk: walk again below
             try:
                 self._empty_old_trash()
                 self._drop_orphan_versions()
             except Exception:
                 pass   # never let trash upkeep stop an unlock
             self._synced = time.time()
-            todo = [(p.lstrip("/"), e) for p, e in tree.walk()
+            # trash and version upkeep only touch hidden folders, so the first walk still holds every note
+            todo = [(p.lstrip("/"), e) for p, e in (tree.walk() if walked is None else walked)
                     if e.kind == "file" and p.lower().endswith(".md") and p.split("/")[1] not in HIDDEN]
             self._building = len(todo)   # the note count status() gives until the index is full
             self._built = done = threading.Event()   # the notes show now; search fills in behind them
@@ -234,7 +237,7 @@ class Memory:
                     ingest.count_backlinks(con, self.cfg)
                     con.commit()
                     self._gen += 1
-                    self._synced = 0   # pick up anything that changed on disk while building
+                    # _synced keeps the unlock-time stamp (set before the walk): the normal sync catches later changes within SYNC_EVERY
         finally:
             done.set()
 
@@ -259,7 +262,7 @@ class Memory:
         text = self._tree.read_file(entry).decode("utf-8", "replace")
         if "\x00" in text[:4000] or ingest.has_skip_marker(text, cfg):
             return
-        mtime = self._tree.contents_path(entry).stat().st_mtime
+        mtime = self._tree.contents_stat(entry).st_mtime
         meta, body = ingest.parse_frontmatter(redact(text))
         status = meta.get("status", "").lower()
         until = ingest.to_ts(meta.get("valid_until"))
@@ -439,13 +442,15 @@ class Memory:
         except Exception:
             pass   # the copy itself is what matters; the task is a helper
 
-    def _fix_clash_copies(self) -> int:
+    def _fix_clash_copies(self, walked: list | None = None) -> int:
         """Cloud drives keep both sides of a clash as an extra encrypted file, like "ABC (1).c9r" or "ABC (conflicted
         copy ...).c9r". Its name no longer decrypts, so it would just vanish. Exact duplicates are removed; the rest
-        get a readable clash name next to the note. Returns how many were sorted out."""
+        get a readable clash name next to the note. Returns how many were sorted out. If a list is given, the walk
+        it made is kept there (so unlock can reuse it)."""
         self._tree.conflicts = []
-        for _ in self._tree.walk():
-            pass
+        for item in self._tree.walk():
+            if walked is not None and item[1].kind == "file" and item[0].lower().endswith(".md"):
+                walked.append(item)   # only notes: unlock needs nothing else, and images would cost memory
         found, self._tree.conflicts = list(dict.fromkeys(self._tree.conflicts)), []
         fixed = 0
         for path, dir_id in found:
@@ -542,7 +547,7 @@ class Memory:
             remove_file(self._con, rel)
             changed = True
         for rel, entry in disk.items():
-            mtime = self._tree.contents_path(entry).stat().st_mtime
+            mtime = self._tree.contents_stat(entry).st_mtime
             if known.get(rel) != mtime and self._skipped.get(rel) != mtime:
                 remove_file(self._con, rel)
                 self._index_one(rel, entry)
@@ -589,7 +594,7 @@ class Memory:
                     continue
                 item = {"path": rel, "kind": "folder" if entry.kind == "dir" else "file"}
                 if entry.kind == "file":
-                    st = self._tree.contents_path(entry).stat()
+                    st = self._tree.contents_stat(entry)
                     item.update(mtime=st.st_mtime, size=self._tree.file_size(entry))
                 out.append(item)
             return out
@@ -646,7 +651,7 @@ class Memory:
                 if entry.kind != "file" or rel.split("/")[0] in HIDDEN or entry.name == ".DS_Store" \
                         or entry.name.startswith("._") or (under and rel != under and not rel.startswith(under + "/")):
                     continue
-                out[rel] = (self._tree.contents_path(entry).stat().st_mtime, self._tree.file_size(entry))
+                out[rel] = (self._tree.contents_stat(entry).st_mtime, self._tree.file_size(entry))
             return out
 
     def get_file(self, rel: str) -> bytes:

@@ -92,6 +92,10 @@ class PlainTree:
     def contents_path(entry: Entry) -> Path:
         return entry.stored
 
+    @staticmethod
+    def contents_stat(entry: Entry) -> os.stat_result:
+        return entry.stored.stat()
+
     def file_size(self, entry: Entry) -> int:
         return entry.stored.stat().st_size
 
