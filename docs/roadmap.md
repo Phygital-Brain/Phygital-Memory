@@ -18,6 +18,7 @@ What might come next. Nothing here is promised or has a date. If you want one of
 - **An https address for the AI door.** Some AI agents refuse sign-in pages that are not on https, so sign-in from them fails on the local address. For now, they connect with a key.
 - **Shutting out someone you removed from a share.** Changing the memory's key so a removed person cannot read later changes is not built yet.
 - **Unlinking a computer, and moving shares to a linked computer.** Not built yet.
+- **A built-in health check for Encrypted memories.** The check already exists in the code (`vault/health.py`, the same problems Cryptomator's Health check finds) but has no screen yet. Planned shape: it checks quietly after unlock and every few hours; it fixes on its own only what removes nothing (a missing folder made again, orphan files moved to a Recovered folder, a missing folder-ID backup written again), and only if the problem is still there after 10 to 15 minutes, so a cloud drive that is still downloading is never "fixed"; anything that deletes or overwrites waits for you. It stays quiet: fixes go to the activity log only, no AI tasks, one small dot on the memory when something needs you, and one line in the AI's `status`.
 
 ## Maybe
 
