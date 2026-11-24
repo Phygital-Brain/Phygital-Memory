@@ -268,7 +268,9 @@ def status(ctx: Context) -> str:
         lines.append(f'Memory "{f.name}" (folder="{f.name}"): ' + (f"unlocked, {s['notes']} notes" if s["open"] else "locked")
                      + (f". Open memory: a plain folder at {f.open_copy or f.path}, which you may also read directly"
                         if f.plain or f.open_copy else "")
-                     + (f". Private, ask first: {priv}" if priv else ""))
+                     + (f". Private, ask first: {priv}" if priv else "")
+                     + (f". {s['broken']} broken entries were skipped and show as missing or empty folders; the person "
+                        "can repair them with Cryptomator's Health check" if s.get("broken") else ""))
         if s["open"]:
             for r in _guard(f.memory.folder_map):
                 n = f"{r['notes']} note" + ("" if r["notes"] == 1 else "s")

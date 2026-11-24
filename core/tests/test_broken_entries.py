@@ -48,6 +48,7 @@ try:
     check(m.read("Home.md") == "home note kiwi\n", "a good note still opens")
     check(any(r["path"] == "Home.md" for r in m.search("kiwi")), "search still works")
     check(len(m._tree.broken) == 2, "both broken entries are kept in tree.broken")
+    check(m.status()["broken"] == 2, "status counts the broken entries")
     m.save("New.md", "written after\n")
     check(m.read("New.md") == "written after\n", "saving still works")
     m.lock()

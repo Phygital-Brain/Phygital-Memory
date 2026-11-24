@@ -195,7 +195,8 @@ class Memory:
                 return {"open": False, "folder": str(self.folder)}
             notes = self._con.execute("SELECT COUNT(*) FROM files").fetchone()[0] if self._built.is_set() \
                 else self._building
-            return {"open": True, "folder": str(self.folder), "notes": notes}
+            broken = len(getattr(self._tree, "broken", {}))   # entries skipped as broken (see vault/tree.py)
+            return {"open": True, "folder": str(self.folder), "notes": notes, "broken": broken}
 
     def _sweep(self) -> None:
         if self.idle_lock and self._con is not None and time.time() - self._last_use > self.idle_lock:

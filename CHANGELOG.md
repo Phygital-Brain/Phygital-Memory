@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Your AI's `status` tool says how many broken entries an Encrypted memory skipped, so you know to run Cryptomator's Health check.
+
 ## 0.1.7 (2026-11-23)
 
 - An Encrypted memory with a broken entry inside, like an empty folder left by a sync, opens again. Before, it showed nothing at all. The app now skips what is broken and opens the rest, like Cryptomator does.
