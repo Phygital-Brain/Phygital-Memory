@@ -1,7 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.1.8 (2026-11-24)
 
+- A big Encrypted memory opens much faster. On a memory with about 4,000 folders and 22,000 files, unlock to first search went from about 7.8 s to about 4.3 s, unlock from 1.8 s to about 0.9 s, and the first search from about 1 s to 35 ms. Search results are the same.
 - Your AI's `status` tool says how many broken entries an Encrypted memory skipped, so you know to run Cryptomator's Health check.
 
 ## 0.1.7 (2026-11-23)
